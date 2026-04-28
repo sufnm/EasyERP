@@ -1,0 +1,42 @@
+[
+  {
+    "BARCODE": "100",
+    "SALE_PRICE": 14
+  },
+  {
+    "BARCODE": "1000",
+    "SALE_PRICE": 35
+  },
+  {
+    "BARCODE": "1001",
+    "SALE_PRICE": 16
+  },
+  {
+    "BARCODE": "1003",
+    "SALE_PRICE": 10
+  },
+  {
+    "BARCODE": "1004",
+    "SALE_PRICE": 15
+  },
+  {
+    "BARCODE": "1005",
+    "SALE_PRICE": 14
+  },
+  {
+    "BARCODE": "1006",
+    "SALE_PRICE": 2
+  },
+  {
+    "BARCODE": "1007",
+    "SALE_PRICE": 4
+  },
+  {
+    "BARCODE": "1008",
+    "SALE_PRICE": 22
+  },
+  {
+    "BARCODE": "1009",
+    "SALE_PRICE": 35
+  }
+]
