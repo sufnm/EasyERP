@@ -238,6 +238,45 @@ app.get('/api/warehouses/list', async (req, res) => {
 // Alias for list if needed by legacy parts
 app.get('/api/accounts/list', (req, res) => res.redirect('/api/accounts/cache'));
 
+// Create a new Chart of Account
+app.post('/api/accounts/create', async (req, res) => {
+  const { accNo, accName, accTypeCode = 1, accClass = 4, accLevel = 4 } = req.body;
+
+  if (!accNo || !accName) {
+    return res.status(400).json({ error: 'Account Number and Name are required.' });
+  }
+
+  try {
+    const pool = await getPool();
+
+    // Check if account number already exists
+    const checkResult = await pool.request()
+      .input('accNo', sql.Numeric(18, 0), accNo)
+      .query(`SELECT 1 FROM dbo.ACCOUNTS WHERE ACC_NO = @accNo`);
+
+    if (checkResult.recordset.length > 0) {
+      return res.status(400).json({ error: 'Account Number already exists.' });
+    }
+
+    await pool.request()
+      .input('accNo', sql.Numeric(18, 0), accNo)
+      .input('accName', sql.NVarChar(150), accName)
+      .input('accTypeCode', sql.SmallInt, accTypeCode)
+      .input('accClass', sql.Int, accClass)
+      .input('accLevel', sql.Int, accLevel)
+      .query(`
+        INSERT INTO dbo.ACCOUNTS (ACC_NO, ACC_NAME, ACC_TYPE_CODE, ACC_CLASS, ACC_LEVEL, CREATE_TIME)
+        VALUES (@accNo, @accName, @accTypeCode, @accClass, @accLevel, GETDATE())
+      `);
+
+    console.log(`✅ Chart of Account Created: ${accName} (${accNo})`);
+    res.json({ success: true, message: 'Account created successfully' });
+  } catch (error) {
+    console.error("❌ Failed to create account:", error.message);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
 // Get Extended Customer Info
 app.get('/api/customers/:accNo/info', async (req, res) => {
   const { accNo } = req.params;

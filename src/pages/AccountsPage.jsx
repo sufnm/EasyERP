@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from '../config';
 import { Search, Filter, MoreVertical, Plus, ArrowUpRight, ArrowDownRight, CreditCard } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 
-export default function AccountsPage() {
+export default function AccountsPage({ setActivePage }) {
   const { cachedAccounts, isReady } = useCache();
   const [searchTerm, setSearchTerm] = useState('');
   const [accounts, setAccounts] = useState([]);
@@ -70,7 +70,10 @@ export default function AccountsPage() {
             <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter uppercase">Accounts</h1>
             <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">Manage your financial accounts and connectivity.</p>
           </div>
-          <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 text-sm">
+          <button 
+            onClick={() => setActivePage('create-account')}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 text-sm"
+          >
             <Plus size={18} strokeWidth={3} />
             CREATE ACCOUNT
           </button>

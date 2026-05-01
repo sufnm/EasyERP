@@ -10,6 +10,7 @@ export const API_ENDPOINTS = {
   CUSTOMER_INFO: (accNo) => `${API_BASE_URL}/api/customers/${accNo}/info`,
   ACCOUNT_CACHE: `${API_BASE_URL}/api/accounts/cache`,
   ACCOUNT_LIST: `${API_BASE_URL}/api/accounts/list`,
+  ACCOUNT_CREATE: `${API_BASE_URL}/api/accounts/create`,
   INVOICE_NEXT: `${API_BASE_URL}/api/invoice/next`,
   SALES_SAVE: `${API_BASE_URL}/api/sales/save`,
   SALES_HISTORY: `${API_BASE_URL}/api/sales`,

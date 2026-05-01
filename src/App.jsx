@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import SalesPage from './pages/SalesPage';
 import SalesHistoryPage from './pages/SalesHistoryPage';
 import AccountsPage from './pages/AccountsPage';
+import CreateAccountPage from './pages/CreateAccountPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import { CacheProvider } from './context/CacheContext';
@@ -51,9 +52,10 @@ function App() {
           {activePage === 'home' && <HomePage />}
           {activePage === 'sales' && <SalesPage user={user} />}
           {activePage === 'sales-history' && <SalesHistoryPage />}
-          {activePage === 'accounts' && <AccountsPage />}
+          {activePage === 'accounts' && <AccountsPage setActivePage={setActivePage} />}
+          {activePage === 'create-account' && <CreateAccountPage setActivePage={setActivePage} />}
           {activePage === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} />}
-          {['home', 'sales', 'sales-history', 'accounts', 'settings'].includes(activePage) ? null : (
+          {['home', 'sales', 'sales-history', 'accounts', 'create-account', 'settings'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
                <p className="text-zinc-400 text-lg font-medium">Coming Soon</p>
             </div>
