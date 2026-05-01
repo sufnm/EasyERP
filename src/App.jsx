@@ -5,6 +5,10 @@ import SalesPage from './pages/SalesPage';
 import SalesHistoryPage from './pages/SalesHistoryPage';
 import AccountsPage from './pages/AccountsPage';
 import CreateAccountPage from './pages/CreateAccountPage';
+import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
+import ExpenseAccountsPage from './pages/ExpenseAccountsPage';
+import CustomersAccountPage from './pages/CustomersAccountPage';
+import SupplierAccountsPage from './pages/SupplierAccountsPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import { CacheProvider } from './context/CacheContext';
@@ -53,9 +57,13 @@ function App() {
           {activePage === 'sales' && <SalesPage user={user} />}
           {activePage === 'sales-history' && <SalesHistoryPage />}
           {activePage === 'accounts' && <AccountsPage setActivePage={setActivePage} />}
+          {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={setActivePage} />}
+          {activePage === 'customers-account' && <CustomersAccountPage setActivePage={setActivePage} />}
+          {activePage === 'supplier-accounts' && <SupplierAccountsPage setActivePage={setActivePage} />}
+          {activePage === 'chart-of-accounts' && <ChartOfAccountsPage setActivePage={setActivePage} />}
           {activePage === 'create-account' && <CreateAccountPage setActivePage={setActivePage} />}
           {activePage === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} />}
-          {['home', 'sales', 'sales-history', 'accounts', 'create-account', 'settings'].includes(activePage) ? null : (
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'chart-of-accounts', 'create-account', 'settings'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
                <p className="text-zinc-400 text-lg font-medium">Coming Soon</p>
             </div>

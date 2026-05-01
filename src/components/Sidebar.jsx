@@ -1,14 +1,35 @@
-import React from 'react';
-import { Home, ShoppingCart, Settings, Users, BarChart3, Book, Clock, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { Home, ShoppingCart, Settings, Users, BarChart3, Book, Clock, LogOut, ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
+  const [openMenus, setOpenMenus] = useState(['accounts']);
+
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'sales', label: 'Sales', icon: ShoppingCart },
     { id: 'sales-history', label: 'Sales History', icon: Clock },
-    { id: 'accounts', label: 'Accounts', icon: Book },
+    { 
+      id: 'accounts', 
+      label: 'Accounts', 
+      icon: Book,
+      subItems: [
+        { id: 'chart-of-accounts', label: 'Chart Of accounts' },
+        { id: 'customers-account', label: 'Customer Account' },
+        { id: 'supplier-accounts', label: 'Supplier Account' },
+        { id: 'accounts', label: 'Bank and cash' },
+        { id: 'expense-accounts', label: 'Expense' }
+      ]
+    },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
+
+  const toggleMenu = (id) => {
+    setOpenMenus(prev => 
+      prev.includes(id) 
+        ? prev.filter(m => m !== id) 
+        : [...prev, id]
+    );
+  };
 
   return (
     <div className="w-64 bg-zinc-900 dark:bg-zinc-950 border-r border-zinc-800 flex flex-col h-screen text-zinc-300">
@@ -28,20 +49,54 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
       <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activePage === item.id;
+          const isActive = activePage === item.id || item.subItems?.some(sub => sub.id === activePage);
+          const hasSubItems = item.subItems && item.subItems.length > 0;
+          const isOpen = openMenus.includes(item.id);
+
           return (
-            <button
-              key={item.id}
-              onClick={() => setActivePage(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
-                isActive 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20' 
-                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-              }`}
-            >
-              <Icon size={18} className={isActive ? 'text-white' : 'text-zinc-500'} />
-              {item.label}
-            </button>
+            <div key={item.id} className="space-y-1">
+              <button
+                onClick={() => {
+                  if (hasSubItems) {
+                    toggleMenu(item.id);
+                  } else {
+                    setActivePage(item.id);
+                  }
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
+                  isActive && !hasSubItems
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20' 
+                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                }`}
+              >
+                <Icon size={18} className={isActive && !hasSubItems ? 'text-white' : 'text-zinc-500'} />
+                <span className="flex-1 text-left">{item.label}</span>
+                {hasSubItems && (
+                  isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                )}
+              </button>
+
+              {hasSubItems && isOpen && (
+                <div className="pl-9 space-y-1">
+                  {item.subItems.map((subItem) => {
+                    const isSubActive = activePage === subItem.id;
+                    return (
+                      <button
+                        key={subItem.id}
+                        onClick={() => setActivePage(subItem.id)}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isSubActive
+                            ? 'bg-zinc-800 text-white'
+                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                        }`}
+                      >
+                        {subItem.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>

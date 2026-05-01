@@ -219,6 +219,63 @@ app.get('/api/accounts/cache', async (req, res, next) => {
   }
 });
 
+app.get('/api/accounts/all', async (req, res, next) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        ACC_NO, 
+        ACC_NAME, 
+        ACC_CLASS, 
+        LEVEL2_NO, 
+        LEVEL3_NO 
+      FROM dbo.ACCOUNTS 
+      WHERE ACC_LEVEL = 4
+      ORDER BY ACC_NAME
+    `);
+    console.log(`📊 All Accounts: Loaded ${result.recordset.length} accounts.`);
+    res.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/accounts/classes', async (req, res, next) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ACC_CLASS_CODE as acc_class_code, ACC_CLASS_NAME as acc_class_name 
+      FROM dbo.ACC_CLASS
+      ORDER BY ACC_CLASS_CODE
+    `);
+    console.log(`🏷️ Account Classes: Loaded ${result.recordset.length} classes.`);
+    res.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/accounts/subclasses', async (req, res, next) => {
+  const { classCode } = req.query;
+  if (!classCode) return res.json([]);
+
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('classCode', sql.Int, classCode)
+      .query(`
+        SELECT ACC_NO as acc_no, ACC_NAME as acc_name 
+        FROM dbo.ACCOUNTS 
+        WHERE ACC_CLASS = @classCode AND ACC_LEVEL = 2
+        ORDER BY ACC_NO
+      `);
+    console.log(`📂 Sub Classes: Loaded ${result.recordset.length} sub-classes for class ${classCode}.`);
+    res.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/warehouses/list', async (req, res) => {
   try {
     const pool = await getPool();
