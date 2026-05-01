@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
+import { API_ENDPOINTS } from '../config';
 
 export default function SalesGrid({ initialData = [], rows, setRows, visibleColumns = {}, enterToQty = false, taxIncluded = true }) {
   const { searchItems } = useCache();
@@ -51,7 +52,7 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
     if (initialData.length > 0) {
       // Map initial data to grid structure
       const mappedRows = initialData.map((d, index) => ({
-        id: index + 1,
+        id: Date.now() + index,
         itemCode: d.itemCode || d.id || '',
         description: d.description || d.name || '',
         unit: d.unit || '',
@@ -71,7 +72,7 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
     setRows(rows.map(row => row.id === id ? { ...row, [field]: value } : row));
   };
 
-  const handleItemSearch = (id, codeQuery, isSelection = false) => {
+  const handleItemSearch = async (id, codeQuery, isSelection = false) => {
     if (!codeQuery) {
       setSearchResults([]);
       setActiveSearchId(null);
@@ -92,8 +93,20 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
       return;
     }
 
-    // Performance: Use local cache search instead of API
-    const data = searchItems(codeQuery);
+    // 1. Try local cache first
+    let data = searchItems(codeQuery);
+    
+    // 2. If cache is empty or returns nothing, fallback to API search
+    if (!data || data.length === 0) {
+      try {
+        const res = await fetch(`${API_ENDPOINTS.ITEM_SEARCH}?q=${encodeURIComponent(codeQuery)}`);
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (err) {
+        console.error("API search failed:", err);
+      }
+    }
     
     if (isSelection) {
       if (data && data.length > 0) {
@@ -102,7 +115,7 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
       return;
     }
     
-    setSearchResults(data);
+    setSearchResults(data || []);
     setActiveSearchId(id);
     
     // Calculate position for fixed portal
@@ -134,7 +147,7 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
       );
       
       if (!enterToQty && id === prevRows[prevRows.length - 1].id) {
-         nextRows.push({ id: id + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' });
+         nextRows.push({ id: Date.now() + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' });
       }
       return nextRows;
     });
@@ -150,13 +163,21 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
         qtyInput?.focus();
         qtyInput?.select();
       } else {
-        document.getElementById(`itemCode-${id + 1}`)?.focus();
+        // Find next row after current id
+        setRows(currentRows => {
+          const currentIndex = currentRows.findIndex(r => r.id === id);
+          const nextRow = currentRows[currentIndex + 1];
+          if (nextRow) {
+             setTimeout(() => document.getElementById(`itemCode-${nextRow.id}`)?.focus(), 10);
+          }
+          return currentRows;
+        });
       }
     }, 50);
   };
 
   const addRow = () => {
-    setRows([...rows, { id: rows.length + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }]);
+    setRows([...rows, { id: Date.now(), itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }]);
   };
 
   const removeRow = (id) => {
@@ -278,9 +299,20 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       if (!row.qty) updateRow(row.id, 'qty', '0');
-                      const nextId = row.id + 1;
-                      setRows(prev => prev[prev.length - 1].id === row.id ? [...prev, { id: nextId, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }] : prev);
-                      setTimeout(() => document.getElementById(`itemCode-${nextId}`)?.focus(), 50);
+                      const newId = Date.now();
+                      setRows(prev => {
+                        const isLast = prev[prev.length - 1].id === row.id;
+                        if (isLast) {
+                          const nextRows = [...prev, { id: newId, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }];
+                          setTimeout(() => document.getElementById(`itemCode-${newId}`)?.focus(), 50);
+                          return nextRows;
+                        } else {
+                          const currentIndex = prev.findIndex(r => r.id === row.id);
+                          const nextRow = prev[currentIndex + 1];
+                          if (nextRow) setTimeout(() => document.getElementById(`itemCode-${nextRow.id}`)?.focus(), 10);
+                          return prev;
+                        }
+                      });
                     }
                   }} 
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
@@ -294,9 +326,20 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       if (!row.aliasCode) updateRow(row.id, 'aliasCode', 'N/A');
-                      const nextId = row.id + 1;
-                      setRows(prev => prev[prev.length - 1].id === row.id ? [...prev, { id: nextId, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }] : prev);
-                      setTimeout(() => document.getElementById(`itemCode-${nextId}`)?.focus(), 50);
+                      const newId = Date.now();
+                      setRows(prev => {
+                        const isLast = prev[prev.length - 1].id === row.id;
+                        if (isLast) {
+                          const nextRows = [...prev, { id: newId, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }];
+                          setTimeout(() => document.getElementById(`itemCode-${newId}`)?.focus(), 50);
+                          return nextRows;
+                        } else {
+                          const currentIndex = prev.findIndex(r => r.id === row.id);
+                          const nextRow = prev[currentIndex + 1];
+                          if (nextRow) setTimeout(() => document.getElementById(`itemCode-${nextRow.id}`)?.focus(), 10);
+                          return prev;
+                        }
+                      });
                     }
                   }}
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded dark:text-zinc-200" 

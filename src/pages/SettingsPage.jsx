@@ -1,7 +1,28 @@
 import React from 'react';
-import { Moon, Sun, Settings as SettingsIcon, Monitor, Bell, Shield } from 'lucide-react';
+import { Moon, Sun, Settings as SettingsIcon, Monitor, Bell, Shield, Table, History } from 'lucide-react';
+import { useCache } from '../context/CacheContext';
 
 export default function SettingsPage({ darkMode, setDarkMode }) {
+  const { historyInvoiceColumns, setHistoryInvoiceColumns } = useCache();
+
+  const toggleColumn = (key) => {
+    setHistoryInvoiceColumns(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const columns = [
+    { key: 'barcode', label: 'Barcode' },
+    { key: 'description', label: 'Description' },
+    { key: 'unit', label: 'Unit Price' },
+    { key: 'qty', label: 'Quantity' },
+    { key: 'price', label: 'Subtotal' },
+    { key: 'vatPercent', label: 'VAT %' },
+    { key: 'vatAmt', label: 'VAT Amount' },
+    { key: 'total', label: 'Total Amount' },
+  ];
+
   return (
     <div className="p-8 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center gap-3 mb-8">
@@ -22,12 +43,12 @@ export default function SettingsPage({ darkMode, setDarkMode }) {
             Appearance
           </button>
           <button className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-500 dark:text-zinc-400 font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl text-sm transition-all group">
-            <Bell size={18} className="group-hover:text-zinc-700 dark:group-hover:text-zinc-200" />
-            Notifications
+            <History size={18} className="group-hover:text-zinc-700 dark:group-hover:text-zinc-200" />
+            Invoice Layout
           </button>
           <button className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-500 dark:text-zinc-400 font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl text-sm transition-all group">
-            <Shield size={18} className="group-hover:text-zinc-700 dark:group-hover:text-zinc-200" />
-            Privacy
+            <Bell size={18} className="group-hover:text-zinc-700 dark:group-hover:text-zinc-200" />
+            Notifications
           </button>
         </div>
 
@@ -56,9 +77,47 @@ export default function SettingsPage({ darkMode, setDarkMode }) {
                 />
               </button>
             </div>
+          </section>
 
-            <div className="mt-6 p-4 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700 flex items-center justify-center">
-               <p className="text-xs text-zinc-400 font-medium italic">More appearance options coming soon...</p>
+          <section className="bg-card p-6 rounded-2xl border border-border shadow-sm">
+            <div className="flex items-center gap-3 mb-6">
+               <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600">
+                 <Table size={16} />
+               </div>
+               <h2 className="text-sm font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest">History Invoice Columns</h2>
+            </div>
+            
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-6 font-medium">
+              Choose which columns to show when viewing a saved invoice in the Sales History Dashboard.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              {columns.map((col) => (
+                <div 
+                  key={col.key}
+                  onClick={() => toggleColumn(col.key)}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                    historyInvoiceColumns[col.key]
+                    ? 'bg-indigo-50/50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
+                    : 'bg-zinc-50 dark:bg-zinc-900/50 border-zinc-100 dark:border-zinc-800'
+                  }`}
+                >
+                  <span className={`text-[11px] font-black uppercase tracking-tight ${
+                    historyInvoiceColumns[col.key] ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400'
+                  }`}>
+                    {col.label}
+                  </span>
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                    historyInvoiceColumns[col.key] 
+                    ? 'bg-indigo-600 border-indigo-600' 
+                    : 'bg-transparent border-zinc-300 dark:border-zinc-700'
+                  }`}>
+                    {historyInvoiceColumns[col.key] && (
+                      <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         </div>

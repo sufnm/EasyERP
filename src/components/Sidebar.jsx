@@ -1,13 +1,12 @@
 import React from 'react';
-import { Home, ShoppingCart, Settings, Users, BarChart3, Book } from 'lucide-react';
+import { Home, ShoppingCart, Settings, Users, BarChart3, Book, Clock, LogOut } from 'lucide-react';
 
-export default function Sidebar({ activePage, setActivePage }) {
+export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'sales', label: 'Sales', icon: ShoppingCart },
+    { id: 'sales-history', label: 'Sales History', icon: Clock },
     { id: 'accounts', label: 'Accounts', icon: Book },
-    { id: 'customers', label: 'Customers', icon: Users },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -47,17 +46,25 @@ export default function Sidebar({ activePage, setActivePage }) {
         })}
       </div>
 
-      {/* User Profile Summary */}
-      <div className="p-4 border-t border-zinc-800">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300 border border-zinc-600 shadow-sm">
-            AD
+      {/* User Profile & Logout */}
+      <div className="p-4 border-t border-zinc-800 space-y-4">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white border border-white/10 shadow-sm">
+            {user?.username?.substring(0, 2).toUpperCase() || 'AD'}
           </div>
-          <div className="text-xs">
-            <p className="text-zinc-200 font-semibold">Admin User</p>
-            <p className="text-zinc-500">Super Admin</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-zinc-200 font-semibold text-sm truncate">{user?.username || 'Admin User'}</p>
+            <p className="text-zinc-500 text-[10px] uppercase tracking-wider font-medium">{user?.mobile || 'Administrator'}</p>
           </div>
         </div>
+        
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-zinc-400 hover:bg-red-500/10 hover:text-red-400 transition-all text-sm font-medium"
+        >
+          <LogOut size={18} />
+          Sign Out
+        </button>
       </div>
     </div>
   );

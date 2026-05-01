@@ -1,34 +1,62 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { API_ENDPOINTS } from '../config';
 
 const CacheContext = createContext();
 
 export function CacheProvider({ children }) {
   const [cachedItems, setCachedItems] = useState([]);
   const [cachedCustomers, setCachedCustomers] = useState([]);
+  const [cachedSales, setCachedSales] = useState([]);
+  const [cachedAccounts, setCachedAccounts] = useState([]);
+  const [addressCache, setAddressCache] = useState({}); // { accNo: info }
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState(null);
 
+  // Global App Settings (Preserved across page navigation)
+  const [taxIncluded, setTaxIncluded] = useState(true);
+  const [enterToQty, setEnterToQty] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    itemCode: true, description: true, unit: true, qty: true, 
+    price: true, aliasCode: true, vatAmt: true, total: true, stock: true
+  });
+  const [historyInvoiceColumns, setHistoryInvoiceColumns] = useState({
+    barcode: true, description: true, unit: true, qty: true, 
+    price: true, vatPercent: true, vatAmt: true, total: true
+  });
+
   const loadCache = useCallback(async () => {
     try {
-      console.log('🔄 Prefetching data cache...');
-      const [itemsRes, custRes] = await Promise.all([
-        fetch('http://localhost:3000/api/items/cache'),
-        fetch('http://localhost:3000/api/customers/cache')
-      ]);
+      console.log('🔄 Prefetching data cache... VERSION: 1.1 (Diagnostics)');
+      
+      const fetchWithLog = async (name, url) => {
+        try {
+          console.log(`📡 Starting fetch for ${name}...`);
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`${name} fetch failed with status ${res.status}`);
+          const data = await res.json();
+          console.log(`✅ ${name} loaded: ${data.length} records.`);
+          return data;
+        } catch (err) {
+          console.error(`❌ ${name} fetch error:`, err);
+          return [];
+        }
+      };
 
-      if (!itemsRes.ok || !custRes.ok) throw new Error('Failed to fetch cache data');
-
-      const [items, customers] = await Promise.all([
-        itemsRes.json(),
-        custRes.json()
+      const [items, customers, sales, accounts] = await Promise.all([
+        fetchWithLog('Items', API_ENDPOINTS.ITEM_CACHE),
+        fetchWithLog('Customers', API_ENDPOINTS.CUSTOMER_CACHE),
+        fetchWithLog('Sales', API_ENDPOINTS.SALES_HISTORY),
+        fetchWithLog('Accounts', API_ENDPOINTS.ACCOUNT_CACHE)
       ]);
 
       setCachedItems(items);
       setCachedCustomers(customers);
+      setCachedSales(sales);
+      setCachedAccounts(accounts);
       setIsReady(true);
-      console.log(`✅ Cache ready: ${items.length} items, ${customers.length} customers.`);
+      console.log('🚀 Global Cache is READY');
     } catch (err) {
-      console.error('❌ Cache prefetch failed:', err);
+      console.error('❌ Global Cache prefetch failed:', err);
       setError(err.message);
     }
   }, []);
@@ -42,10 +70,10 @@ export function CacheProvider({ children }) {
     const q = query.toLowerCase();
     return cachedItems
       .filter(item => 
-        (item.BARCODE && item.BARCODE.toLowerCase().includes(q)) || 
-        (item.DESCRIPTION && item.DESCRIPTION.toLowerCase().includes(q))
+        (item.BARCODE && String(item.BARCODE).toLowerCase().includes(q)) || 
+        (item.DESCRIPTION && String(item.DESCRIPTION).toLowerCase().includes(q))
       )
-      .slice(0, 15); // Return top 15 results
+      .slice(0, 15);
   };
 
   const searchCustomers = (query) => {
@@ -58,14 +86,32 @@ export function CacheProvider({ children }) {
       .slice(0, 15);
   };
 
+  const getAddressFromCache = (accNo) => addressCache[accNo] || null;
+  
+  const updateAddressCache = (accNo, info) => {
+    setAddressCache(prev => ({ ...prev, [accNo]: info }));
+  };
+
   return (
     <CacheContext.Provider value={{ 
       cachedItems, 
       cachedCustomers, 
+      cachedSales,
+      cachedAccounts,
       isReady, 
       error, 
       searchItems, 
       searchCustomers,
+      getAddressFromCache,
+      updateAddressCache,
+      taxIncluded,
+      setTaxIncluded,
+      enterToQty,
+      setEnterToQty,
+      visibleColumns,
+      setVisibleColumns,
+      historyInvoiceColumns,
+      setHistoryInvoiceColumns,
       refreshCache: loadCache 
     }}>
       {children}

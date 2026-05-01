@@ -1,14 +1,28 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { API_ENDPOINTS } from '../config';
 import { createPortal } from 'react-dom';
-import { User, ChevronDown } from 'lucide-react';
+import { User, ChevronDown, MapPin, Trash2 } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 
-export default function CustomerDetails({ customer, setCustomer, vatNumber, setVatNumber }) {
-  const { isReady, searchCustomers } = useCache();
+export default function CustomerDetails({ 
+  customer, 
+  setCustomer, 
+  vatNumber, 
+  setVatNumber, 
+  setAddress,
+  address,
+  handleAddressChange,
+  validationErrors = []
+}) {
+  const { isReady, searchCustomers, getAddressFromCache, updateAddressCache } = useCache();
   const [searchResults, setSearchResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
   const [saveCustomer, setSaveCustomer] = useState(false);
+  const [showAddressPopup, setShowAddressPopup] = useState(false);
+  const [addressPopupPos, setAddressPopupPos] = useState({ top: 0, left: 0, width: 0 });
+  const addressButtonRef = useRef(null);
+  const addressPopupRef = useRef(null);
 
   const containerRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -19,7 +33,7 @@ export default function CustomerDetails({ customer, setCustomer, vatNumber, setV
   useEffect(() => {
     const fetchDefault = async () => {
       try {
-        const res = await fetch(`http://localhost:3000/api/customers/search?q=CASH SALE`);
+        const res = await fetch(`${API_ENDPOINTS.CUSTOMER_SEARCH}?q=CASH SALE`);
         if (res.ok) {
           const data = await res.json();
           if (data.length > 0) {
@@ -34,20 +48,37 @@ export default function CustomerDetails({ customer, setCustomer, vatNumber, setV
     fetchDefault();
   }, []);
 
-  const handleSearch = (query) => {
+  const handleSearch = async (query) => {
     if (query === undefined || query === null) {
       setSearchResults([]);
       return;
     }
     
-    // Performance: Use local cache search instead of API
+    // 1. Try local cache first
     let results = searchCustomers(query);
 
+    // 2. If cache is empty and not just '999', fallback to API search
+    if (results.length === 0 && query !== '999') {
+      try {
+        const res = await fetch(`${API_ENDPOINTS.CUSTOMER_SEARCH}?q=${encodeURIComponent(query || '')}`);
+        if (res.ok) {
+          const apiData = await res.json();
+          // Extra safety: Filter API results again on the frontend to match exactly what is typed
+          const q = (query || '').toLowerCase();
+          results = apiData.filter(c => 
+            (c.ACC_NO && String(c.ACC_NO).toLowerCase().includes(q)) || 
+            (c.ACC_NAME && c.ACC_NAME.toLowerCase().includes(q))
+          );
+        }
+      } catch (err) {
+        console.error("Customer API search failed:", err);
+      }
+    }
+    
     // Add 999 option if it matches query or if query is empty
-    const queryLower = query.toLowerCase();
-    if ('999'.includes(queryLower) || 'new customer'.includes(queryLower) || query === '') {
-      // Check if not already in results
-      if (!results.find(r => r.ACC_NO === '999')) {
+    const queryLower = (query || '').toLowerCase();
+    if (queryLower === '' || '999'.includes(queryLower) || 'new customer'.includes(queryLower)) {
+      if (!results.find(r => String(r.ACC_NO) === '999')) {
         results = [{ ACC_NO: '999', ACC_NAME: 'NEW CUSTOMER' }, ...results];
       }
     }
@@ -85,6 +116,45 @@ export default function CustomerDetails({ customer, setCustomer, vatNumber, setV
     };
   }, [showDropdown, updateDropdownPosition]);
 
+  const updateAddressPopupPosition = useCallback(() => {
+    if (addressButtonRef.current) {
+      const rect = addressButtonRef.current.getBoundingClientRect();
+      const popupWidth = 400; // Max width of the popup
+      let left = rect.right - popupWidth;
+      if (left < 20) left = 20; // Padding from left edge
+
+      setAddressPopupPos({
+        top: rect.bottom + 8,
+        left: left,
+        width: popupWidth
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showAddressPopup) {
+      window.addEventListener('scroll', updateAddressPopupPosition, true);
+      window.addEventListener('resize', updateAddressPopupPosition);
+    }
+    return () => {
+      window.removeEventListener('scroll', updateAddressPopupPosition, true);
+      window.removeEventListener('resize', updateAddressPopupPosition);
+    };
+  }, [showAddressPopup, updateAddressPopupPosition]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (addressPopupRef.current && !addressPopupRef.current.contains(event.target) && 
+          addressButtonRef.current && !addressButtonRef.current.contains(event.target)) {
+        setShowAddressPopup(false);
+      }
+    };
+    if (showAddressPopup) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showAddressPopup]);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target) && 
@@ -96,13 +166,56 @@ export default function CustomerDetails({ customer, setCustomer, vatNumber, setV
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const selectCustomer = (selected) => {
+  const selectCustomer = async (selected) => {
     setCustomer({ id: selected.ACC_NO, name: selected.ACC_NAME });
     setSearchResults([]);
     setShowDropdown(false);
 
-    if (selected.ACC_NO === '999') {
-      setTimeout(() => nameInputRef.current?.focus(), 10);
+    // Fetch extra info and update the existing address card in SalesPage
+    if (selected && selected.ACC_NO && selected.ACC_NO !== '999' && setAddress) {
+      // 1. Check Cache First
+      const cachedInfo = getAddressFromCache(selected.ACC_NO);
+      if (cachedInfo) {
+        setAddress({
+          street: cachedInfo.street_name || '',
+          city: cachedInfo.city_name || '',
+          district: cachedInfo.district || '',
+          building: cachedInfo.building_no || '',
+          pincode: cachedInfo.postal_zone || ''
+        });
+        return;
+      }
+
+      // 2. Fallback to API
+      try {
+        const res = await fetch(API_ENDPOINTS.CUSTOMER_INFO(selected.ACC_NO));
+        if (res.ok) {
+          const info = await res.json();
+          if (info) {
+            updateAddressCache(selected.ACC_NO, info); // Store in cache
+            setAddress({
+              street: info.street_name || '',
+              city: info.city_name || '',
+              district: info.district || '',
+              building: info.building_no || '',
+              pincode: info.postal_zone || ''
+            });
+          } else {
+            setAddress({ street: '', city: '', district: '', building: '', pincode: '' });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch customer address info:", err);
+      }
+    }
+
+    if (String(selected.ACC_NO) === '999') {
+      setTimeout(() => {
+        if (nameInputRef.current) {
+          nameInputRef.current.focus();
+          nameInputRef.current.select();
+        }
+      }, 50);
     }
   };
 
@@ -119,14 +232,6 @@ export default function CustomerDetails({ customer, setCustomer, vatNumber, setV
 
   return (
     <div className="bg-card p-4 rounded-xl border border-border shadow-sm transition-all duration-300">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <h2 className="text-sm font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-widest flex items-center gap-2">
-          Customer Info
-        </h2>
-        <div className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded uppercase tracking-tighter">
-          BAL: SAR 0.00
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="lg:col-span-2">
@@ -142,9 +247,15 @@ export default function CustomerDetails({ customer, setCustomer, vatNumber, setV
                 const val = e.target.value;
                 setCustomer({ ...customer, id: val });
                 handleSearch(val);
-                if (val === '999') {
+                if (String(val) === '999') {
                   setCustomer({ id: '999', name: '' });
-                  setTimeout(() => nameInputRef.current?.focus(), 10);
+                  // Focus the name input immediately
+                  setTimeout(() => {
+                    if (nameInputRef.current) {
+                      nameInputRef.current.focus();
+                      nameInputRef.current.select(); // Select existing text if any
+                    }
+                  }, 50);
                 }
               }}
               onKeyDown={(e) => {
@@ -249,19 +360,138 @@ export default function CustomerDetails({ customer, setCustomer, vatNumber, setV
         </div>
 
         <div>
-          <label className="block text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1 px-1">Warehouse</label>
-          <div className="relative">
-            <select className="w-full bg-card border border-border rounded-lg px-3 py-1.5 text-sm appearance-none focus:border-primary focus:ring-2 focus:ring-indigo-50 dark:focus:ring-indigo-900/20 outline-none transition-all cursor-pointer font-medium text-zinc-700 dark:text-zinc-300">
-              <option>Batha</option>
-              <option>Main Warehouse</option>
-            </select>
-             <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-zinc-400 dark:text-zinc-600">
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
+          <label className="block text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1 px-1">Address Details</label>
+          <button
+            ref={addressButtonRef}
+            type="button"
+            onClick={() => {
+              if (!showAddressPopup) updateAddressPopupPosition();
+              setShowAddressPopup(!showAddressPopup);
+            }}
+            className={`w-full flex items-center justify-between gap-2 py-1.5 px-3 rounded-lg border text-xs transition-all h-[38px] ${
+              showAddressPopup 
+                ? 'border-primary ring-2 ring-indigo-500/10 bg-indigo-50/50 dark:bg-indigo-500/10 text-primary' 
+                : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-primary hover:text-primary'
+            }`}
+          >
+            <div className="flex items-center gap-2 overflow-hidden">
+              <MapPin size={14} className={showAddressPopup ? 'text-primary' : 'text-zinc-400'} />
+              <span className="truncate font-bold uppercase tracking-tight">
+                {address.city ? `${address.building} ${address.street}, ${address.city}`.trim() : 'Click to add address'}
+              </span>
             </div>
-          </div>
+            <div className="flex items-center gap-1 shrink-0">
+               {vatNumber.trim() !== '' && validationErrors.length > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+              )}
+              <ChevronDown size={14} className={`transition-transform duration-200 ${showAddressPopup ? 'rotate-180' : ''}`} />
+            </div>
+          </button>
         </div>
+
+        {showAddressPopup && createPortal(
+          <div 
+            ref={addressPopupRef}
+            style={{
+              position: 'fixed',
+              top: addressPopupPos.top,
+              left: addressPopupPos.left,
+              width: addressPopupPos.width,
+              zIndex: 9999
+            }}
+            className="bg-card border border-border shadow-2xl rounded-2xl p-5 animate-in fade-in slide-in-from-top-2 duration-200"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="h-1 w-4 bg-primary rounded-full"></div>
+                <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-widest">Address Details</h3>
+              </div>
+              <button 
+                onClick={() => setShowAddressPopup(false)}
+                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-12 gap-x-3 gap-y-3">
+              <div className="col-span-4">
+                <label className="block text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1 px-1">Bld #</label>
+                <input
+                  type="text"
+                  value={address.building}
+                  onChange={(e) => handleAddressChange('building', e.target.value)}
+                  placeholder="#"
+                  className={`w-full bg-zinc-50 dark:bg-zinc-900 border rounded-lg px-3 py-2 text-sm focus:bg-white dark:focus:bg-zinc-800 focus:border-primary outline-none transition-all dark:text-zinc-200 ${validationErrors.includes('building') ? 'border-red-500 ring-1 ring-red-500' : 'border-border'}`}
+                />
+              </div>
+
+              <div className="col-span-8">
+                <label className="block text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1 px-1">Street</label>
+                <input
+                  type="text"
+                  value={address.street}
+                  onChange={(e) => handleAddressChange('street', e.target.value)}
+                  placeholder="Street Details"
+                  className={`w-full bg-zinc-50 dark:bg-zinc-900 border rounded-lg px-3 py-2 text-sm focus:bg-white dark:focus:bg-zinc-800 focus:border-primary outline-none transition-all dark:text-zinc-200 ${validationErrors.includes('street') ? 'border-red-500 ring-1 ring-red-500' : 'border-border'}`}
+                />
+              </div>
+
+              <div className="col-span-12">
+                <label className="block text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1 px-1">District</label>
+                <input
+                  type="text"
+                  value={address.district}
+                  onChange={(e) => handleAddressChange('district', e.target.value)}
+                  placeholder="District Name"
+                  className={`w-full bg-zinc-50 dark:bg-zinc-900 border rounded-lg px-3 py-2 text-sm focus:bg-white dark:focus:bg-zinc-800 focus:border-primary outline-none transition-all dark:text-zinc-200 ${validationErrors.includes('district') ? 'border-red-500 ring-1 ring-red-500' : 'border-border'}`}
+                />
+              </div>
+
+              <div className="col-span-7">
+                <label className="block text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1 px-1">City</label>
+                <input
+                  type="text"
+                  value={address.city}
+                  onChange={(e) => handleAddressChange('city', e.target.value)}
+                  placeholder="City"
+                  className={`w-full bg-zinc-50 dark:bg-zinc-900 border rounded-lg px-3 py-2 text-sm focus:bg-white dark:focus:bg-zinc-800 focus:border-primary outline-none transition-all dark:text-zinc-200 ${validationErrors.includes('city') ? 'border-red-500 ring-1 ring-red-500' : 'border-border'}`}
+                />
+              </div>
+
+              <div className="col-span-5">
+                <label className="block text-[9px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mb-1 px-1">Pincode</label>
+                <input
+                  type="text"
+                  value={address.pincode}
+                  onChange={(e) => handleAddressChange('pincode', e.target.value)}
+                  placeholder="Pincode"
+                  className={`w-full bg-zinc-50 dark:bg-zinc-900 border rounded-lg px-3 py-2 text-sm focus:bg-white dark:focus:bg-zinc-800 focus:border-primary outline-none transition-all dark:text-zinc-200 ${validationErrors.includes('pincode') ? 'border-red-500 ring-1 ring-red-500' : 'border-border'}`}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-between items-center">
+              <button 
+                type="button"
+                onClick={() => setAddress({ street: '', city: '', district: '', building: '', pincode: '' })}
+                className="text-[10px] font-black text-zinc-400 hover:text-rose-500 transition-colors uppercase tracking-widest flex items-center gap-1 px-2 py-1"
+              >
+                <Trash2 size={12} />
+                Clear Address
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowAddressPopup(false)}
+                className="px-6 py-2 bg-indigo-600 text-white text-[10px] font-black rounded-lg shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 active:scale-[0.98] transition-all uppercase tracking-widest"
+              >
+                Done
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     </div>
   );
 }
-

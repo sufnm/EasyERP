@@ -1,28 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_ENDPOINTS } from '../config';
 import { Search, Filter, MoreVertical, Plus, ArrowUpRight, ArrowDownRight, CreditCard } from 'lucide-react';
+import { useCache } from '../context/CacheContext';
 
 export default function AccountsPage() {
+  const { cachedAccounts, isReady } = useCache();
   const [searchTerm, setSearchTerm] = useState('');
   const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isReady);
 
-  React.useEffect(() => {
-    fetch('http://localhost:3000/api/accounts/list')
-      .then(res => res.json())
+  useEffect(() => {
+    setLoading(true);
+    fetch(API_ENDPOINTS.ACCOUNT_CACHE)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch accounts');
+        return res.json();
+      })
       .then(data => {
-        // Map DB fields to UI fields
         const mappedData = data.map(acc => ({
-          id: String(acc.acc_no),
-          name: acc.Acc_name,
-          type: 'Cash', // Based on the query logic (CASH_ac_type)
-          balance: 0, // Balance not in provided query
+          id: String(acc.acc_no || acc.ACC_NO),
+          name: acc.Acc_name || acc.ACC_NAME,
+          type: 'Cash',
+          balance: 0,
           status: 'Active'
         }));
         setAccounts(mappedData);
         setLoading(false);
       })
       .catch(err => {
-        console.error("Failed to fetch accounts:", err);
+        console.error('❌ Accounts fetch error:', err);
         setLoading(false);
       });
   }, []);
@@ -31,9 +37,9 @@ export default function AccountsPage() {
   const dropdownRef = React.useRef(null);
 
   const toggleStatus = (id) => {
-    setAccounts(prev => prev.map(acc => 
-      acc.id === id 
-        ? { ...acc, status: acc.status === 'Active' ? 'Inactive' : 'Active' } 
+    setAccounts(prev => prev.map(acc =>
+      acc.id === id
+        ? { ...acc, status: acc.status === 'Active' ? 'Inactive' : 'Active' }
         : acc
     ));
     setOpenDropdownId(null);
@@ -49,15 +55,15 @@ export default function AccountsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredAccounts = accounts.filter(acc => 
-    acc.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredAccounts = accounts.filter(acc =>
+    acc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     acc.id.includes(searchTerm)
   );
 
   return (
     <div className="flex flex-col h-full p-6 animate-in fade-in zoom-in-95 duration-300">
       <div className="max-w-7xl mx-auto w-full flex flex-col flex-1 h-full relative">
-        
+
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 px-2">
           <div>
@@ -94,9 +100,9 @@ export default function AccountsPage() {
           <div className="p-4 border-b border-border bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-col sm:flex-row gap-4 items-center justify-between">
             <div className="relative w-full sm:w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-              <input 
-                type="text" 
-                placeholder="Search accounts..." 
+              <input
+                type="text"
+                placeholder="Search accounts..."
                 className="w-full bg-white dark:bg-zinc-800 border border-border rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all dark:text-zinc-100"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -128,15 +134,14 @@ export default function AccountsPage() {
                       <div className="font-bold text-zinc-900 dark:text-zinc-200">{account.name}</div>
                     </td>
                     <td className="p-4 text-center">
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black ${
-                        account.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
-                      }`}>
+                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black ${account.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
+                        }`}>
                         <div className={`w-1.5 h-1.5 rounded-full ${account.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                         {account.status}
                       </div>
                     </td>
                     <td className="p-4 text-center relative">
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenDropdownId(openDropdownId === account.id ? null : account.id);
@@ -145,13 +150,13 @@ export default function AccountsPage() {
                       >
                         <MoreVertical size={16} />
                       </button>
-                      
+
                       {openDropdownId === account.id && (
-                        <div 
+                        <div
                           ref={dropdownRef}
                           className="absolute right-8 top-1/2 -translate-y-1/2 bg-card border border-border shadow-xl rounded-xl py-1 z-10 w-40 animate-in fade-in slide-in-from-right-2 duration-200"
                         >
-                          <button 
+                          <button
                             onClick={() => toggleStatus(account.id)}
                             className="w-full text-left px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"
                           >
@@ -169,7 +174,7 @@ export default function AccountsPage() {
               </tbody>
             </table>
           </div>
-          
+
           <div className="p-4 border-t border-border bg-zinc-50/30 dark:bg-zinc-900/30 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 font-medium">
             <p>Showing {filteredAccounts.length} of {accounts.length} accounts</p>
             <div className="flex gap-2">
