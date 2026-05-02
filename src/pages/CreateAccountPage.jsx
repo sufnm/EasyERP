@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { ArrowLeft, Save, Briefcase, Hash, Type, Layers, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, Save, Briefcase, Hash, Type, Layers, CheckCircle2, XCircle, ArrowDownRight, ArrowUpRight, CreditCard } from 'lucide-react';
 
 export default function CreateAccountPage({ setActivePage, initialData = {}, prevPage }) {
   const [formData, setFormData] = useState({
-    accNo: '',
-    accName: '',
-    accAName: '',
+    accNo: initialData.accNo || '',
+    accName: initialData.accName || '',
+    accAName: initialData.accAName || '',
     accClass: initialData.accClass || '1',
     accLevel: initialData.accLevel || 4,
-    groupAc: '',
-    prefexNo: '',
+    groupAc: initialData.groupAc || '',
+    prefexNo: initialData.prefexNo || '',
     level1: initialData.accClass || '1',
     level2: initialData.level2 || '',
     level3: initialData.level3 || '',
-    isPermanent: 0,
-    accCode: ''
+    isPermanent: initialData.isPermanent || 0,
+    accCode: initialData.accCode || '',
+    obDrAmount: initialData.obDrAmount || 0,
+    obCrAmount: initialData.obCrAmount || 0,
+    cbDrAmount: initialData.cbDrAmount || 0,
+    cbCrAmount: initialData.cbCrAmount || 0,
+    isInactive: initialData.isInactive || 0,
+    isHidden: initialData.isHidden || 0
   });
 
   const [status, setStatus] = useState({ type: '', message: '' });
@@ -37,11 +43,30 @@ export default function CreateAccountPage({ setActivePage, initialData = {}, pre
     }
   }, [formData.level3, formData.level2]);
 
+  const enToArabicMap = {
+    'q': 'ض', 'w': 'ص', 'e': 'ث', 'r': 'ق', 't': 'ف', 'y': 'غ', 'u': 'ع', 'i': 'ه', 'o': 'خ', 'p': 'ح', '[': 'ج', ']': 'د',
+    'a': 'ش', 's': 'س', 'd': 'ي', 'f': 'ب', 'g': 'ل', 'h': 'ا', 'j': 'ت', 'k': 'ن', 'l': 'م', ';': 'ك', "'": 'ط',
+    'z': 'ئ', 'x': 'ء', 'c': 'ؤ', 'v': 'ر', 'b': 'لا', 'n': 'ى', 'm': 'ة', ',': 'و', '.': 'ز', '/': 'ظ',
+    'Q': 'َ', 'W': 'ً', 'E': 'ُ', 'R': 'ٌ', 'T': 'لإ', 'Y': 'إ', 'U': '`', 'I': 'ه', 'O': 'خ', 'P': 'ح', '{': 'ج', '}': 'د',
+    'A': 'ِ', 'S': 'ٍ', 'D': '[', 'F': ']', 'G': 'لأ', 'H': 'أ', 'J': 'ـ', 'K': '，', 'L': '/', ':': ':', '"': '"',
+    'Z': '~', 'X': 'ْ', 'C': '{', 'V': '}', 'B': 'لآ', 'N': 'آ', 'M': '’', '<': '>', '>': '<', '?': '؟'
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let finalValue = type === 'checkbox' ? (checked ? 1 : 0) : value;
+
+    // Auto-map English keys to Arabic characters for accAName field
+    if (name === 'accAName' && type !== 'checkbox' && value.length > (formData.accAName?.length || 0)) {
+      const lastChar = value.charAt(value.length - 1);
+      if (enToArabicMap[lastChar]) {
+        finalValue = value.substring(0, value.length - 1) + enToArabicMap[lastChar];
+      }
+    }
+
     setFormData(prev => ({ 
       ...prev, 
-      [name]: type === 'checkbox' ? (checked ? 1 : 0) : value 
+      [name]: finalValue
     }));
   };
 
@@ -65,7 +90,13 @@ export default function CreateAccountPage({ setActivePage, initialData = {}, pre
       level1: sanitize(formData.level1) ? String(formData.level1) : null,
       level2: sanitize(formData.level2) ? String(formData.level2) : null,
       level3: sanitize(formData.level3) ? String(formData.level3) : null,
-      isPermanent: formData.isPermanent ? 1 : 0
+      isPermanent: formData.isPermanent ? 1 : 0,
+      obDrAmount: Number(formData.obDrAmount) || 0,
+      obCrAmount: Number(formData.obCrAmount) || 0,
+      cbDrAmount: Number(formData.cbDrAmount) || 0,
+      cbCrAmount: Number(formData.cbCrAmount) || 0,
+      isInactive: formData.isInactive ? 1 : 0,
+      isHidden: formData.isHidden ? 1 : 0
     };
 
     try {
@@ -89,7 +120,13 @@ export default function CreateAccountPage({ setActivePage, initialData = {}, pre
         accName: '',
         accAName: '',
         accCode: '',
-        prefexNo: ''
+        prefexNo: '',
+        obDrAmount: 0,
+        obCrAmount: 0,
+        cbDrAmount: 0,
+        cbCrAmount: 0,
+        isInactive: 0,
+        isHidden: 0
       }));
     } catch (err) {
       setStatus({ type: 'error', message: err.message });
@@ -150,7 +187,7 @@ export default function CreateAccountPage({ setActivePage, initialData = {}, pre
                     <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-zinc-500 transition-colors" size={18} />
                     <input
                       type="text"
-                      value="AUTO-GENERATE"
+                      value={formData.accNo || 'AUTO-GENERATE'}
                       disabled
                       className="w-full bg-zinc-100 dark:bg-zinc-800 border border-border rounded-2xl pl-12 pr-4 py-3.5 text-base font-bold outline-none cursor-not-allowed text-zinc-500"
                     />
@@ -276,8 +313,84 @@ export default function CreateAccountPage({ setActivePage, initialData = {}, pre
                 </div>
               </div>
 
+              {/* Opening & Closing Balance Section */}
+              <div className="bg-zinc-50/50 dark:bg-white/5 rounded-3xl p-6 border border-border/50">
+                <h3 className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-5 flex items-center gap-2">
+                  <CreditCard size={14} /> Balance Information
+                </h3>
+                <div className="overflow-hidden rounded-2xl border border-border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-zinc-100 dark:bg-zinc-800">
+                        <th className="p-3 text-left text-[10px] font-black text-zinc-500 uppercase tracking-widest w-1/3"></th>
+                        <th className="p-3 text-center text-[10px] font-black text-blue-600 uppercase tracking-widest border-l border-border">Credit</th>
+                        <th className="p-3 text-center text-[10px] font-black text-rose-600 uppercase tracking-widest border-l border-border">Debit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-t border-border">
+                        <td className="p-3">
+                          <span className="text-[11px] font-black text-rose-500 uppercase tracking-tight flex items-center gap-1.5">
+                            <ArrowDownRight size={14} /> Opening Balance
+                          </span>
+                        </td>
+                        <td className="p-2 border-l border-border">
+                          <input
+                            type="number"
+                            name="obCrAmount"
+                            value={formData.obCrAmount}
+                            onChange={handleChange}
+                            step="0.01"
+                            className="w-full bg-white dark:bg-zinc-900 border border-border rounded-xl px-3 py-2.5 text-sm font-mono font-bold text-right outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white"
+                          />
+                        </td>
+                        <td className="p-2 border-l border-border">
+                          <input
+                            type="number"
+                            name="obDrAmount"
+                            value={formData.obDrAmount}
+                            onChange={handleChange}
+                            step="0.01"
+                            className="w-full bg-white dark:bg-zinc-900 border border-border rounded-xl px-3 py-2.5 text-sm font-mono font-bold text-right outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all dark:text-white"
+                          />
+                        </td>
+                      </tr>
+                      <tr className="border-t border-border bg-zinc-50/50 dark:bg-zinc-900/30">
+                        <td className="p-3">
+                          <span className="text-[11px] font-black text-blue-500 uppercase tracking-tight flex items-center gap-1.5">
+                            <ArrowUpRight size={14} /> Closing Balance
+                          </span>
+                        </td>
+                        <td className="p-2 border-l border-border">
+                          <input
+                            type="number"
+                            name="cbCrAmount"
+                            value={formData.cbCrAmount}
+                            readOnly
+                            disabled
+                            step="0.01"
+                            className="w-full bg-zinc-100 dark:bg-zinc-800 border border-border rounded-xl px-3 py-2.5 text-sm font-mono font-bold text-right outline-none cursor-not-allowed text-zinc-500 dark:text-zinc-500"
+                          />
+                        </td>
+                        <td className="p-2 border-l border-border">
+                          <input
+                            type="number"
+                            name="cbDrAmount"
+                            value={formData.cbDrAmount}
+                            readOnly
+                            disabled
+                            step="0.01"
+                            className="w-full bg-zinc-100 dark:bg-zinc-800 border border-border rounded-xl px-3 py-2.5 text-sm font-mono font-bold text-right outline-none cursor-not-allowed text-zinc-500 dark:text-zinc-500"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               {/* Flags Section */}
-              <div className="flex items-center gap-6 py-2 px-1">
+              <div className="flex flex-wrap items-center gap-6 py-2 px-1">
                 <label className="inline-flex items-center cursor-pointer group">
                   <div className="relative">
                     <input 
@@ -289,7 +402,29 @@ export default function CreateAccountPage({ setActivePage, initialData = {}, pre
                     />
                     <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                   </div>
-                  <span className="ml-3 text-xs font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-tighter group-hover:text-indigo-500 transition-colors">Is Permanent Account</span>
+                  <span className="ml-3 text-xs font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-tighter group-hover:text-indigo-500 transition-colors">Permanent Account</span>
+                </label>
+
+                <label className="inline-flex items-center cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    name="isInactive"
+                    checked={formData.isInactive === 1}
+                    onChange={handleChange}
+                    className="w-4 h-4 rounded border-zinc-300 text-rose-600 focus:ring-rose-500 dark:border-zinc-600 dark:bg-zinc-800 cursor-pointer" 
+                  />
+                  <span className="ml-2 text-xs font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-tighter group-hover:text-rose-500 transition-colors">Inactive</span>
+                </label>
+
+                <label className="inline-flex items-center cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    name="isHidden"
+                    checked={formData.isHidden === 1}
+                    onChange={handleChange}
+                    className="w-4 h-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500 dark:border-zinc-600 dark:bg-zinc-800 cursor-pointer" 
+                  />
+                  <span className="ml-2 text-xs font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-tighter group-hover:text-amber-500 transition-colors">Hidden Account</span>
                 </label>
               </div>
 

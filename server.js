@@ -110,17 +110,39 @@ app.get('/api/items/search', async (req, res) => {
   }
 });
 
-// Endpoint to search customers in dbo.ACCOUNTS
 // --- CUSTOMER ENDPOINTS ---
 
-// 1. Cache endpoint (Must be above :id to avoid conflict)
+// 1. List Customers from ACCOUNTS_INFO
+app.get('/api/customers/list', async (req, res) => {
+  console.log('📡 CUSTOMER LIST REQUEST RECEIVED');
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        ACC_NO, 
+       ACC_NAME, 
+         ACC_ANAME,
+        ACC_TYPE,
+        OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT
+      FROM dbo.ACCOUNTS_INFO AI
+     
+      WHERE ACC_TYPE = 1
+      ORDER BY ACC_NO
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('❌ SQL ERROR IN CUSTOMER LIST:', error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+// 2. Cache endpoint
 app.get('/api/customers/cache', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT ACC_NO, ACC_NAME 
-      FROM dbo.ACCOUNTS 
-      WHERE ACC_TYPE_CODE = 2
+   
+      SELECT ACC_NO, ACC_NAME FROM dbo.ACCOUNTS_INFO WHERE ACC_TYPE = 1
     `);
     console.log(`👤 Customer Cache: Loaded ${result.recordset.length} customers.`);
     res.json(result.recordset);
@@ -130,7 +152,7 @@ app.get('/api/customers/cache', async (req, res) => {
   }
 });
 
-// 2. Search customers
+// 3. Search customers
 app.get('/api/customers/search', async (req, res) => {
   const q = req.query.q || '';
   try {
@@ -138,9 +160,11 @@ app.get('/api/customers/search', async (req, res) => {
     const result = await pool.request()
       .input('query', sql.VarChar, `%${q}%`)
       .query(`
-        SELECT TOP 10 ACC_NO, ACC_NAME 
-        FROM dbo.ACCOUNTS 
-        WHERE ACC_TYPE_CODE = 2 AND (ACC_NO LIKE @query OR ACC_NAME LIKE @query)
+        SELECT TOP 20 ACC_NO, ACC_NAME FROM (
+       
+          SELECT ACC_NO, ACC_NAME FROM dbo.ACCOUNTS_INFO WHERE ACC_TYPE = 1
+        ) AS Customers
+        WHERE (ACC_NO LIKE @query OR ACC_NAME LIKE @query)
       `);
     console.log(`👤 Customer Search: Query "${q}" returned ${result.recordset.length} results`);
     res.json(result.recordset);
@@ -150,28 +174,187 @@ app.get('/api/customers/search', async (req, res) => {
   }
 });
 
-// 2. Fetch single customer by ID (Numeric match)
+// --- SUPPLIER ENDPOINTS ---
+
+// 1. List Suppliers from ACCOUNTS_INFO
+app.get('/api/suppliers/list', async (req, res) => {
+  console.log('📡 SUPPLIER LIST REQUEST RECEIVED');
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        ACC_NO, 
+        ACC_NAME, 
+        ACC_ANAME,
+        ACC_TYPE,
+        OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT
+      FROM dbo.ACCOUNTS_INFO
+      WHERE ACC_TYPE = 2
+      ORDER BY ACC_NO
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('❌ SQL ERROR IN SUPPLIER LIST:', error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+// 2. Cache endpoint
+app.get('/api/suppliers/cache', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ACC_NO, ACC_NAME FROM dbo.ACCOUNTS_INFO WHERE ACC_TYPE = 2
+    `);
+    console.log(`👤 Supplier Cache: Loaded ${result.recordset.length} suppliers.`);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch suppliers cache:", error);
+    res.status(500).json({ error: 'Failed to fetch suppliers for cache' });
+  }
+});
+
+// 3. Search suppliers
+app.get('/api/suppliers/search', async (req, res) => {
+  const q = req.query.q || '';
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('query', sql.VarChar, `%${q}%`)
+      .query(`
+        SELECT TOP 20 ACC_NO, ACC_NAME FROM dbo.ACCOUNTS_INFO
+        WHERE ACC_TYPE = 2 AND (ACC_NO LIKE @query OR ACC_NAME LIKE @query)
+      `);
+    console.log(`👤 Supplier Search: Query "${q}" returned ${result.recordset.length} results`);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Supplier search failed:", error.message);
+    res.status(500).json({ error: 'Database search error' });
+  }
+});
+
+app.get('/api/options/supplier-policy', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT SUP_AC_TYPE, PAYABLE_ACC FROM dbo.ac_options
+    `);
+
+    if (result.recordset[0]) {
+      const policy = result.recordset[0];
+      console.log('✅ SUPPLIER POLICY RESOLVED:', policy);
+      res.json({
+        sup_ac_type: policy.SUP_AC_TYPE,
+        default_ledger: String(policy.PAYABLE_ACC || '')
+      });
+    } else {
+      console.log('⚠️ SUPPLIER POLICY NOT FOUND IN AC_OPTIONS');
+      res.json({ sup_ac_type: null, default_ledger: null });
+    }
+  } catch (error) {
+    console.error('❌ SQL ERROR GETTING SUPPLIER POLICY:', error.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// --- PURCHASE ENDPOINTS ---
+
+// 1. List Purchase Accounts from ACCOUNTS_INFO
+app.get('/api/purchases/list', async (req, res) => {
+  console.log('📡 PURCHASE LIST REQUEST RECEIVED');
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        ACC_NO, 
+        ACC_NAME, 
+        ACC_ANAME,
+        ACC_TYPE,
+        OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT
+      FROM dbo.ACCOUNTS_INFO
+      WHERE ACC_TYPE = 2
+      ORDER BY ACC_NO
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('❌ SQL ERROR IN PURCHASE LIST:', error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+// 2. Cache endpoint
+app.get('/api/purchases/cache', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ACC_NO, ACC_NAME FROM dbo.ACCOUNTS_INFO WHERE ACC_TYPE = 2
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch purchases cache:", error);
+    res.status(500).json({ error: 'Failed to fetch purchases for cache' });
+  }
+});
+
+// 3. Search purchases
+app.get('/api/purchases/search', async (req, res) => {
+  const q = req.query.q || '';
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('query', sql.VarChar, `%${q}%`)
+      .query(`
+        SELECT TOP 20 ACC_NO, ACC_NAME FROM dbo.ACCOUNTS_INFO
+        WHERE ACC_TYPE = 2 AND (ACC_NO LIKE @query OR ACC_NAME LIKE @query)
+      `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Purchase search failed:", error.message);
+    res.status(500).json({ error: 'Database search error' });
+  }
+});
+
+app.get('/api/options/purchase-policy', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT EXP_AC_TYPE, EXP_ACC FROM dbo.ac_options
+    `);
+
+    if (result.recordset[0]) {
+      const policy = result.recordset[0];
+      res.json({
+        pur_ac_type: policy.EXP_AC_TYPE,
+        default_ledger: String(policy.EXP_ACC || '')
+      });
+    } else {
+      res.json({ pur_ac_type: null, default_ledger: null });
+    }
+  } catch (error) {
+    console.error('❌ SQL ERROR GETTING PURCHASE POLICY:', error.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// 4. Fetch single customer/supplier by ID (Numeric match)
 app.get('/api/customers/:id', async (req, res) => {
   const { id } = req.params;
-
   if (isNaN(parseInt(id))) {
     return res.status(400).json({ error: 'Invalid ID format' });
   }
-
   try {
     const pool = await getPool();
     const result = await pool.request()
       .input('id', sql.Int, parseInt(id))
       .query(`
         SELECT TOP 1 ACC_NO, ACC_NAME 
-        FROM dbo.ACCOUNTS 
+        FROM dbo.ACCOUNTS_INFO 
         WHERE ACC_NO = @id
       `);
-
     if (result.recordset && result.recordset.length > 0) {
       res.json(result.recordset[0]);
     } else {
-      res.status(404).json({ error: 'Customer not found' });
+      res.status(404).json({ error: 'Account not found' });
     }
   } catch (error) {
     console.error("DB Error in /api/customers/:id:", error.message);
@@ -205,8 +388,8 @@ app.get('/api/accounts/cache', async (req, res, next) => {
   try {
     const pool = await getPool();
     const query = level === '0'
-      ? `SELECT ACC_NO, ACC_NAME, ACC_CLASS, LEVEL2_NO, LEVEL3_NO, ACC_LEVEL, OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT FROM dbo.ACCOUNTS ORDER BY ISNULL(LEVEL1_NO, 9), ISNULL(LEVEL2_NO, 9), ISNULL(LEVEL3_NO, 9), ACC_NO`
-      : `SELECT ACC_NO, ACC_NAME, ACC_CLASS, LEVEL2_NO, LEVEL3_NO, ACC_LEVEL, OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT FROM dbo.ACCOUNTS WHERE ACC_LEVEL = @level ORDER BY ISNULL(LEVEL1_NO, 9), ISNULL(LEVEL2_NO, 9), ISNULL(LEVEL3_NO, 9), ACC_NO`;
+      ? `SELECT ACC_NO, ACC_NAME, ACC_ANAME, ACC_CLASS, LEVEL2_NO, LEVEL3_NO, ACC_LEVEL, OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT, ACC_CODE, ISPERMENENT, GROUP_AC, PREFEX_NO, ACC_TYPE_CODE FROM dbo.ACCOUNTS ORDER BY ISNULL(LEVEL1_NO, 9), ISNULL(LEVEL2_NO, 9), ISNULL(LEVEL3_NO, 9), ACC_NO`
+      : `SELECT ACC_NO, ACC_NAME, ACC_ANAME, ACC_CLASS, LEVEL2_NO, LEVEL3_NO, ACC_LEVEL, OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT, ACC_CODE, ISPERMENENT, GROUP_AC, PREFEX_NO, ACC_TYPE_CODE FROM dbo.ACCOUNTS WHERE ACC_LEVEL = @level ORDER BY ISNULL(LEVEL1_NO, 9), ISNULL(LEVEL2_NO, 9), ISNULL(LEVEL3_NO, 9), ACC_NO`;
 
     const result = await pool.request()
       .input('level', sql.Int, level)
@@ -336,7 +519,7 @@ app.get('/api/accounts/list-by-parent', async (req, res, next) => {
         ORDER BY ACC_NO
       `);
     if (result.recordset.length > 0) {
-        console.log('🔗 CHILD RECORD SAMPLE:', result.recordset[0]);
+      console.log('🔗 CHILD RECORD SAMPLE:', result.recordset[0]);
     }
     console.log(`✅ Found ${result.recordset.length} accounts for group.`);
     res.json(result.recordset);
@@ -390,11 +573,14 @@ app.get('/api/accounts/by-level', async (req, res, next) => {
 
 // Create a new Chart of Account
 app.post('/api/accounts/create', async (req, res) => {
-  const { 
-    accName, accClass, accLevel, 
-    accAName = '', groupAc = '', prefexNo = '', 
-    level1, level2, level3, 
-    isPermanent = 0, accCode = ''
+  const {
+    accNo: providedAccNo,
+    accName, accClass, accLevel,
+    accAName = '', groupAc = '', prefexNo = '',
+    level1, level2, level3,
+    isPermanent = 0, accCode = '',
+    obDrAmount = 0, obCrAmount = 0,
+    isInactive = 0, isHidden = 0
   } = req.body;
 
   if (!accName) {
@@ -403,73 +589,143 @@ app.post('/api/accounts/create', async (req, res) => {
 
   try {
     const pool = await getPool();
+    let finalAccNo = providedAccNo;
 
-    // Determine parent context for ID generation
-    let parentColumn = '';
-    let parentValue = '';
-    
-    if (accLevel === 4) {
-      parentColumn = 'LEVEL3_NO';
-      parentValue = level3;
-    } else if (accLevel === 3) {
-      parentColumn = 'LEVEL2_NO';
-      parentValue = level2;
-    } else {
-      parentColumn = 'ACC_CLASS';
-      parentValue = accClass;
+    // If no AccNo provided, generate next one
+    if (!finalAccNo || isNaN(Number(finalAccNo))) {
+      // Determine parent context for ID generation
+      let parentColumn = '';
+      let parentValue = '';
+
+      if (accLevel === 4) {
+        parentColumn = 'LEVEL3_NO';
+        parentValue = level3;
+      } else if (accLevel === 3) {
+        parentColumn = 'LEVEL2_NO';
+        parentValue = level2;
+      } else {
+        parentColumn = 'ACC_CLASS';
+        parentValue = accClass;
+      }
+
+      // Auto-generate ACC_NO: MAX(ACC_NO) + 1 within parent context
+      const idResult = await pool.request()
+        .input('parentValue', sql.NVarChar(50), String(parentValue))
+        .query(`
+          SELECT ISNULL(MAX(ACC_NO), 0) as lastNo 
+          FROM dbo.ACCOUNTS 
+          WHERE ${parentColumn} = @parentValue
+        `);
+
+      let nextAccNo = idResult.recordset[0].lastNo;
+
+      // If no existing accounts, start from ParentID * 100 + 1 (or simple +1 if numeric mismatch)
+      if (nextAccNo === 0) {
+        const startBase = isNaN(Number(parentValue)) ? 0 : Number(parentValue);
+        nextAccNo = startBase * 100 + 1;
+      } else {
+        nextAccNo = Number(nextAccNo) + 1;
+      }
+      finalAccNo = nextAccNo;
     }
 
-    // Auto-generate ACC_NO: MAX(ACC_NO) + 1 within parent context
-    const idResult = await pool.request()
-      .input('parentValue', sql.NVarChar(50), String(parentValue))
+    // --- CALCULATE CLOSING BALANCE FROM TRANSACTIONS ---
+    // CB = OB + Sum(TRN)
+    const trnResult = await pool.request()
+      .input('accNo', sql.Numeric(18, 0), finalAccNo)
       .query(`
-        SELECT ISNULL(MAX(ACC_NO), 0) as lastNo 
-        FROM dbo.ACCOUNTS 
-        WHERE ${parentColumn} = @parentValue
+        SELECT 
+          SUM(CASE WHEN DR_CR='C' THEN PAY_AMOUNT ELSE 0 END) AS CREDIT_AMOUNT,
+          SUM(CASE WHEN DR_CR='D' THEN PAY_AMOUNT ELSE 0 END) AS DEBIT_AMOUNT 
+        FROM dbo.TRN_ACCOUNTS 
+        WHERE ACC_NO = @accNo
       `);
-    
-    let nextAccNo = idResult.recordset[0].lastNo;
-    
-    // If no existing accounts, start from ParentID * 100 + 1 (or simple +1 if numeric mismatch)
-    if (nextAccNo === 0) {
-      const startBase = isNaN(Number(parentValue)) ? 0 : Number(parentValue);
-      nextAccNo = startBase * 100 + 1;
+
+    const trnCr = trnResult.recordset[0].CREDIT_AMOUNT || 0;
+    const trnDr = trnResult.recordset[0].DEBIT_AMOUNT || 0;
+
+    const cbCrAmount = (Number(obCrAmount) || 0) + trnCr;
+    const cbDrAmount = (Number(obDrAmount) || 0) + trnDr;
+
+    // Check if account already exists (for "Update" functionality if needed)
+    const checkExist = await pool.request()
+      .input('accNo', sql.Numeric(18, 0), finalAccNo)
+      .query(`SELECT ACC_NO FROM dbo.ACCOUNTS WHERE ACC_NO = @accNo`);
+
+    if (checkExist.recordset.length > 0) {
+      // UPDATE EXISTING
+      const updateQuery = `
+        UPDATE dbo.ACCOUNTS SET
+          ACC_NAME = @accName, ACC_ANAME = @accAName, ACC_CLASS = @accClass, ACC_LEVEL = @accLevel,
+          GROUP_AC = @groupAc, PREFEX_NO = @prefexNo, LEVEL1_NO = @level1, LEVEL2_NO = @level2, LEVEL3_NO = @level3,
+          ISPERMENENT = @isPermanent, ACC_CODE = @accCode,
+          OB_DR_AMOUNT = @obDrAmount, OB_CR_AMOUNT = @obCrAmount,
+          CB_DR_AMOUNT = @cbDrAmount, CB_CR_AMOUNT = @cbCrAmount,
+          UPDATE_TIME = GETDATE()
+        WHERE ACC_NO = @accNo
+      `;
+      await pool.request()
+        .input('accNo', sql.Numeric(18, 0), finalAccNo)
+        .input('accName', sql.NVarChar(150), accName)
+        .input('accAName', sql.NVarChar(150), accAName)
+        .input('accClass', sql.Int, accClass)
+        .input('accLevel', sql.Int, accLevel)
+        .input('groupAc', sql.Numeric(18, 0), (groupAc === '' || isNaN(Number(groupAc))) ? null : Number(groupAc))
+        .input('prefexNo', sql.Numeric(18, 0), (prefexNo === '' || isNaN(Number(prefexNo))) ? null : Number(prefexNo))
+        .input('level1', sql.NVarChar(50), level1 ? String(level1) : null)
+        .input('level2', sql.NVarChar(50), level2 ? String(level2) : null)
+        .input('level3', sql.NVarChar(50), level3 ? String(level3) : null)
+        .input('isPermanent', sql.Bit, isPermanent)
+        .input('accCode', sql.NVarChar(50), accCode)
+        .input('obDrAmount', sql.Decimal(18, 2), Number(obDrAmount) || 0)
+        .input('obCrAmount', sql.Decimal(18, 2), Number(obCrAmount) || 0)
+        .input('cbDrAmount', sql.Decimal(18, 2), Number(cbDrAmount) || 0)
+        .input('cbCrAmount', sql.Decimal(18, 2), Number(cbCrAmount) || 0)
+        .query(updateQuery);
+
+      console.log(`✅ Chart of Account Updated: ${accName} (${finalAccNo})`);
+      res.json({ success: true, message: 'Account updated successfully', accNo: finalAccNo });
     } else {
-      nextAccNo = Number(nextAccNo) + 1;
+      // INSERT NEW
+      const insertQuery = `
+          INSERT INTO dbo.ACCOUNTS (
+            ACC_NO, ACC_NAME, ACC_ANAME, ACC_CLASS, ACC_LEVEL, 
+            GROUP_AC, PREFEX_NO, LEVEL1_NO, LEVEL2_NO, LEVEL3_NO, 
+            ISPERMENENT, ACC_CODE, ACC_TYPE_CODE, CREATE_TIME,
+            OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT
+          )
+          VALUES (
+            @accNo, @accName, @accAName, @accClass, @accLevel, 
+            @groupAc, @prefexNo, @level1, @level2, @level3, 
+            @isPermanent, @accCode, 1, GETDATE(),
+            @obDrAmount, @obCrAmount, @cbDrAmount, @cbCrAmount
+          )
+      `;
+
+      await pool.request()
+        .input('accNo', sql.Numeric(18, 0), finalAccNo)
+        .input('accName', sql.NVarChar(150), accName)
+        .input('accAName', sql.NVarChar(150), accAName)
+        .input('accClass', sql.Int, accClass)
+        .input('accLevel', sql.Int, accLevel)
+        .input('groupAc', sql.Numeric(18, 0), (groupAc === '' || isNaN(Number(groupAc))) ? null : Number(groupAc))
+        .input('prefexNo', sql.Numeric(18, 0), (prefexNo === '' || isNaN(Number(prefexNo))) ? null : Number(prefexNo))
+        .input('level1', sql.NVarChar(50), level1 ? String(level1) : null)
+        .input('level2', sql.NVarChar(50), level2 ? String(level2) : null)
+        .input('level3', sql.NVarChar(50), level3 ? String(level3) : null)
+        .input('isPermanent', sql.Bit, isPermanent)
+        .input('accCode', sql.NVarChar(50), accCode)
+        .input('obDrAmount', sql.Decimal(18, 2), Number(obDrAmount) || 0)
+        .input('obCrAmount', sql.Decimal(18, 2), Number(obCrAmount) || 0)
+        .input('cbDrAmount', sql.Decimal(18, 2), Number(cbDrAmount) || 0)
+        .input('cbCrAmount', sql.Decimal(18, 2), Number(cbCrAmount) || 0)
+        .query(insertQuery);
+
+      console.log(`✅ Chart of Account Created: ${accName} (${finalAccNo})`);
+      res.json({ success: true, message: 'Account created successfully', accNo: finalAccNo });
     }
-
-    const insertQuery = `
-        INSERT INTO dbo.ACCOUNTS (
-          ACC_NO, ACC_NAME, ACC_ANAME, ACC_CLASS, ACC_LEVEL, 
-          GROUP_AC, PREFEX_NO, LEVEL1_NO, LEVEL2_NO, LEVEL3_NO, 
-          ISPERMENENT, ACC_CODE, ACC_TYPE_CODE, CREATE_TIME
-        )
-        VALUES (
-          @accNo, @accName, @accAName, @accClass, @accLevel, 
-          @groupAc, @prefexNo, @level1, @level2, @level3, 
-          @isPermanent, @accCode, 1, GETDATE()
-        )
-    `;
-
-    await pool.request()
-      .input('accNo', sql.Numeric(18, 0), nextAccNo)
-      .input('accName', sql.NVarChar(150), accName)
-      .input('accAName', sql.NVarChar(150), accAName)
-      .input('accClass', sql.Int, accClass)
-      .input('accLevel', sql.Int, accLevel)
-      .input('groupAc', sql.Numeric(18, 0), (groupAc === '' || isNaN(Number(groupAc))) ? null : Number(groupAc))
-      .input('prefexNo', sql.Numeric(18, 0), (prefexNo === '' || isNaN(Number(prefexNo))) ? null : Number(prefexNo))
-      .input('level1', sql.NVarChar(50), level1 ? String(level1) : null)
-      .input('level2', sql.NVarChar(50), level2 ? String(level2) : null)
-      .input('level3', sql.NVarChar(50), level3 ? String(level3) : null)
-      .input('isPermanent', sql.Bit, isPermanent)
-      .input('accCode', sql.NVarChar(50), accCode)
-      .query(insertQuery);
-
-    console.log(`✅ Chart of Account Created Auto-ID: ${accName} (${nextAccNo})`);
-    res.json({ success: true, message: 'Account created successfully', accNo: nextAccNo });
   } catch (error) {
-    console.error("❌ SQL ERROR DURING ACCOUNT CREATE:");
+    console.error("❌ SQL ERROR DURING ACCOUNT SAVE:");
     console.error("Message:", error.message);
     console.error("Payload received:", req.body);
     res.status(500).json({ error: 'Database error', details: error.message });
@@ -484,22 +740,22 @@ app.get('/api/options/cash-policy', async (req, res) => {
     const fallbackResult = await pool.request().query(`
       SELECT CASH_AC_TYPE FROM dbo.AC_OPTIONS WHERE ID = 1
     `);
-    
+
     if (fallbackResult.recordset[0]) {
-        const headerId = fallbackResult.recordset[0].CASH_AC_TYPE;
-        const accInfo = await pool.request()
-            .input('headerId', sql.Numeric(18,0), headerId)
-            .query('SELECT LEVEL2_NO FROM dbo.ACCOUNTS WHERE ACC_NO = @headerId');
-        
-        const resData = {
-            headerAcc: headerId,
-            subClass: accInfo.recordset[0]?.LEVEL2_NO || 'All'
-        };
-        console.log('✅ CASH POLICY RESOLVED:', resData);
-        res.json(resData);
+      const headerId = fallbackResult.recordset[0].CASH_AC_TYPE;
+      const accInfo = await pool.request()
+        .input('headerId', sql.Numeric(18, 0), headerId)
+        .query('SELECT LEVEL2_NO FROM dbo.ACCOUNTS WHERE ACC_NO = @headerId');
+
+      const resData = {
+        headerAcc: headerId,
+        subClass: accInfo.recordset[0]?.LEVEL2_NO || 'All'
+      };
+      console.log('✅ CASH POLICY RESOLVED:', resData);
+      res.json(resData);
     } else {
-        console.log('⚠️ CASH POLICY NOT FOUND IN AC_OPTIONS');
-        res.json({ headerAcc: 'All', subClass: 'All' });
+      console.log('⚠️ CASH POLICY NOT FOUND IN AC_OPTIONS');
+      res.json({ headerAcc: 'All', subClass: 'All' });
     }
   } catch (error) {
     console.error('❌ Failed to fetch cash policy:', error.message);
@@ -511,16 +767,19 @@ app.get('/api/options/customer-policy', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT cus_ac_type FROM dbo.ac_options
+      SELECT cus_ac_type, RECEIVABLE_ACC FROM dbo.ac_options
     `);
-    
-    if (result.recordset[0] && result.recordset[0].cus_ac_type) {
-        const cusTypeId = result.recordset[0].cus_ac_type;
-        console.log('✅ CUSTOMER POLICY RESOLVED:', { cus_ac_type: cusTypeId });
-        res.json({ cus_ac_type: cusTypeId });
+
+    if (result.recordset[0]) {
+      const policy = result.recordset[0];
+      console.log('✅ CUSTOMER POLICY RESOLVED:', policy);
+      res.json({
+        cus_ac_type: policy.cus_ac_type,
+        default_ledger: String(policy.RECEIVABLE_ACC || '')
+      });
     } else {
-        console.log('⚠️ CUSTOMER POLICY NOT FOUND IN AC_OPTIONS');
-        res.json({ cus_ac_type: null });
+      console.log('⚠️ CUSTOMER POLICY NOT FOUND IN AC_OPTIONS');
+      res.json({ cus_ac_type: null, default_ledger: null });
     }
   } catch (error) {
     console.error('❌ SQL ERROR GETTING CUSTOMER POLICY:', error.message);
@@ -537,13 +796,11 @@ app.get('/api/customers/:accNo/info', async (req, res) => {
       .input('accNo', sql.VarChar, accNo)
       .query(`
         SELECT 
-          ACC_NO, ACC_NAME, ACC_ANAME, ACC_TELE_NO, ACC_MOBILE_NO, ACC_FAX_NO, ACC_ADDRESS, 
-          CREDIT_LIMIT, CONTACT_PERSON, ID_NUMBER, FLAG, EMAIL, SEND_SMS, IBAN_NO, BANK_DET, 
-          VAT_Tinno, CREDIT_DAYS, building_no, city_subdivision_name, street_name, Schema_no, 
-          city_name, city_aname, postal_zone, regsitered_name, LEDGER_ACC, IS_PERMINENT,
-          city_subdivision_name as district
-        FROM dbo.ACCOUNTS_INFO
-        WHERE ACC_NO = @accNo
+          AI.*,
+           ACC_NAME,
+         ACC_ANAME
+        FROM dbo.ACCOUNTS_INFO AI
+        WHERE AI.ACC_NO = @accNo
       `);
 
     if (result.recordset.length > 0) {
@@ -552,56 +809,91 @@ app.get('/api/customers/:accNo/info', async (req, res) => {
       res.json(null);
     }
   } catch (error) {
-    console.error(`❌ Address Lookup Error for ${accNo}:`, error.message);
+    console.error(`❌ Customer Lookup Error for ${accNo}:`, error.message);
     res.status(500).json({ error: 'Database error' });
   }
 });
 
 // Save Customer Info
 app.post('/api/customers/:accNo/info', async (req, res) => {
-  const { accNo } = req.params;
+  const { accNo: originalAccNo } = req.params;
   const data = req.body;
-  if (!accNo || !data) return res.status(400).json({ error: 'Missing logic' });
+  if (!originalAccNo || !data) return res.status(400).json({ error: 'Missing logic' });
 
   try {
     const pool = await getPool();
-    
-    // Check if exists
+    let accNo = originalAccNo;
+
+    // Handle Auto-generation for new customers (using ACCOUNTS_INFO as source)
+    if (originalAccNo === 'AUTO-GENERATE' || !originalAccNo) {
+      const maxResult = await pool.request()
+        .query(`SELECT ISNULL(MAX(ACC_NO), 6000) as maxNo FROM dbo.ACCOUNTS_INFO WHERE ACC_TYPE = 1`);
+
+      const lastNo = maxResult.recordset[0].maxNo;
+      if (lastNo) {
+        accNo = String(Number(lastNo) + 1);
+      } else {
+        accNo = "1";
+      }
+      console.log(`✨ Generated New Customer ACC_NO in ACCOUNTS_INFO: ${accNo}`);
+    }
+
+    // 1. CALCULATE CLOSING BALANCE FROM TRANSACTIONS
+    const trnResult = await pool.request()
+      .input('accNo', sql.Numeric(18, 0), accNo)
+      .query(`
+        SELECT 
+          SUM(CASE WHEN DR_CR='C' THEN PAY_AMOUNT ELSE 0 END) AS CREDIT_AMOUNT,
+          SUM(CASE WHEN DR_CR='D' THEN PAY_AMOUNT ELSE 0 END) AS DEBIT_AMOUNT 
+        FROM dbo.TRN_ACCOUNTS 
+        WHERE ACC_NO = @accNo
+      `);
+    const trnCr = trnResult.recordset[0].CREDIT_AMOUNT || 0;
+    const trnDr = trnResult.recordset[0].DEBIT_AMOUNT || 0;
+    const cbCrAmount = (Number(data.OB_CR_AMOUNT) || 0) + trnCr;
+    const cbDrAmount = (Number(data.OB_DR_AMOUNT) || 0) + trnDr;
+
+    // 2. CHECK IF EXISTS IN ACCOUNTS_INFO
     const checkEx = await pool.request()
       .input('accNo', sql.VarChar, accNo)
       .query(`SELECT ACC_NO FROM dbo.ACCOUNTS_INFO WHERE ACC_NO = @accNo`);
-      
+
     const reqPool = pool.request()
-      .input('accNo', sql.VarChar, accNo)
+      .input('accNo', sql.Numeric(18, 0), accNo)
       .input('ACC_NAME', sql.NVarChar, data.ACC_NAME || '')
       .input('ACC_ANAME', sql.NVarChar, data.ACC_ANAME || '')
-      .input('ACC_TELE_NO', sql.VarChar, data.ACC_TELE_NO || '')
-      .input('ACC_MOBILE_NO', sql.VarChar, data.ACC_MOBILE_NO || '')
-      .input('ACC_FAX_NO', sql.VarChar, data.ACC_FAX_NO || '')
+      .input('ACC_TELE_NO', sql.VarChar, String(data.ACC_TELE_NO || ''))
+      .input('ACC_MOBILE_NO', sql.VarChar, String(data.ACC_MOBILE_NO || ''))
+      .input('ACC_FAX_NO', sql.VarChar, String(data.ACC_FAX_NO || ''))
       .input('ACC_ADDRESS', sql.NVarChar, data.ACC_ADDRESS || '')
-      .input('CREDIT_LIMIT', sql.Float, data.CREDIT_LIMIT || 0)
+      .input('CREDIT_LIMIT', sql.Float, parseFloat(data.CREDIT_LIMIT) || 0)
       .input('CONTACT_PERSON', sql.NVarChar, data.CONTACT_PERSON || '')
-      .input('ID_NUMBER', sql.VarChar, data.ID_NUMBER || '')
+      .input('ID_NUMBER', sql.VarChar, String(data.ID_NUMBER || ''))
       .input('FLAG', sql.VarChar, data.FLAG || 'A')
       .input('EMAIL', sql.VarChar, data.EMAIL || '')
       .input('SEND_SMS', sql.Bit, data.SEND_SMS ? 1 : 0)
-      .input('IBAN_NO', sql.VarChar, data.IBAN_NO || '')
+      .input('IBAN_NO', sql.VarChar, String(data.IBAN_NO || ''))
       .input('BANK_DET', sql.NVarChar, data.BANK_DET || '')
-      .input('VAT_Tinno', sql.VarChar, data.VAT_Tinno || '')
-      .input('CREDIT_DAYS', sql.Int, data.CREDIT_DAYS || 0)
-      .input('building_no', sql.VarChar, data.building_no || '')
+      .input('VAT_Tinno', sql.VarChar, String(data.VAT_Tinno || ''))
+      .input('CREDIT_DAYS', sql.Int, parseInt(data.CREDIT_DAYS) || 0)
+      .input('building_no', sql.VarChar, String(data.building_no || ''))
       .input('city_subdivision_name', sql.NVarChar, data.city_subdivision_name || '')
       .input('street_name', sql.NVarChar, data.street_name || '')
-      .input('Schema_no', sql.VarChar, data.Schema_no || '')
+      .input('Schema_no', sql.VarChar, String(data.Schema_no || ''))
       .input('city_name', sql.NVarChar, data.city_name || '')
       .input('city_aname', sql.NVarChar, data.city_aname || '')
-      .input('postal_zone', sql.VarChar, data.postal_zone || '')
+      .input('postal_zone', sql.VarChar, String(data.postal_zone || ''))
       .input('regsitered_name', sql.NVarChar, data.regsitered_name || '')
-      .input('LEDGER_ACC', sql.VarChar, data.LEDGER_ACC || '')
-      .input('IS_PERMINENT', sql.Bit, data.IS_PERMINENT ? 1 : 0);
+      .input('LEDGER_ACC', sql.Numeric(18, 0), data.LEDGER_ACC || 0)
+      .input('IS_PERMINENT', sql.Bit, data.IS_PERMINENT ? 1 : 0)
+      .input('obDr', sql.Decimal(18, 2), Number(data.OB_DR_AMOUNT) || 0)
+      .input('obCr', sql.Decimal(18, 2), Number(data.OB_CR_AMOUNT) || 0)
+      .input('cbDr', sql.Decimal(18, 2), Number(cbDrAmount) || 0)
+      .input('cbCr', sql.Decimal(18, 2), Number(cbCrAmount) || 0);
+
+    const accType = parseInt(data.ACC_TYPE) || 1;
 
     if (checkEx.recordset.length > 0) {
-      // UPDATE
       await reqPool.query(`
         UPDATE dbo.ACCOUNTS_INFO SET 
           ACC_NAME = @ACC_NAME, ACC_ANAME = @ACC_ANAME, ACC_TELE_NO = @ACC_TELE_NO, 
@@ -612,30 +904,34 @@ app.post('/api/customers/:accNo/info', async (req, res) => {
           city_subdivision_name = @city_subdivision_name, street_name = @street_name, 
           Schema_no = @Schema_no, city_name = @city_name, city_aname = @city_aname, 
           postal_zone = @postal_zone, regsitered_name = @regsitered_name,
-          LEDGER_ACC = @LEDGER_ACC, IS_PERMINENT = @IS_PERMINENT
+          LEDGER_ACC = @LEDGER_ACC, IS_PERMINENT = @IS_PERMINENT,
+          OB_DR_AMOUNT = @obDr, OB_CR_AMOUNT = @obCr,
+          CB_DR_AMOUNT = @cbDr, CB_CR_AMOUNT = @cbCr,
+          ACC_TYPE = ${accType}
         WHERE ACC_NO = @accNo
       `);
     } else {
-      // INSERT
       await reqPool.query(`
         INSERT INTO dbo.ACCOUNTS_INFO (
           ACC_NO, ACC_NAME, ACC_ANAME, ACC_TELE_NO, ACC_MOBILE_NO, ACC_FAX_NO, ACC_ADDRESS, 
           CREDIT_LIMIT, CONTACT_PERSON, ID_NUMBER, FLAG, EMAIL, SEND_SMS, IBAN_NO, BANK_DET, 
           VAT_Tinno, CREDIT_DAYS, building_no, city_subdivision_name, street_name, Schema_no, 
-          city_name, city_aname, postal_zone, regsitered_name, LEDGER_ACC, IS_PERMINENT
+          city_name, city_aname, postal_zone, regsitered_name, LEDGER_ACC, IS_PERMINENT, 
+          OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT, ACC_TYPE
         ) VALUES (
           @accNo, @ACC_NAME, @ACC_ANAME, @ACC_TELE_NO, @ACC_MOBILE_NO, @ACC_FAX_NO, @ACC_ADDRESS, 
           @CREDIT_LIMIT, @CONTACT_PERSON, @ID_NUMBER, @FLAG, @EMAIL, @SEND_SMS, @IBAN_NO, @BANK_DET, 
           @VAT_Tinno, @CREDIT_DAYS, @building_no, @city_subdivision_name, @street_name, @Schema_no, 
-          @city_name, @city_aname, @postal_zone, @regsitered_name, @LEDGER_ACC, @IS_PERMINENT
+          @city_name, @city_aname, @postal_zone, @regsitered_name, @LEDGER_ACC, @IS_PERMINENT, 
+          @obDr, @obCr, @cbDr, @cbCr, ${accType}
         )
       `);
     }
-    
-    res.json({ success: true });
+
+    res.json({ success: true, accNo: accNo });
   } catch (err) {
     console.error("Save Customer Error:", err);
-    res.status(500).json({ error: 'Database save error' });
+    res.status(500).json({ error: 'Database save error', details: err.message });
   }
 });
 
@@ -658,13 +954,13 @@ app.get('/api/item-groups', async (req, res) => {
 app.post('/api/item-groups', async (req, res) => {
   const { ITM_CAT_CODE, ITM_CAT_NAME, ITM_CAT_ANAME, VAT_PERCENT } = req.body;
   if (!ITM_CAT_CODE || !ITM_CAT_NAME) return res.status(400).json({ error: 'Code and Name required' });
-  
+
   try {
     const pool = await getPool();
     const checkEx = await pool.request()
       .input('code', sql.Int, ITM_CAT_CODE)
       .query(`SELECT ITM_CAT_CODE FROM dbo.ITEM_CAT WHERE ITM_CAT_CODE = @code`);
-      
+
     const reqPool = pool.request()
       .input('code', sql.Int, ITM_CAT_CODE)
       .input('name', sql.NVarChar, ITM_CAT_NAME)

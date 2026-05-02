@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Save, User, Building, Phone, Mail, FileText, Banknote, CreditCard, Hash, MapPin, Globe } from 'lucide-react';
+import { ArrowLeft, Save, User, Building, Phone, Mail, FileText, Banknote, CreditCard, Hash, MapPin, Globe, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { API_ENDPOINTS } from '../config';
 
 export default function CustomerAccountForm({ setActivePage, params = {} }) {
@@ -32,22 +32,44 @@ export default function CustomerAccountForm({ setActivePage, params = {} }) {
     postal_zone: '',
     regsitered_name: '',
     LEDGER_ACC: '',
-    IS_PERMINENT: false
+    IS_PERMINENT: false,
+    OB_DR_AMOUNT: 0,
+    OB_CR_AMOUNT: 0,
+    CB_DR_AMOUNT: 0,
+    CB_CR_AMOUNT: 0
   });
+
+  const isSupplier = params.type === 'Supplier';
+  const isPurchase = params.type === 'Purchase';
+  const modeLabel = isPurchase ? 'Purchase' : (isSupplier ? 'Supplier' : 'Customer');
 
   useEffect(() => {
     // Fetch policy & ledger accounts
-    fetch(API_ENDPOINTS.CUSTOMER_POLICY)
+    let policyUrl = API_ENDPOINTS.CUSTOMER_POLICY;
+    if (isSupplier) policyUrl = API_ENDPOINTS.SUPPLIER_POLICY;
+    if (isPurchase) policyUrl = API_ENDPOINTS.PURCHASE_POLICY;
+    
+    fetch(policyUrl)
       .then(res => res.json())
       .then(policy => {
-        if (policy.cus_ac_type) {
-          return fetch(API_ENDPOINTS.ACCOUNT_LIST_BY_PARENT('3', policy.cus_ac_type));
+        console.log(`💎 ${modeLabel} Policy received:`, policy);
+        if (policy.default_ledger && !params.id) {
+          setFormData(prev => ({ ...prev, LEDGER_ACC: String(policy.default_ledger) }));
+        }
+        
+        let parentType = policy.cus_ac_type;
+        if (isSupplier) parentType = policy.sup_ac_type;
+        if (isPurchase) parentType = policy.pur_ac_type;
+
+        if (parentType) {
+          return fetch(API_ENDPOINTS.ACCOUNT_LIST_BY_PARENT('3', parentType));
         }
         return [];
       })
       .then(res => (res.json ? res.json() : res))
       .then(data => {
-        setLedgerAccounts(data.map ? data : []);
+        const filtered = (data.map ? data : []).filter(la => (la.acc_type_code || la.ACC_TYPE_CODE) === 1);
+        setLedgerAccounts(filtered);
       })
       .catch(err => console.error("Policy/Ledger fetch error:", err));
 
@@ -67,70 +89,123 @@ export default function CustomerAccountForm({ setActivePage, params = {} }) {
           setLoading(false);
         })
         .catch(err => {
-          console.error("Failed to load customer info:", err);
+          console.error(`Failed to load ${modeLabel} info:`, err);
           setLoading(false);
         });
     }
-  }, [params.id]);
+  }, [params.id, params.type]);
+
+  const enToArabicMap = {
+    'q': 'ض', 'w': 'ص', 'e': 'ث', 'r': 'ق', 't': 'ف', 'y': 'غ', 'u': 'ع', 'i': 'ه', 'o': 'خ', 'p': 'ح', '[': 'ج', ']': 'د',
+    'a': 'ش', 's': 'س', 'd': 'ي', 'f': 'ب', 'g': 'ل', 'h': 'ا', 'j': 'ت', 'k': 'ن', 'l': 'م', ';': 'ك', "'": 'ط',
+    'z': 'ئ', 'x': 'ء', 'c': 'ؤ', 'v': 'ر', 'b': 'لا', 'n': 'ى', 'm': 'ة', ',': 'و', '.': 'ز', '/': 'ظ',
+    'Q': 'َ', 'W': 'ً', 'E': 'ُ', 'R': 'ٌ', 'T': 'لإ', 'Y': 'إ', 'U': '`', 'I': 'ه', 'O': 'خ', 'P': 'ح', '{': 'ج', '}': 'د',
+    'A': 'ِ', 'S': 'ٍ', 'D': '[', 'F': ']', 'G': 'لأ', 'H': 'أ', 'J': 'ـ', 'K': '،', 'L': '/', ':': ':', '"': '"',
+    'Z': '~', 'X': 'ْ', 'C': '{', 'V': '}', 'B': 'لآ', 'N': 'آ', 'M': '’', '<': '>', '>': '<', '?': '؟'
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let finalValue = type === 'checkbox' ? checked : value;
+
+    // Auto-map English keys to Arabic characters for ACC_ANAME and city_aname fields
+    if ((name === 'ACC_ANAME' || name === 'city_aname') && type !== 'checkbox' && value.length > (formData[name]?.length || 0)) {
+      const lastChar = value.charAt(value.length - 1);
+      if (enToArabicMap[lastChar]) {
+        finalValue = value.substring(0, value.length - 1) + enToArabicMap[lastChar];
+      }
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: finalValue
     }));
   };
 
-  const handleSave = async () => {
+  const handleSubmit = async () => {
     if (!formData.LEDGER_ACC) {
       alert("Ledger Account is mandatory. Please select one.");
       return;
     }
     setLoading(true);
-    try {
-      const res = await fetch(`${API_ENDPOINTS.CUSTOMER_INFO(formData.ACC_NO)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+    const targetAccNo = formData.ACC_NO || 'AUTO-GENERATE';
+    let accType = 1;
+    if (isSupplier || isPurchase) accType = 2;
+
+    const payload = {
+      ...formData,
+      ACC_TYPE: accType
+    };
+
+    fetch(API_ENDPOINTS.CUSTOMER_INFO(targetAccNo), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(result => {
+        setLoading(false);
+        if (result.success) {
+          alert(`${modeLabel} saved successfully!`);
+          let targetPage = 'customers-account';
+          if (isSupplier) targetPage = 'supplier-accounts';
+          if (isPurchase) targetPage = 'purchase-accounts';
+          setActivePage(targetPage);
+        } else {
+          alert(`Error: ${result.error || 'Failed to save account'}`);
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Network error while saving');
+        setLoading(false);
       });
-      if (res.ok) {
-        alert('Customer saved successfully!');
-        setActivePage('customers-accounts');
-      } else {
-        const err = await res.json();
-        alert('Error saving customer: ' + (err.error || err.details));
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Network error while saving');
-    }
-    setLoading(false);
   };
 
   return (
     <div className="flex flex-col h-full p-6 animate-in fade-in zoom-in-95 duration-300">
       <div className="max-w-7xl mx-auto w-full flex flex-col flex-1 h-full relative">
-        <div className="flex items-center gap-4 mb-6">
-          <button 
-            onClick={() => setActivePage('customers-accounts')}
-            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-500"
-          >
-            <ArrowLeft size={24} />
-          </button>
-          <div>
-            <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter uppercase">
-              {params.id ? 'Edit Customer Account' : 'New Customer Account'}
-            </h1>
-            <p className="text-zinc-500 text-sm font-medium">Fill in the customer information details.</p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4 px-2">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => {
+                let targetPage = 'customers-account';
+                if (isSupplier) targetPage = 'supplier-accounts';
+                if (isPurchase) targetPage = 'purchase-accounts';
+                setActivePage(targetPage);
+              }}
+              className="p-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors text-zinc-500"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter uppercase">
+                {params.id ? `Edit ${modeLabel}` : `New ${modeLabel}`}
+              </h1>
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">Complete the form below to {params.id ? 'update' : 'register'} {modeLabel.toLowerCase()} account details.</p>
+            </div>
           </div>
-          <button 
-            onClick={handleSave}
-            disabled={loading}
-            className="ml-auto flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg"
-          >
-            <Save size={18} strokeWidth={3} />
-            {loading ? 'SAVING...' : 'SAVE CUSTOMER'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => {
+                let targetPage = 'customers-account';
+                if (isSupplier) targetPage = 'supplier-accounts';
+                if (isPurchase) targetPage = 'purchase-accounts';
+                setActivePage(targetPage);
+              }}
+              className="px-5 py-2.5 rounded-xl font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors text-sm"
+            >
+              CANCEL
+            </button>
+            <button 
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-rose-600/20 active:scale-95 disabled:opacity-50 text-sm"
+            >
+              <Save size={18} strokeWidth={3} />
+              {loading ? 'SAVING...' : 'SAVE ACCOUNT'}
+            </button>
+          </div>
         </div>
 
         <div className="bg-card rounded-2xl border border-border shadow-sm p-6 overflow-y-auto">
@@ -159,7 +234,7 @@ export default function CustomerAccountForm({ setActivePage, params = {} }) {
                 <select name="LEDGER_ACC" value={formData.LEDGER_ACC} onChange={handleChange} className="input-class bg-white dark:bg-zinc-800 border border-rose-200 dark:border-rose-900/30 rounded-lg px-3 py-2 text-sm focus:ring-rose-500/20">
                   <option value="">-- Select Ledger Account --</option>
                   {ledgerAccounts.map(la => (
-                    <option key={la.acc_no || la.ACC_NO} value={la.acc_no || la.ACC_NO}>
+                    <option key={String(la.acc_no || la.ACC_NO)} value={String(la.acc_no || la.ACC_NO)}>
                       {la.acc_no || la.ACC_NO} - {la.acc_name || la.ACC_NAME}
                     </option>
                   ))}
@@ -234,6 +309,65 @@ export default function CustomerAccountForm({ setActivePage, params = {} }) {
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] uppercase font-black text-zinc-500">Bank Details</label>
                 <input name="BANK_DET" value={formData.BANK_DET} onChange={handleChange} className="input-class bg-white dark:bg-zinc-800 border border-border rounded-lg px-3 py-2 text-sm" />
+              </div>
+
+              {/* Balance Table */}
+              <div className="mt-4 border border-border rounded-2xl overflow-hidden bg-zinc-50/30 dark:bg-zinc-900/20">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-zinc-100/50 dark:bg-zinc-800/50 text-[10px] uppercase font-black text-zinc-500 border-b border-border">
+                      <th className="p-2 text-left">Type</th>
+                      <th className="p-2 text-right text-emerald-600">Credit</th>
+                      <th className="p-2 text-right text-rose-600">Debit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-border/50">
+                      <td className="p-2 font-bold text-zinc-500 flex items-center gap-1">
+                        <ArrowDownRight size={14} /> Opening
+                      </td>
+                      <td className="p-1">
+                        <input
+                          type="number"
+                          name="OB_CR_AMOUNT"
+                          value={formData.OB_CR_AMOUNT}
+                          onChange={handleChange}
+                          className="w-full bg-white dark:bg-zinc-900 border border-border rounded-lg px-2 py-1.5 text-right font-mono font-bold outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <input
+                          type="number"
+                          name="OB_DR_AMOUNT"
+                          value={formData.OB_DR_AMOUNT}
+                          onChange={handleChange}
+                          className="w-full bg-white dark:bg-zinc-900 border border-border rounded-lg px-2 py-1.5 text-right font-mono font-bold outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="p-2 font-bold text-blue-500 flex items-center gap-1">
+                        <ArrowUpRight size={14} /> Closing
+                      </td>
+                      <td className="p-1">
+                        <input
+                          type="number"
+                          value={formData.CB_CR_AMOUNT}
+                          readOnly
+                          className="w-full bg-zinc-100 dark:bg-zinc-800 border border-border rounded-lg px-2 py-1.5 text-right font-mono font-bold outline-none cursor-not-allowed text-zinc-500"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <input
+                          type="number"
+                          value={formData.CB_DR_AMOUNT}
+                          readOnly
+                          className="w-full bg-zinc-100 dark:bg-zinc-800 border border-border rounded-lg px-2 py-1.5 text-right font-mono font-bold outline-none cursor-not-allowed text-zinc-500"
+                        />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 

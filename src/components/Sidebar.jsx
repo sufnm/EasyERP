@@ -16,6 +16,7 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
         { id: 'chart-of-accounts', label: 'Chart Of accounts' },
         { id: 'customers-account', label: 'Customer Account' },
         { id: 'supplier-accounts', label: 'Supplier Account' },
+        { id: 'purchase-accounts', label: 'Purchase Account' },
         { id: 'accounts', label: 'Bank and cash' },
         { id: 'expense-accounts', label: 'Expense' }
       ]

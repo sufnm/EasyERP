@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { Search, Filter, MoreVertical, Plus, ArrowUpRight, ArrowDownRight, CreditCard } from 'lucide-react';
+import { Search, Filter, MoreVertical, Plus, ArrowUpRight, ArrowDownRight, CreditCard, Edit } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 
 export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
@@ -54,13 +54,19 @@ export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
         setAccounts(data.map(acc => ({
           id: String(acc.acc_no || acc.ACC_NO),
           name: acc.acc_name || acc.ACC_NAME,
+          aName: acc.acc_aname || acc.ACC_ANAME || '',
           class: acc.acc_class || acc.ACC_CLASS,
           level2: acc.LEVEL2_NO || acc.level2_no,
           level3: acc.LEVEL3_NO || acc.level3_no,
+          accLevel: acc.acc_level || acc.ACC_LEVEL,
           ob_dr: acc.OB_DR_AMOUNT || 0,
           ob_cr: acc.OB_CR_AMOUNT || 0,
           cb_dr: acc.CB_DR_AMOUNT || 0,
           cb_cr: acc.CB_CR_AMOUNT || 0,
+          accCode: acc.acc_code || acc.ACC_CODE || '',
+          isPermanent: acc.ispermenent || acc.ISPERMENENT || 0,
+          groupAc: acc.group_ac || acc.GROUP_AC || '',
+          prefexNo: acc.prefex_no || acc.PREFEX_NO || '',
           status: 'Active'
         })));
         setLoading(false);
@@ -304,6 +310,31 @@ export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
                         <button onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === account.id ? null : account.id); }} className="text-zinc-400 hover:text-indigo-500 transition-colors p-1"><MoreVertical size={16} /></button>
                         {openDropdownId === account.id && (
                           <div ref={dropdownRef} className="absolute right-8 top-1/2 -translate-y-1/2 bg-card border border-border shadow-xl rounded-xl py-1 z-10 w-40 animate-in fade-in slide-in-from-right-2 duration-200">
+                            <button 
+                              onClick={() => {
+                                setActivePage('create-account', { 
+                                  accNo: account.id,
+                                  accName: account.name,
+                                  accAName: account.aName,
+                                  accClass: String(account.class),
+                                  level2: String(account.level2 || ''),
+                                  level3: String(account.level3 || ''),
+                                  accLevel: account.accLevel,
+                                  obDrAmount: account.ob_dr,
+                                  obCrAmount: account.ob_cr,
+                                  cbDrAmount: account.cb_dr,
+                                  cbCrAmount: account.cb_cr,
+                                  accCode: account.accCode,
+                                  isPermanent: account.isPermanent,
+                                  groupAc: account.groupAc,
+                                  prefexNo: account.prefexNo
+                                });
+                              }}
+                              className="w-full text-left px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2 border-b border-border"
+                            >
+                              <Edit size={14} className="text-indigo-500" />
+                              Edit Account
+                            </button>
                             <button onClick={() => toggleStatus(account.id)} className="w-full text-left px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2">
                               <div className={`w-2 h-2 rounded-full ${account.status === 'Active' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
                               {account.status === 'Active' ? 'Make Inactive' : 'Make Active'}
