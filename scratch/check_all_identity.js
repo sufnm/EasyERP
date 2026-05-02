@@ -10,19 +10,19 @@ const dbConfig = {
   options: { encrypt: false, trustServerCertificate: true } 
 };
 
-async function checkTriggers() {
+async function checkAllIdentity() {
   try {
     const pool = await sql.connect(dbConfig);
     const result = await pool.request().query(`
-      SELECT name, is_disabled
-      FROM sys.triggers
-      WHERE parent_id = OBJECT_ID('ACCOUNTS')
+      SELECT COLUMN_NAME, COLUMNPROPERTY(OBJECT_ID('ACCOUNTS'), COLUMN_NAME, 'IsIdentity') AS IsIdentity
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'ACCOUNTS'
     `);
-    console.log("Triggers on ACCOUNTS:", result.recordset);
+    console.table(result.recordset.filter(c => c.IsIdentity === 1));
   } catch (e) {
     console.error(e);
   } finally {
     process.exit();
   }
 }
-checkTriggers();
+checkAllIdentity();

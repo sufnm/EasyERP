@@ -10,19 +10,17 @@ const dbConfig = {
   options: { encrypt: false, trustServerCertificate: true } 
 };
 
-async function checkTriggers() {
+async function checkBoth() {
   try {
     const pool = await sql.connect(dbConfig);
     const result = await pool.request().query(`
-      SELECT name, is_disabled
-      FROM sys.triggers
-      WHERE parent_id = OBJECT_ID('ACCOUNTS')
+      SELECT name, object_id, type_desc FROM sys.objects WHERE name IN ('ACCOUNTS', 'TRN_ACCOUNTS')
     `);
-    console.log("Triggers on ACCOUNTS:", result.recordset);
+    console.table(result.recordset);
   } catch (e) {
     console.error(e);
   } finally {
     process.exit();
   }
 }
-checkTriggers();
+checkBoth();

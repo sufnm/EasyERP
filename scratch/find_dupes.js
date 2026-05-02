@@ -10,19 +10,15 @@ const dbConfig = {
   options: { encrypt: false, trustServerCertificate: true } 
 };
 
-async function checkTriggers() {
+async function findDuplicates() {
   try {
     const pool = await sql.connect(dbConfig);
-    const result = await pool.request().query(`
-      SELECT name, is_disabled
-      FROM sys.triggers
-      WHERE parent_id = OBJECT_ID('ACCOUNTS')
-    `);
-    console.log("Triggers on ACCOUNTS:", result.recordset);
+    const result = await pool.request().query("SELECT ACC_ID, ACC_NO, ACC_NAME, ACC_LEVEL, LEVEL3_NO FROM dbo.ACCOUNTS WHERE ACC_NO = 111");
+    console.table(result.recordset);
   } catch (e) {
     console.error(e);
   } finally {
     process.exit();
   }
 }
-checkTriggers();
+findDuplicates();

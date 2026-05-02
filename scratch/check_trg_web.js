@@ -10,19 +10,17 @@ const dbConfig = {
   options: { encrypt: false, trustServerCertificate: true } 
 };
 
-async function checkTriggers() {
+async function checkTrg() {
   try {
     const pool = await sql.connect(dbConfig);
     const result = await pool.request().query(`
-      SELECT name, is_disabled
-      FROM sys.triggers
-      WHERE parent_id = OBJECT_ID('ACCOUNTS')
+      SELECT definition FROM sys.sql_modules WHERE object_id = OBJECT_ID('trg_data_entry_web_ins_upd')
     `);
-    console.log("Triggers on ACCOUNTS:", result.recordset);
+    console.log(result.recordset[0].definition);
   } catch (e) {
     console.error(e);
   } finally {
     process.exit();
   }
 }
-checkTriggers();
+checkTrg();

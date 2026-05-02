@@ -10,19 +10,22 @@ const dbConfig = {
   options: { encrypt: false, trustServerCertificate: true } 
 };
 
-async function checkTriggers() {
+async function checkDependencies() {
   try {
     const pool = await sql.connect(dbConfig);
     const result = await pool.request().query(`
-      SELECT name, is_disabled
-      FROM sys.triggers
-      WHERE parent_id = OBJECT_ID('ACCOUNTS')
+      SELECT 
+          referencing_entity_name, 
+          referencing_id, 
+          referencing_class_desc, 
+          is_caller_dependent
+      FROM sys.dm_sql_referencing_entities ('dbo.ACCOUNTS', 'OBJECT');
     `);
-    console.log("Triggers on ACCOUNTS:", result.recordset);
+    console.table(result.recordset);
   } catch (e) {
     console.error(e);
   } finally {
     process.exit();
   }
 }
-checkTriggers();
+checkDependencies();

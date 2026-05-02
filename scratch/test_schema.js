@@ -10,19 +10,15 @@ const dbConfig = {
   options: { encrypt: false, trustServerCertificate: true } 
 };
 
-async function checkTriggers() {
+async function test() {
   try {
     const pool = await sql.connect(dbConfig);
-    const result = await pool.request().query(`
-      SELECT name, is_disabled
-      FROM sys.triggers
-      WHERE parent_id = OBJECT_ID('ACCOUNTS')
-    `);
-    console.log("Triggers on ACCOUNTS:", result.recordset);
+    const result = await pool.request().query("SELECT TOP 1 * FROM dbo.ACCOUNTS_INFO");
+    console.table(result.recordset);
   } catch (e) {
     console.error(e);
   } finally {
     process.exit();
   }
 }
-checkTriggers();
+test();

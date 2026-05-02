@@ -20,6 +20,14 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
         { id: 'expense-accounts', label: 'Expense' }
       ]
     },
+    { 
+      id: 'lookup-master', 
+      label: 'LookUp master', 
+      icon: Settings,
+      subItems: [
+        { id: 'item-group', label: 'Item Group' }
+      ]
+    },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 

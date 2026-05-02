@@ -11,10 +11,21 @@ import CustomersAccountPage from './pages/CustomersAccountPage';
 import SupplierAccountsPage from './pages/SupplierAccountsPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
+import CustomerAccountForm from './pages/CustomerAccountForm';
+import ItemGroupPage from './pages/ItemGroupPage';
 import { CacheProvider } from './context/CacheContext';
 
 function App() {
   const [activePage, setActivePage] = useState('sales');
+  const [activePageParams, setActivePageParams] = useState({});
+  const [prevPage, setPrevPage] = useState('home');
+
+  const navigateTo = (page, params = {}) => {
+    setPrevPage(activePage);
+    setActivePage(page);
+    setActivePageParams(params);
+  };
+
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
@@ -56,14 +67,16 @@ function App() {
           {activePage === 'home' && <HomePage />}
           {activePage === 'sales' && <SalesPage user={user} />}
           {activePage === 'sales-history' && <SalesHistoryPage />}
-          {activePage === 'accounts' && <AccountsPage setActivePage={setActivePage} />}
-          {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={setActivePage} />}
-          {activePage === 'customers-account' && <CustomersAccountPage setActivePage={setActivePage} />}
-          {activePage === 'supplier-accounts' && <SupplierAccountsPage setActivePage={setActivePage} />}
-          {activePage === 'chart-of-accounts' && <ChartOfAccountsPage setActivePage={setActivePage} />}
-          {activePage === 'create-account' && <CreateAccountPage setActivePage={setActivePage} />}
+          {activePage === 'accounts' && <AccountsPage setActivePage={navigateTo} />}
+          {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={navigateTo} />}
+          {activePage === 'customers-account' && <CustomersAccountPage setActivePage={navigateTo} />}
+          {activePage === 'supplier-accounts' && <SupplierAccountsPage setActivePage={navigateTo} />}
+          {activePage === 'customer-account-form' && <CustomerAccountForm setActivePage={navigateTo} params={activePageParams} />}
+          {activePage === 'item-group' && <ItemGroupPage />}
+          {activePage === 'chart-of-accounts' && <ChartOfAccountsPage setActivePage={navigateTo} params={activePageParams} />}
+          {activePage === 'create-account' && <CreateAccountPage setActivePage={navigateTo} initialData={activePageParams} prevPage={prevPage} />}
           {activePage === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} />}
-          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'chart-of-accounts', 'create-account', 'settings'].includes(activePage) ? null : (
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
                <p className="text-zinc-400 text-lg font-medium">Coming Soon</p>
             </div>

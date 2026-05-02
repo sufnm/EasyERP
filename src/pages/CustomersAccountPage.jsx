@@ -21,7 +21,10 @@ export default function CustomersAccountPage({ setActivePage }) {
           id: String(acc.acc_no || acc.ACC_NO),
           name: acc.Acc_name || acc.ACC_NAME,
           type: 'Customer',
-          balance: 0,
+          ob_dr: acc.OB_DR_AMOUNT || 0,
+          ob_cr: acc.OB_CR_AMOUNT || 0,
+          cb_dr: acc.CB_DR_AMOUNT || 0,
+          cb_cr: acc.CB_CR_AMOUNT || 0,
           status: 'Active'
         }));
         setAccounts(mappedData);
@@ -71,7 +74,7 @@ export default function CustomersAccountPage({ setActivePage }) {
             <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">Manage and track your customer accounts and balances.</p>
           </div>
           <button 
-            onClick={() => setActivePage('create-account')}
+            onClick={() => setActivePage('customer-account-form')}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 text-sm"
           >
             <Plus size={18} strokeWidth={3} />
@@ -100,18 +103,36 @@ export default function CustomersAccountPage({ setActivePage }) {
                 <tr className="bg-zinc-50/50 dark:bg-zinc-900/50 text-[10px] uppercase font-black text-zinc-400 dark:text-zinc-500 tracking-widest border-b border-border">
                   <th className="p-4 w-24">Acc #</th>
                   <th className="p-4">Customer Name</th>
+                  <th className="p-3 text-center" colSpan="2">
+                    <div className="text-rose-500">Opening Balance</div>
+                    <div className="flex mt-1">
+                      <span className="flex-1 text-center">Credit</span>
+                      <span className="flex-1 text-center">Debit</span>
+                    </div>
+                  </th>
+                  <th className="p-3 text-center" colSpan="2">
+                    <div className="text-blue-500">Closing Balance</div>
+                    <div className="flex mt-1">
+                      <span className="flex-1 text-center">Credit</span>
+                      <span className="flex-1 text-center">Debit</span>
+                    </div>
+                  </th>
                   <th className="p-4 text-center">Status</th>
                   <th className="p-4 w-10 text-center"></th>
                 </tr>
               </thead>
               <tbody className="text-sm">
                 {filteredAccounts.map((account) => (
-                  <tr key={account.id} className="border-b border-border hover:bg-indigo-500/5 transition-colors group">
-                    <td className="p-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">{account.id}</td>
-                    <td className="p-4">
-                      <div className="font-bold text-zinc-900 dark:text-zinc-200">{account.name}</div>
-                    </td>
-                    <td className="p-4 text-center">
+                    <tr key={account.id} className="border-b border-border hover:bg-indigo-500/5 transition-colors group">
+                      <td className="p-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">{account.id}</td>
+                      <td className="p-4">
+                        <div className="font-bold text-zinc-900 dark:text-zinc-200">{account.name}</div>
+                      </td>
+                      <td className="p-3 text-center font-mono text-sm text-rose-600 dark:text-rose-400">{Number(account.ob_cr).toLocaleString('en', {minimumFractionDigits: 2})}</td>
+                      <td className="p-3 text-center font-mono text-sm text-rose-600 dark:text-rose-400">{Number(account.ob_dr).toLocaleString('en', {minimumFractionDigits: 2})}</td>
+                      <td className="p-3 text-center font-mono text-sm text-blue-600 dark:text-blue-400">{Number(account.cb_cr).toLocaleString('en', {minimumFractionDigits: 2})}</td>
+                      <td className="p-3 text-center font-mono text-sm text-blue-600 dark:text-blue-400">{Number(account.cb_dr).toLocaleString('en', {minimumFractionDigits: 2})}</td>
+                      <td className="p-4 text-center">
                       <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black ${account.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
                         }`}>
                         <div className={`w-1.5 h-1.5 rounded-full ${account.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
@@ -134,6 +155,13 @@ export default function CustomersAccountPage({ setActivePage }) {
                           ref={dropdownRef}
                           className="absolute right-8 top-1/2 -translate-y-1/2 bg-card border border-border shadow-xl rounded-xl py-1 z-10 w-40 animate-in fade-in slide-in-from-right-2 duration-200"
                         >
+                          <button
+                            onClick={() => setActivePage('customer-account-form', { id: account.id })}
+                            className="w-full text-left px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"
+                          >
+                            <ArrowUpRight size={14} className="text-indigo-500" />
+                            Edit Profile
+                          </button>
                           <button
                             onClick={() => toggleStatus(account.id)}
                             className="w-full text-left px-4 py-2 text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"

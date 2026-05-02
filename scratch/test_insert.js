@@ -10,19 +10,20 @@ const dbConfig = {
   options: { encrypt: false, trustServerCertificate: true } 
 };
 
-async function checkTriggers() {
+async function testInsert() {
   try {
     const pool = await sql.connect(dbConfig);
-    const result = await pool.request().query(`
-      SELECT name, is_disabled
-      FROM sys.triggers
-      WHERE parent_id = OBJECT_ID('ACCOUNTS')
-    `);
-    console.log("Triggers on ACCOUNTS:", result.recordset);
+    const q = `
+      INSERT INTO dbo.ACCOUNTS (
+        ACC_NO, ACC_NAME, ACC_TYPE_CODE
+      ) VALUES (9999, 'Test Manual', 1)
+    `;
+    await pool.request().query(q);
+    console.log("Insert success!");
   } catch (e) {
-    console.error(e);
+    console.error("Manual Insert Fail:", e.message);
   } finally {
     process.exit();
   }
 }
-checkTriggers();
+testInsert();
