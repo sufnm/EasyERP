@@ -6,6 +6,7 @@ import InvoiceHeader from '../components/InvoiceHeader';
 import CustomerDetails from '../components/CustomerDetails';
 import SalesGrid from '../components/SalesGrid';
 import SummaryFooter from '../components/SummaryFooter';
+import InvoiceModal from '../components/InvoiceModal';
 
 export default function SalesPage({ user }) {
   const {
@@ -13,7 +14,9 @@ export default function SalesPage({ user }) {
     cachedAccounts,
     taxIncluded, setTaxIncluded,
     enterToQty, setEnterToQty,
-    visibleColumns, setVisibleColumns
+    visibleColumns, setVisibleColumns,
+    historyInvoiceColumns,
+    showInvoiceAfterSave, setShowInvoiceAfterSave
   } = useCache();
 
   const [salesData, setSalesData] = useState([]);
@@ -46,6 +49,7 @@ export default function SalesPage({ user }) {
   const [validationErrors, setValidationErrors] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState('1');
+  const [savedInvoice, setSavedInvoice] = useState(null);
 
   const handleAddressChange = (field, value) => {
     setAddress(prev => ({ ...prev, [field]: value }));
@@ -56,6 +60,23 @@ export default function SalesPage({ user }) {
       .then(res => res.json())
       .then(data => setInvoiceNo(data.nextInvoice))
       .catch(err => console.error("Failed to fetch next invoice:", err));
+  };
+
+  const resetPage = () => {
+    fetchInvoiceNo();
+    // Complete Reset
+    setVatNumber('');
+    setPaymentMethod('');
+    setCashPaid(0);
+    setOtherPaid(0);
+    setAddress({ street: '', city: '', district: '', building: '', pincode: '' });
+    setRows([
+      { id: Date.now(), itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now() + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now() + 2, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now() + 3, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now() + 4, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+    ]);
   };
 
   const handleSave = async () => {
@@ -116,22 +137,30 @@ export default function SalesPage({ user }) {
       });
 
       if (res.ok) {
-        alert('Sale saved successfully!');
+        const result = await res.json();
+        
         refreshCache();
-        fetchInvoiceNo();
-        // Complete Reset
-        setVatNumber('');
-        setPaymentMethod('');
-        setCashPaid(0);
-        setOtherPaid(0);
-        setAddress({ street: '', city: '', district: '', building: '', pincode: '' });
-        setRows([
-          { id: Date.now(), itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-          { id: Date.now() + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-          { id: Date.now() + 2, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-          { id: Date.now() + 3, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-          { id: Date.now() + 4, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-        ]);
+
+        if (showInvoiceAfterSave) {
+          // Prepare invoice data for modal
+          const invoiceData = {
+            REC_NO: result.REC_NO,
+            INVOICE_NO: result.INVOICE_NO,
+            CURDATE: new Date().toISOString(),
+            ENAME: customer.name || 'Cash Customer',
+            ACCODE: customer.id,
+            G_TOTAL: totals.gross,
+            DISC_AMT: totals.discount,
+            NET_AMOUNT: totals.net,
+            VAT_AMOUNT: totals.vat,
+            VAT_NUMBER: vatNumber,
+            TRN_TYPE: paymentMethod === 'Cash' ? 6 : 7
+          };
+          setSavedInvoice(invoiceData);
+        } else {
+          alert('Sale saved successfully!');
+          resetPage();
+        }
       } else {
         const err = await res.json();
         alert(`Error: ${err.details || 'Save failed'}`);
@@ -140,6 +169,11 @@ export default function SalesPage({ user }) {
       console.error("Save error:", err);
       alert('Connection error');
     }
+  };
+
+  const handleCloseInvoice = () => {
+    setSavedInvoice(null);
+    resetPage();
   };
 
   useEffect(() => {
@@ -187,7 +221,16 @@ export default function SalesPage({ user }) {
       <div className="max-w-7xl mx-auto w-full flex flex-col flex-1 h-full relative">
         <div className="flex items-center justify-between mb-6 px-2 shrink-0 gap-4">
           <div className="flex-1">
-            <Toolbar visibleColumns={visibleColumns} setVisibleColumns={setVisibleColumns} taxIncluded={taxIncluded} setTaxIncluded={setTaxIncluded} enterToQty={enterToQty} setEnterToQty={setEnterToQty} />
+            <Toolbar 
+              visibleColumns={visibleColumns} 
+              setVisibleColumns={setVisibleColumns} 
+              taxIncluded={taxIncluded} 
+              setTaxIncluded={setTaxIncluded} 
+              enterToQty={enterToQty} 
+              setEnterToQty={setEnterToQty}
+              showInvoiceAfterSave={showInvoiceAfterSave}
+              setShowInvoiceAfterSave={setShowInvoiceAfterSave}
+            />
           </div>
 
           <h2 className="text-2xl font-black text-rose-500 uppercase tracking-widest hidden sm:block drop-shadow-sm shrink-0">
@@ -234,6 +277,14 @@ export default function SalesPage({ user }) {
           />
         </div>
       </div>
+
+      {/* Final Invoice Modal */}
+      <InvoiceModal 
+        sale={savedInvoice} 
+        onClose={handleCloseInvoice}
+        address={address}
+        historyInvoiceColumns={historyInvoiceColumns}
+      />
     </div>
   );
 }

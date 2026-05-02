@@ -13,7 +13,12 @@ const ToolbarButton = ({ icon: Icon, label, shortcut, colorClass = "text-zinc-70
   </button>
 );
 
-export default function Toolbar({ visibleColumns, setVisibleColumns, taxIncluded, setTaxIncluded, enterToQty, setEnterToQty }) {
+export default function Toolbar({ 
+  visibleColumns, setVisibleColumns, 
+  taxIncluded, setTaxIncluded, 
+  enterToQty, setEnterToQty,
+  showInvoiceAfterSave, setShowInvoiceAfterSave
+}) {
   const [showOptions, setShowOptions] = useState(false);
   const toggleColumn = (key) => setVisibleColumns?.(prev => ({ ...prev, [key]: !prev[key] }));
   return (
@@ -53,6 +58,10 @@ export default function Toolbar({ visibleColumns, setVisibleColumns, taxIncluded
                   <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
                     <input type="checkbox" checked={enterToQty} onChange={() => setEnterToQty?.(!enterToQty)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
                     <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Enter Adds and Moves to QTY</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
+                    <input type="checkbox" checked={showInvoiceAfterSave} onChange={() => setShowInvoiceAfterSave?.(!showInvoiceAfterSave)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Show Invoice after Sale</span>
                   </label>
                 </div>
               </div>

@@ -1,38 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { Search, Calendar, FileText, User, CreditCard, ChevronRight, Filter, X, Package } from 'lucide-react';
+import { Search, FileText, User, ChevronRight } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
+import InvoiceModal from '../components/InvoiceModal';
 
 export default function SalesHistoryPage() {
-  const { cachedSales, refreshCache, isReady, historyInvoiceColumns } = useCache();
+  const { cachedSales, isReady, historyInvoiceColumns } = useCache();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(!isReady);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [selectedSale, setSelectedSale] = useState(null);
-  const [saleItems, setSaleItems] = useState([]);
-  const [loadingItems, setLoadingItems] = useState(false);
 
   useEffect(() => {
     setSales(cachedSales);
     if (isReady) setLoading(false);
   }, [cachedSales, isReady]);
-
-  const fetchSaleDetails = async (sale) => {
-    setSelectedSale(sale);
-    setLoadingItems(true);
-    try {
-      const res = await fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO));
-      if (res.ok) {
-        const data = await res.json();
-        setSaleItems(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch sale items:", err);
-    } finally {
-      setLoadingItems(false);
-    }
-  };
 
   const filteredSales = sales.filter(sale => {
     const matchesSearch = 
@@ -160,7 +143,7 @@ export default function SalesHistoryPage() {
                 filteredSales.map((sale) => (
                   <tr 
                     key={sale.REC_NO} 
-                    onClick={() => fetchSaleDetails(sale)}
+                    onClick={() => setSelectedSale(sale)}
                     className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors group cursor-pointer"
                   >
                     <td className="px-6 py-4">
@@ -212,126 +195,11 @@ export default function SalesHistoryPage() {
       </div>
 
       {/* Details Modal */}
-      {selectedSale && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-zinc-950/40 backdrop-blur-sm" onClick={() => setSelectedSale(null)}></div>
-          
-          <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl rounded-2xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/30">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/20">
-                  <FileText size={24} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight uppercase">Invoice #{selectedSale.INVOICE_NO}</h2>
-                  <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                    <Calendar size={12} /> {new Date(selectedSale.CURDATE).toLocaleDateString()}
-                    <span className="mx-1">•</span>
-                    <User size={12} /> {selectedSale.ENAME || 'Cash Customer'}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setSelectedSale(null)}
-                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-all text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {loadingItems ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-4">
-                  <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-xs font-black text-zinc-400 uppercase tracking-widest animate-pulse">Loading items...</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                   <div className="border border-zinc-100 dark:border-zinc-800 rounded-xl overflow-hidden">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-                          {historyInvoiceColumns.barcode && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest">Barcode</th>}
-                          {historyInvoiceColumns.description && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest">Description</th>}
-                          {historyInvoiceColumns.unit && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">UNIT</th>}
-                          {historyInvoiceColumns.qty && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Qty</th>}
-                          {historyInvoiceColumns.price && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">PRICE</th>}
-                          {historyInvoiceColumns.vatPercent && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">VAT%</th>}
-                          {historyInvoiceColumns.vatAmt && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">VAT Amt</th>}
-                          {historyInvoiceColumns.total && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">Total</th>}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                        {saleItems.map((item, idx) => {
-                          const unitPrice = Number(item.UNIT_PRICE) || 0;
-                          const qty = Number(item.QTY) || 0;
-                          const netSubtotal = unitPrice * qty;
-                          
-                          return (
-                            <tr key={idx} className="text-[11px]">
-                              {historyInvoiceColumns.barcode && <td className="px-4 py-3 font-mono text-zinc-500">{item.BARCODE}</td>}
-                              {historyInvoiceColumns.description && <td className="px-4 py-3 font-bold text-zinc-700 dark:text-zinc-200">{item.DESCRIPTION}</td>}
-                              {historyInvoiceColumns.unit && <td className="px-4 py-3 text-center font-medium">SAR {unitPrice.toFixed(2)}</td>}
-                              {historyInvoiceColumns.qty && <td className="px-4 py-3 text-center">{qty.toFixed(2)}</td>}
-                              {historyInvoiceColumns.price && <td className="px-4 py-3 text-right text-zinc-500 font-bold">SAR {netSubtotal.toFixed(2)}</td>}
-                              {historyInvoiceColumns.vatPercent && <td className="px-4 py-3 text-right text-zinc-400">{Number(item.VAT_PERCENT || 0).toFixed(0)}%</td>}
-                              {historyInvoiceColumns.vatAmt && <td className="px-4 py-3 text-right text-zinc-400">SAR {Number(item.VAT_AMOUNT || 0).toFixed(2)}</td>}
-                              {historyInvoiceColumns.total && <td className="px-4 py-3 text-right font-black text-zinc-800 dark:text-zinc-100">SAR {Number(item.ITM_TOTAL).toFixed(2)}</td>}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                      <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Gross Total</p>
-                      <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
-                        SAR {(Number(selectedSale.G_TOTAL) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-rose-50/50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/30">
-                      <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Discount</p>
-                      <p className="text-lg font-black text-rose-600 dark:text-rose-400">
-                        SAR {(Number(selectedSale.DISC_AMT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                      <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">VAT Amount</p>
-                      <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
-                        SAR {(Number(selectedSale.VAT_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/30 ml-auto w-full text-right">
-                      <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Net Total</p>
-                      <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
-                        SAR {(Number(selectedSale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex justify-end gap-3">
-               <button 
-                onClick={() => setSelectedSale(null)}
-                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:bg-zinc-100 transition-all"
-               >
-                Close
-               </button>
-               <button className="px-6 py-2 rounded-xl bg-zinc-800 dark:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900 transition-all flex items-center gap-2 shadow-lg shadow-zinc-900/20">
-                 <FileText size={14} /> Print Invoice
-               </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <InvoiceModal 
+        sale={selectedSale} 
+        onClose={() => setSelectedSale(null)} 
+        historyInvoiceColumns={historyInvoiceColumns}
+      />
     </div>
   );
 }

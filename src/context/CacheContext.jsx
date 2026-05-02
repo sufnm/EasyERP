@@ -23,6 +23,7 @@ export function CacheProvider({ children }) {
     barcode: true, description: true, unit: true, qty: true, 
     price: true, vatPercent: true, vatAmt: true, total: true
   });
+  const [showInvoiceAfterSave, setShowInvoiceAfterSave] = useState(true);
 
   const loadCache = useCallback(async () => {
     try {
@@ -112,6 +113,8 @@ export function CacheProvider({ children }) {
       setVisibleColumns,
       historyInvoiceColumns,
       setHistoryInvoiceColumns,
+      showInvoiceAfterSave,
+      setShowInvoiceAfterSave,
       refreshCache: loadCache 
     }}>
       {children}
