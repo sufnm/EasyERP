@@ -17,9 +17,13 @@ const dbConfig = {
   database: process.env.DB_NAME,
   options: {
     encrypt: false,
-    trustServerCertificate: true
+    trustServerCertificate: true,
+    connectionTimeout: 15000, // 15 seconds
+    requestTimeout: 30000     // 30 seconds
   }
 };
+
+console.log(`📡 Attempting to connect to database on server: ${dbConfig.server}`);
 
 // MSSQL connection pool
 let pool;
