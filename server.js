@@ -1866,12 +1866,60 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// --- TRANSLATION API ---
+app.get('/api/translations', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query('SELECT TRANSLATION_KEY, EN_VALUE, AR_VALUE FROM WEB_TRANSLATIONS');
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch translations:", err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/translations/save', async (req, res) => {
+  const { translations } = req.body; // Array of { key, en, ar }
+  try {
+    const pool = await getPool();
+    for (const item of translations) {
+      await pool.request()
+        .input('key', sql.VarChar, item.key)
+        .input('en', sql.NVarChar, item.en)
+        .input('ar', sql.NVarChar, item.ar)
+        .query(`
+          IF EXISTS (SELECT 1 FROM WEB_TRANSLATIONS WHERE TRANSLATION_KEY = @key)
+            UPDATE WEB_TRANSLATIONS SET EN_VALUE = @en, AR_VALUE = @ar WHERE TRANSLATION_KEY = @key
+          ELSE
+            INSERT INTO WEB_TRANSLATIONS (TRANSLATION_KEY, EN_VALUE, AR_VALUE) VALUES (@key, @en, @ar)
+        `);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to save translations:", err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
   try {
-    await getPool();
+    const pool = await getPool();
     console.log('✅ Successfully connected to the Microsoft SQL Server database!');
+    
+    // Initialize translations table
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='WEB_TRANSLATIONS' AND xtype='U')
+      CREATE TABLE WEB_TRANSLATIONS (
+        TRANSLATION_KEY VARCHAR(100) PRIMARY KEY,
+        EN_VALUE NVARCHAR(MAX),
+        AR_VALUE NVARCHAR(MAX)
+      )
+    `);
+    console.log('✅ WEB_TRANSLATIONS table initialized');
   } catch (error) {
-    console.error('❌ Failed to connect to the database:', error.message);
+    console.error('❌ Failed to connect to the database or initialize table:', error.message);
   }
 });
+

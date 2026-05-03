@@ -151,4 +151,20 @@
   .skyblue * {
     scrollbar-color: #075985 transparent;
   }
+
+  /* RTL Support */
+  [dir="rtl"] {
+    font-family: 'Inter', 'Noto Sans Arabic', sans-serif;
+  }
+
+  [dir="rtl"] .mirror-rtl {
+    transform: scaleX(-1);
+  }
+
+  /* RTL Specific Adjustments */
+  .rtl .text-left { text-align: right; }
+  .rtl .text-right { text-align: left; }
+  .rtl .ml-auto { margin-right: auto; margin-left: 0; }
+  .rtl .mr-auto { margin-left: auto; margin-right: 0; }
 }
+

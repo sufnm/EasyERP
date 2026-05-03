@@ -8,8 +8,10 @@ import CustomerDetails from '../components/CustomerDetails';
 import SalesGrid from '../components/SalesGrid';
 import SummaryFooter from '../components/SummaryFooter';
 import InvoiceModal from '../components/InvoiceModal';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function SalesPage({ user, params = {}, onBack }) {
+  const { t, language } = useLanguage();
   const {
     refreshCache,
     cachedAccounts,
@@ -339,7 +341,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
               </button>
             )}
             <h2 className={`text-2xl font-black ${editingRecNo ? 'text-indigo-600' : 'text-rose-500'} uppercase tracking-widest hidden sm:block drop-shadow-sm shrink-0`}>
-              {editingRecNo ? 'EDIT SALE' : 'CREDIT SALES'}
+              {editingRecNo ? (language === 'ar' ? 'تعديل فاتورة' : 'EDIT SALE') : (language === 'ar' ? 'مبيعات آجلة' : 'CREDIT SALES')}
             </h2>
           </div>
         </div>

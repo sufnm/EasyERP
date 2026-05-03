@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
-import { Home, ShoppingCart, ShoppingBag, Settings, Users, BarChart3, Book, Clock, LogOut, ChevronDown, ChevronRight, Wallet, ShieldCheck } from 'lucide-react';
+import { Home, ShoppingCart, ShoppingBag, Settings, Users, BarChart3, Book, Clock, LogOut, ChevronDown, ChevronRight, Wallet, ShieldCheck, Languages } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
   const [openMenus, setOpenMenus] = useState(['accounts']);
+  const { language, toggleLanguage, t } = useLanguage();
 
   const navItems = [
-    { id: 'home', label: 'Home', icon: Home },
+    { id: 'home', label: t('home'), icon: Home },
     { 
       id: 'sales-n-return', 
-      label: 'Sales N Return', 
+      label: t('sales'), 
       icon: ShoppingCart,
       subItems: [
-        { id: 'sales', label: 'Sales' },
+        { id: 'sales', label: t('sales') },
         { id: 'sales-return', label: 'Sales Return' },
-        { id: 'sales-history', label: 'Sales History' }
+        { id: 'sales-history', label: t('salesHistory') }
       ]
     },
     { 
@@ -27,10 +29,10 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
     },
     { 
       id: 'accounts', 
-      label: 'Accounts', 
+      label: t('accounts'), 
       icon: Book,
       subItems: [
-        { id: 'chart-of-accounts', label: 'Chart Of accounts' },
+        { id: 'chart-of-accounts', label: t('chartOfAccounts') },
         { id: 'customers-account', label: 'Customer Account' },
         { id: 'supplier-accounts', label: 'Supplier Account' },
         { id: 'purchase-accounts', label: 'Purchase Account' },
@@ -43,7 +45,7 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
       label: 'Transactions',
       icon: Wallet,
       subItems: [
-        { id: 'customer-receivable', label: 'Customer Receivable' },
+        { id: 'customer-receivable', label: t('customerReceivable') },
         { id: 'supplier-payable', label: 'Supplier Payable' },
         { id: 'general-voucher', label: 'General Voucher Entry' },
         { id: 'expense-entry', label: 'Expense Entry' },
@@ -66,10 +68,11 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
       subItems: [
         { id: 'transaction-types', label: 'Transaction Types' },
         { id: 'user-privileges', label: 'User Privileges' },
-        { id: 'user-info', label: 'User Info' }
+        { id: 'user-info', label: 'User Info' },
+        { id: 'translation-manager', label: t('translationManager') }
       ]
     },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'settings', label: t('settings'), icon: Settings },
   ];
 
   const toggleMenu = (id) => {
@@ -81,16 +84,16 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
   };
 
   return (
-    <div className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col h-screen text-sidebar-text transition-colors duration-300">
+    <div className={`w-64 bg-sidebar border-r border-sidebar-border flex flex-col h-screen text-sidebar-text transition-colors duration-300 ${language === 'ar' ? 'border-l border-r-0' : ''}`}>
       {/* Logo Section */}
       <div className="h-16 flex items-center px-6 border-b border-sidebar-border transition-colors duration-300">
          <div className="flex items-center gap-3 w-full">
-           <div className="bg-sidebar-active w-8 h-8 rounded-lg shadow-lg flex items-center justify-center text-white font-bold text-lg transition-colors duration-300">
-             E
-           </div>
-           <div className="flex-1 overflow-hidden">
-             <h1 className="text-lg font-bold tracking-tight text-white truncate">EasyERP</h1>
-           </div>
+            <div className="bg-sidebar-active w-8 h-8 rounded-lg shadow-lg flex items-center justify-center text-white font-bold text-lg transition-colors duration-300">
+              E
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <h1 className="text-lg font-bold tracking-tight text-white truncate">EasyERP</h1>
+            </div>
          </div>
       </div>
 
@@ -121,21 +124,21 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
                 }`}
               >
                 <Icon size={18} className={isActive && !hasSubItems ? 'text-white' : 'text-sidebar-text'} />
-                <span className="flex-1 text-left">{item.label}</span>
+                <span className={`flex-1 ${language === 'ar' ? 'text-right' : 'text-left'}`}>{item.label}</span>
                 {hasSubItems && (
-                  isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                  isOpen ? <ChevronDown size={14} /> : (language === 'ar' ? <ChevronRight size={14} className="rotate-180" /> : <ChevronRight size={14} />)
                 )}
               </button>
 
               {hasSubItems && isOpen && (
-                <div className="pl-9 space-y-1">
+                <div className={`${language === 'ar' ? 'pr-9 pl-0' : 'pl-9'} space-y-1`}>
                   {item.subItems.map((subItem) => {
                     const isSubActive = activePage === subItem.id;
                     return (
                       <button
                         key={subItem.id}
                         onClick={() => setActivePage(subItem.id)}
-                        className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${language === 'ar' ? 'text-right' : 'text-left'} ${
                           isSubActive
                             ? 'text-sidebar-active font-bold' 
                             : 'text-sidebar-text hover:text-sidebar-text-hover hover:bg-sidebar-hover/50'
@@ -153,7 +156,7 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
         })}
       </div>
 
-      {/* User Profile & Logout */}
+      {/* User Profile & Language & Logout */}
       <div className="p-4 border-t border-sidebar-border space-y-4 transition-colors duration-300">
         <div className="flex items-center gap-3 px-2">
           <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white border border-white/10 shadow-sm">
@@ -164,15 +167,26 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
             <p className="text-sidebar-text text-[10px] uppercase tracking-wider font-medium">{user?.mobile || 'Administrator'}</p>
           </div>
         </div>
-        
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-text hover:bg-rose-500/10 hover:text-rose-500 transition-colors text-sm font-medium"
-        >
-          <LogOut size={18} />
-          Sign Out
-        </button>
+
+        <div className="px-2 space-y-2">
+          <button
+            onClick={toggleLanguage}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-hover transition-colors text-sm font-medium border border-sidebar-border"
+          >
+            <Languages size={18} />
+            <span className="flex-1 text-left">{language === 'en' ? 'Arabic (العربية)' : 'English'}</span>
+          </button>
+          
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-text hover:bg-rose-500/10 hover:text-rose-500 transition-colors text-sm font-medium"
+          >
+            <LogOut size={18} />
+            {t('logout')}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+
