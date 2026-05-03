@@ -67,8 +67,9 @@ function App() {
         
         <main className="flex-1 overflow-y-auto">
           {activePage === 'home' && <HomePage />}
-          {activePage === 'sales' && <SalesPage user={user} />}
-          {activePage === 'sales-history' && <SalesHistoryPage />}
+           {activePage === 'sales' && <SalesPage user={user} params={activePageParams} />}
+           {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} onBack={() => navigateTo('sales-history')} />}
+          {activePage === 'sales-history' && <SalesHistoryPage setActivePage={navigateTo} />}
           {activePage === 'accounts' && <AccountsPage setActivePage={navigateTo} />}
           {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={navigateTo} />}
           {activePage === 'customers-account' && <CustomersAccountPage setActivePage={navigateTo} />}
@@ -80,7 +81,7 @@ function App() {
           {activePage === 'create-account' && <CreateAccountPage setActivePage={navigateTo} initialData={activePageParams} prevPage={prevPage} />}
           {activePage === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}
           {activePage === 'customer-receivable' && <CustomerReceivablePage setActivePage={navigateTo} />}
-          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'purchase', 'purchase-return'].includes(activePage) ? null : (
+          {['home', 'sales', 'edit-sale', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'purchase', 'purchase-return'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
                <p className="text-zinc-400 text-lg font-medium">Coming Soon</p>
             </div>

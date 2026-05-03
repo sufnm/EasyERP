@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { API_ENDPOINTS } from '../config';
 import { useCache } from '../context/CacheContext';
 import Toolbar from '../components/Toolbar';
@@ -8,7 +9,7 @@ import SalesGrid from '../components/SalesGrid';
 import SummaryFooter from '../components/SummaryFooter';
 import InvoiceModal from '../components/InvoiceModal';
 
-export default function SalesPage({ user }) {
+export default function SalesPage({ user, params = {}, onBack }) {
   const {
     refreshCache,
     cachedAccounts,
@@ -50,12 +51,14 @@ export default function SalesPage({ user }) {
   const [warehouses, setWarehouses] = useState([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState('1');
   const [savedInvoice, setSavedInvoice] = useState(null);
+  const [editingRecNo, setEditingRecNo] = useState(null);
 
   const handleAddressChange = (field, value) => {
     setAddress(prev => ({ ...prev, [field]: value }));
   };
 
   const fetchInvoiceNo = () => {
+    if (editingRecNo) return; // Don't fetch if editing
     fetch(API_ENDPOINTS.INVOICE_NEXT)
       .then(res => res.json())
       .then(data => setInvoiceNo(data.nextInvoice))
@@ -63,6 +66,7 @@ export default function SalesPage({ user }) {
   };
 
   const resetPage = () => {
+    setEditingRecNo(null);
     fetchInvoiceNo();
     // Complete Reset
     setVatNumber('');
@@ -79,19 +83,25 @@ export default function SalesPage({ user }) {
     ]);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (isQuickSave = false) => {
     if (invoiceNo === 'Loading...') {
       alert('Invoice number is still loading. Please wait.');
       return;
     }
 
-    if (!paymentMethod) {
+    if (!isQuickSave && !paymentMethod) {
       alert('Please select a payment method before saving.');
       return;
     }
 
     if (!customer.id || customer.id === '6000') {
-      if (!confirm('Save as Cash Sale?')) return;
+      if (!isQuickSave && !confirm('Save as Cash Sale?')) return;
+      // If quick save is attempted for 6000, it should have been blocked in UI, 
+      // but let's double check here just in case.
+      if (isQuickSave) {
+        alert('Payment is mandatory for walkthrough customers.');
+        return;
+      }
     }
 
     // MANDATORY VALIDATION: If VAT Number is added, address fields are mandatory
@@ -112,6 +122,10 @@ export default function SalesPage({ user }) {
     setValidationErrors([]);
 
     try {
+      const finalPaymentMethod = isQuickSave ? 'Others' : paymentMethod;
+      const finalCashPaid = isQuickSave ? 0 : cashPaid;
+      const finalOtherPaid = isQuickSave ? 0 : otherPaid;
+
       const payload = {
         INVOICE_NO: String(invoiceNo),
         ACCODE: String(customer.id || ''),
@@ -120,13 +134,14 @@ export default function SalesPage({ user }) {
         DISC_AMT: totals.discount,
         NET_AMOUNT: totals.net,
         VAT_AMOUNT: totals.vat,
-        CASH_PAID: cashPaid,
-        OTHER_PAID: otherPaid,
+        CASH_PAID: finalCashPaid,
+        OTHER_PAID: finalOtherPaid,
         VAT_NUMBER: String(vatNumber || ''),
-        PAYMENT_METHOD: paymentMethod,
+        PAYMENT_METHOD: finalPaymentMethod,
         TAX_INCLUDED: taxIncluded,
         USERNAME: user?.username || '',
         WR_CODE: selectedWarehouse,
+        REC_NO: editingRecNo,
         ROWS: rows.filter(r => r.itemCode.trim() !== '')
       };
 
@@ -141,7 +156,7 @@ export default function SalesPage({ user }) {
         
         refreshCache();
 
-        if (showInvoiceAfterSave) {
+        if (showInvoiceAfterSave && !isQuickSave) {
           // Prepare invoice data for modal
           const invoiceData = {
             REC_NO: result.REC_NO,
@@ -154,7 +169,7 @@ export default function SalesPage({ user }) {
             NET_AMOUNT: totals.net,
             VAT_AMOUNT: totals.vat,
             VAT_NUMBER: vatNumber,
-            TRN_TYPE: paymentMethod === 'Cash' ? 6 : 7
+            TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7
           };
           setSavedInvoice(invoiceData);
         } else {
@@ -177,7 +192,9 @@ export default function SalesPage({ user }) {
   };
 
   useEffect(() => {
-    fetchInvoiceNo();
+    if (!params?.editSale) {
+      fetchInvoiceNo();
+    }
 
     // Fetch Default Cash Customer (6000)
     fetch(API_ENDPOINTS.CUSTOMER_BY_ID('6000'))
@@ -209,6 +226,65 @@ export default function SalesPage({ user }) {
       .catch(err => console.error("Failed to fetch warehouses:", err));
   }, []);
 
+  // Handle Edit Mode from Params
+  useEffect(() => {
+    if (params && params.editSale) {
+      const sale = params.editSale;
+      setEditingRecNo(sale.REC_NO);
+      setInvoiceNo(sale.INVOICE_NO);
+      setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
+      setVatNumber(sale.VAT_NUMBER || '');
+      setPaymentMethod(sale.TRN_TYPE === 6 ? 'Cash' : 'Others');
+      
+      // Fetch Sale Items
+      fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO))
+        .then(res => res.json())
+        .then(items => {
+          const mappedRows = items.map((item, idx) => ({
+            id: idx + 1,
+            itemCode: item.BARCODE,
+            description: item.DESCRIPTION,
+            unit: item.UNIT,
+            qty: item.QTY,
+            price: item.UNIT_PRICE,
+            vatPercent: item.VAT_PERCENT,
+            vatAmt: item.VAT_AMOUNT,
+            total: item.ITM_TOTAL,
+            aliasCode: '',
+            stock: ''
+          }));
+          
+          // Fill up to at least 5 rows
+          while (mappedRows.length < 5) {
+            mappedRows.push({ 
+              id: mappedRows.length + 1, 
+              itemCode: '', description: '', unit: '', qty: '', price: '', 
+              aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' 
+            });
+          }
+          setRows(mappedRows);
+        })
+        .catch(err => console.error("Failed to fetch edit items:", err));
+        
+      // Fetch Customer Address if available
+      if (sale.ACCODE && sale.ACCODE !== '6000') {
+        fetch(API_ENDPOINTS.CUSTOMER_INFO(sale.ACCODE))
+          .then(res => res.json())
+          .then(data => {
+            if (data) {
+              setAddress({
+                building: data.building_no || '',
+                street: data.street_name || '',
+                district: data.district || '',
+                city: data.city_name || '',
+                pincode: data.postal_zone || ''
+              });
+            }
+          });
+      }
+    }
+  }, [params]);
+
   useEffect(() => {
     if (cachedAccounts.length > 0) {
       setAccounts(cachedAccounts);
@@ -233,9 +309,19 @@ export default function SalesPage({ user }) {
             />
           </div>
 
-          <h2 className="text-2xl font-black text-rose-500 uppercase tracking-widest hidden sm:block drop-shadow-sm shrink-0">
-            CREDIT SALES
-          </h2>
+          <div className="flex items-center gap-4">
+            {editingRecNo && onBack && (
+              <button 
+                onClick={onBack}
+                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-all text-zinc-500"
+              >
+                <ChevronRight className="rotate-180" size={24} />
+              </button>
+            )}
+            <h2 className={`text-2xl font-black ${editingRecNo ? 'text-indigo-600' : 'text-rose-500'} uppercase tracking-widest hidden sm:block drop-shadow-sm shrink-0`}>
+              {editingRecNo ? 'EDIT SALE' : 'CREDIT SALES'}
+            </h2>
+          </div>
         </div>
 
         <div className="flex flex-col flex-1 pb-6 gap-6">
@@ -274,6 +360,7 @@ export default function SalesPage({ user }) {
             accounts={accounts}
             selectedAccount={selectedAccount}
             setSelectedAccount={setSelectedAccount}
+            customerId={customer.id}
           />
         </div>
       </div>

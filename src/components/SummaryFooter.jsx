@@ -14,7 +14,8 @@ export default function SummaryFooter({
   setOtherPaid,
   accounts = [],
   selectedAccount,
-  setSelectedAccount
+  setSelectedAccount,
+  customerId
 }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -102,8 +103,29 @@ export default function SummaryFooter({
   };
 
   const handleFinalSave = () => {
+    // Validation for Walkthrough Customer (6000)
+    if (String(customerId) === '6000') {
+      const totalPaid = (Number(cashPaid) || 0) + (Number(otherPaid) || 0);
+      if (Math.abs(totalPaid - netAmount) >= 0.01) {
+        alert(`Full payment is mandatory for walkthrough customers.\nTotal Paid: SAR ${totalPaid.toFixed(2)}\nNet Amount: SAR ${netAmount.toFixed(2)}`);
+        return;
+      }
+    }
+    
     setIsCheckoutOpen(false);
     onSave();
+  };
+
+  const handleQuickSave = () => {
+    if (rows.filter(r => r.itemCode.trim() !== '').length === 0) {
+      alert("Please add at least one item before proceeding.");
+      return;
+    }
+    if (String(customerId) === '6000') {
+      alert("Payment is mandatory for walkthrough customers.");
+      return;
+    }
+    onSave(true);
   };
 
   return (
@@ -148,14 +170,30 @@ export default function SummaryFooter({
 
           </div>
 
-          {/* Next Button */}
-          <button 
-            onClick={handleNext}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest px-10 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg shadow-indigo-900/20 flex items-center gap-2 group shrink-0 self-center"
-          >
-            Next Step
-            <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
-          </button>
+          {/* Action Buttons Group */}
+          <div className="flex items-center gap-3 shrink-0 self-center">
+            <button 
+              onClick={handleQuickSave}
+              disabled={String(customerId) === '6000'}
+              title={String(customerId) === '6000' ? "Payment is mandatory for walkthrough customers" : "Save without payment"}
+              className={`text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg flex items-center gap-2 group shrink-0 ${
+                String(customerId) === '6000' 
+                ? 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed border border-zinc-800/50' 
+                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 shadow-zinc-950/50'
+              }`}
+            >
+              Save Invoice
+              <FileCheck size={18} className={String(customerId) !== '6000' ? "group-hover:scale-110 transition-transform" : ""} />
+            </button>
+
+            <button 
+              onClick={handleNext}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest px-8 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg shadow-indigo-900/20 flex items-center gap-2 group shrink-0"
+            >
+              Payment
+              <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
 
         </div>
       </div>

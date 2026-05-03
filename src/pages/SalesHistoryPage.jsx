@@ -4,7 +4,7 @@ import { Search, FileText, User, ChevronRight } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 import InvoiceModal from '../components/InvoiceModal';
 
-export default function SalesHistoryPage() {
+export default function SalesHistoryPage({ setActivePage }) {
   const { cachedSales, isReady, historyInvoiceColumns } = useCache();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(!isReady);
@@ -29,6 +29,10 @@ export default function SalesHistoryPage() {
 
     return matchesSearch && matchesType;
   });
+
+  const handleEditInvoice = (sale) => {
+    setActivePage('edit-sale', { editSale: sale });
+  };
 
   return (
     <div className="flex flex-col h-full p-6 animate-in fade-in duration-500 relative">
@@ -198,6 +202,7 @@ export default function SalesHistoryPage() {
       <InvoiceModal 
         sale={selectedSale} 
         onClose={() => setSelectedSale(null)} 
+        onEdit={handleEditInvoice}
         historyInvoiceColumns={historyInvoiceColumns}
       />
     </div>

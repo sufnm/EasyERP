@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, FileText, Calendar, User, Printer } from 'lucide-react';
 import { API_ENDPOINTS } from '../config';
 
-export default function InvoiceModal({ sale, onClose, address: passedAddress, historyInvoiceColumns = {
+export default function InvoiceModal({ sale, onClose, onEdit, address: passedAddress, historyInvoiceColumns = {
   barcode: true,
   description: true,
   unit: true,
@@ -252,10 +252,21 @@ export default function InvoiceModal({ sale, onClose, address: passedAddress, hi
            </button>
            <button 
             onClick={handlePrint}
-            className="px-6 py-2 rounded-xl bg-zinc-800 dark:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900 transition-all flex items-center gap-2 shadow-lg shadow-zinc-900/20"
+            className="px-6 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-2"
            >
-             <Printer size={14} /> Print Invoice
+             <Printer size={14} /> Print
            </button>
+           {onEdit && (
+            <button 
+              onClick={() => {
+                onEdit(sale);
+                onClose();
+              }}
+              className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+            >
+              <FileText size={14} /> Edit Invoice
+            </button>
+           )}
         </div>
       </div>
     </div>

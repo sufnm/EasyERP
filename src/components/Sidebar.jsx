@@ -87,7 +87,9 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
       <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activePage === item.id || item.subItems?.some(sub => sub.id === activePage);
+          const isActive = activePage === item.id || 
+                           item.subItems?.some(sub => sub.id === activePage) ||
+                           (item.id === 'sales-history' && activePage === 'edit-sale');
           const hasSubItems = item.subItems && item.subItems.length > 0;
           const isOpen = openMenus.includes(item.id);
 
