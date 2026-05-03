@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, ShoppingCart, ShoppingBag, Settings, Users, BarChart3, Book, Clock, LogOut, ChevronDown, ChevronRight, Wallet } from 'lucide-react';
+import { Home, ShoppingCart, ShoppingBag, Settings, Users, BarChart3, Book, Clock, LogOut, ChevronDown, ChevronRight, Wallet, ShieldCheck } from 'lucide-react';
 
 export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
   const [openMenus, setOpenMenus] = useState(['accounts']);
@@ -55,7 +55,18 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
       label: 'LookUp master', 
       icon: Settings,
       subItems: [
-        { id: 'item-group', label: 'Item Group' }
+        { id: 'item-group', label: 'Item Group' },
+        { id: 'unit-master', label: 'Unit Master' }
+      ]
+    },
+    {
+      id: 'admin-setup',
+      label: 'Admin Setup',
+      icon: ShieldCheck,
+      subItems: [
+        { id: 'transaction-types', label: 'Transaction Types' },
+        { id: 'user-privileges', label: 'User Privileges' },
+        { id: 'user-info', label: 'User Info' }
       ]
     },
     { id: 'settings', label: 'Settings', icon: Settings },

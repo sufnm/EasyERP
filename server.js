@@ -606,6 +606,37 @@ app.get('/api/warehouses/list', async (req, res) => {
   }
 });
 
+app.get('/api/branches', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT Branch_Code, Branch_Name 
+      FROM dbo.BRANCHES
+      ORDER BY Branch_Code ASC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch branches:", error);
+    res.status(500).json({ error: 'Failed to fetch branches' });
+  }
+});
+
+app.get('/api/screens', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT DISTINCT Menu_Name 
+      FROM dbo.UserPriv
+      WHERE Menu_Name IS NOT NULL AND Menu_Name <> ''
+      ORDER BY Menu_Name ASC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch screens:", error);
+    res.status(500).json({ error: 'Failed to fetch screens' });
+  }
+});
+
 app.get('/api/accounts/list-by-parent', async (req, res, next) => {
   const { parentLevel, parentId } = req.query;
   if (!parentLevel || !parentId) return res.json([]);
@@ -1097,6 +1128,291 @@ app.post('/api/item-groups', async (req, res) => {
   } catch (err) {
     console.error("Item Group Post Error:", err.message);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+
+// Unit Master Endpoints
+app.get('/api/unit-master', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT Unit_id, Unit_Name, Unit_AName, Unit_Type, QTY 
+      FROM dbo.UnitMaster
+      ORDER BY Unit_id ASC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Unit Master Get Error:", err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/unit-master', async (req, res) => {
+  const { Unit_id, Unit_Name, Unit_AName, Unit_Type, QTY } = req.body;
+  if (!Unit_id || !Unit_Name) return res.status(400).json({ error: 'ID and Name required' });
+
+  try {
+    const pool = await getPool();
+    const checkEx = await pool.request()
+      .input('id', sql.Int, Unit_id)
+      .query(`SELECT Unit_id FROM dbo.UnitMaster WHERE Unit_id = @id`);
+
+    const reqPool = pool.request()
+      .input('id', sql.Int, Unit_id)
+      .input('name', sql.NVarChar, Unit_Name)
+      .input('aname', sql.NVarChar, Unit_AName || '')
+      .input('unitType', sql.NVarChar, Unit_Type || '')
+      .input('qty', sql.Float, QTY || 0);
+
+    if (checkEx.recordset.length > 0) {
+      // UPDATE
+      await reqPool.query(`
+        UPDATE dbo.UnitMaster SET 
+          Unit_Name = @name,
+          Unit_AName = @aname,
+          Unit_Type = @unitType,
+          QTY = @qty
+        WHERE Unit_id = @id
+      `);
+    } else {
+      // INSERT
+      await reqPool.query(`
+        INSERT INTO dbo.UnitMaster (Unit_id, Unit_Name, Unit_AName, Unit_Type, QTY)
+        VALUES (@id, @name, @aname, @unitType, @qty)
+      `);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Unit Master Post Error:", err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Transaction Types Endpoints
+app.get('/api/transaction-types', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        TRN_CODE, TRN_NAME, TRN_NO, BRN_CODE, TRN_ANAME, 
+        ACC_NO, ABRV, DRCR, DRCR1, PAYBY, 
+        INV_PREFEX, AUTO_POST, ABRV_CODE, VAT_ACC, EXP_ACC, 
+        PIH, SCREEN_NAME
+      FROM dbo.TRN_TYPE
+      ORDER BY TRN_CODE ASC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Transaction Types Get Error:", err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/transaction-types', async (req, res) => {
+  const data = req.body;
+  if (!data.TRN_CODE || !data.TRN_NAME) return res.status(400).json({ error: 'Code and Name required' });
+
+  try {
+    const pool = await getPool();
+    const checkEx = await pool.request()
+      .input('code', sql.Int, data.TRN_CODE)
+      .query(`SELECT TRN_CODE FROM dbo.TRN_TYPE WHERE TRN_CODE = @code`);
+
+    const reqPool = pool.request()
+      .input('TRN_CODE', sql.Int, data.TRN_CODE)
+      .input('TRN_NAME', sql.NVarChar, data.TRN_NAME)
+      .input('TRN_NO', sql.Int, data.TRN_NO || null)
+      .input('BRN_CODE', sql.Int, data.BRN_CODE || 1)
+      .input('TRN_ANAME', sql.NVarChar, data.TRN_ANAME || '')
+      .input('ACC_NO', sql.Numeric(18,0), data.ACC_NO ? Number(data.ACC_NO) : null)
+      .input('ABRV', sql.VarChar, data.ABRV || '')
+      .input('DRCR', sql.VarChar, data.DRCR || 'D')
+      .input('DRCR1', sql.VarChar, data.DRCR1 || 'D')
+      .input('PAYBY', sql.VarChar, data.PAYBY || '')
+      .input('INV_PREFEX', sql.VarChar, data.INV_PREFEX || '')
+      .input('AUTO_POST', sql.Int, data.AUTO_POST || 0)
+      .input('ABRV_CODE', sql.VarChar, data.ABRV_CODE || '')
+      .input('VAT_ACC', sql.Numeric(18,0), data.VAT_ACC ? Number(data.VAT_ACC) : null)
+      .input('EXP_ACC', sql.Numeric(18,0), data.EXP_ACC ? Number(data.EXP_ACC) : null)
+      .input('PIH', sql.Int, data.PIH || 0)
+      .input('SCREEN_NAME', sql.NVarChar, data.SCREEN_NAME || '');
+
+    if (checkEx.recordset.length > 0) {
+      await reqPool.query(`
+        UPDATE dbo.TRN_TYPE SET 
+          TRN_NAME = @TRN_NAME, TRN_NO = @TRN_NO, BRN_CODE = @BRN_CODE, TRN_ANAME = @TRN_ANAME, 
+          ACC_NO = @ACC_NO, ABRV = @ABRV, DRCR = @DRCR, DRCR1 = @DRCR1, PAYBY = @PAYBY, 
+          INV_PREFEX = @INV_PREFEX, AUTO_POST = @AUTO_POST, ABRV_CODE = @ABRV_CODE, 
+          VAT_ACC = @VAT_ACC, EXP_ACC = @EXP_ACC, PIH = @PIH, SCREEN_NAME = @SCREEN_NAME
+        WHERE TRN_CODE = @TRN_CODE
+      `);
+    } else {
+      await reqPool.query(`
+        INSERT INTO dbo.TRN_TYPE (
+          TRN_CODE, TRN_NAME, TRN_NO, BRN_CODE, TRN_ANAME, 
+          ACC_NO, ABRV, DRCR, DRCR1, PAYBY, 
+          INV_PREFEX, AUTO_POST, ABRV_CODE, VAT_ACC, EXP_ACC, 
+          PIH, SCREEN_NAME
+        ) VALUES (
+          @TRN_CODE, @TRN_NAME, @TRN_NO, @BRN_CODE, @TRN_ANAME, 
+          @ACC_NO, @ABRV, @DRCR, @DRCR1, @PAYBY, 
+          @INV_PREFEX, @AUTO_POST, @ABRV_CODE, @VAT_ACC, @EXP_ACC, 
+          @PIH, @SCREEN_NAME
+        )
+      `);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Transaction Type Post Error:", err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// User Privileges Endpoints
+app.get('/api/user-privileges', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name
+      FROM dbo.UserPriv
+      ORDER BY GROUP_NAME, Menu_Name ASC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("User Privileges Get Error:", err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/user-privileges', async (req, res) => {
+  const data = req.body;
+  if (!data.GROUP_NAME || !data.Menu_Name) return res.status(400).json({ error: 'Group and Menu Name required' });
+
+  try {
+    const pool = await getPool();
+    const checkEx = await pool.request()
+      .input('group', sql.NVarChar, data.GROUP_NAME)
+      .input('menu', sql.NVarChar, data.Menu_Name)
+      .query(`SELECT GROUP_NAME FROM dbo.UserPriv WHERE GROUP_NAME = @group AND Menu_Name = @menu`);
+
+    const reqPool = pool.request()
+      .input('GROUP_NAME', sql.NVarChar, data.GROUP_NAME)
+      .input('form_id', sql.VarChar, data.form_id || '')
+      .input('ins', sql.Int, data.ins || 0)
+      .input('upd', sql.Int, data.upd || 0)
+      .input('qry', sql.Int, data.qry || 0)
+      .input('del', sql.Int, data.del || 0)
+      .input('dsp', sql.Int, data.dsp || 0)
+      .input('Menu_Name', sql.NVarChar, data.Menu_Name);
+
+    if (checkEx.recordset.length > 0) {
+      await reqPool.query(`
+        UPDATE dbo.UserPriv SET 
+          form_id = @form_id, ins = @ins, upd = @upd, qry = @qry, del = @del, dsp = @dsp
+        WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name
+      `);
+    } else {
+      await reqPool.query(`
+        INSERT INTO dbo.UserPriv (
+          GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name
+        ) VALUES (
+          @GROUP_NAME, @form_id, @ins, @upd, @qry, @del, @dsp, @Menu_Name
+        )
+      `);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("User Privilege Post Error:", err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// User Info Endpoints
+app.get('/api/user-info', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        UserId, UserName, MOBILE_NO, Password, Superuser, 
+        Group_Name, WR_CODE, BRN_CODE, MENU_DOCK, SH_TOPMENU, 
+        SH_SIDEMENU, POWER_USER, DEF_LANG, DEF_INVOICE, DEF_FORM, 
+        DEF_SCREEN, LOGGED_ID, CUR_LOGGED_TIME, Employee_ACNO, 
+        SALE_CASH_AC, SALE_BANK_AC, Payments
+      FROM dbo.UserInfo
+      ORDER BY UserId ASC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("User Info Get Error:", err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/user-info', async (req, res) => {
+  const data = req.body;
+  if (!data.UserId || !data.UserName) return res.status(400).json({ error: 'UserId and UserName required' });
+
+  try {
+    const pool = await getPool();
+    const checkEx = await pool.request()
+      .input('uid', sql.VarChar, data.UserId)
+      .query(`SELECT UserId FROM dbo.UserInfo WHERE UserId = @uid`);
+
+    const reqPool = pool.request()
+      .input('UserId', sql.VarChar, data.UserId)
+      .input('UserName', sql.NVarChar, data.UserName)
+      .input('MOBILE_NO', sql.VarChar, data.MOBILE_NO || '')
+      .input('Password', sql.VarChar, data.Password || '')
+      .input('Superuser', sql.Int, data.Superuser || 0)
+      .input('Group_Name', sql.NVarChar, data.Group_Name || '')
+      .input('WR_CODE', sql.VarChar, data.WR_CODE || '')
+      .input('BRN_CODE', sql.VarChar, data.BRN_CODE || '')
+      .input('MENU_DOCK', sql.Int, data.MENU_DOCK || 0)
+      .input('SH_TOPMENU', sql.Int, data.SH_TOPMENU || 1)
+      .input('SH_SIDEMENU', sql.Int, data.SH_SIDEMENU || 1)
+      .input('POWER_USER', sql.Int, data.POWER_USER || 0)
+      .input('DEF_LANG', sql.VarChar, data.DEF_LANG || 'EN')
+      .input('DEF_INVOICE', sql.VarChar, data.DEF_INVOICE || '')
+      .input('DEF_FORM', sql.VarChar, data.DEF_FORM || '')
+      .input('DEF_SCREEN', sql.VarChar, data.DEF_SCREEN || '')
+      .input('Employee_ACNO', sql.Numeric(18,0), data.Employee_ACNO ? Number(data.Employee_ACNO) : null)
+      .input('SALE_CASH_AC', sql.Numeric(18,0), data.SALE_CASH_AC ? Number(data.SALE_CASH_AC) : null)
+      .input('SALE_BANK_AC', sql.Numeric(18,0), data.SALE_BANK_AC ? Number(data.SALE_BANK_AC) : null)
+      .input('Payments', sql.VarChar, data.Payments || '');
+
+    if (checkEx.recordset.length > 0) {
+      await reqPool.query(`
+        UPDATE dbo.UserInfo SET 
+          UserName = @UserName, MOBILE_NO = @MOBILE_NO, Password = @Password, 
+          Superuser = @Superuser, Group_Name = @Group_Name, WR_CODE = @WR_CODE, 
+          BRN_CODE = @BRN_CODE, MENU_DOCK = @MENU_DOCK, SH_TOPMENU = @SH_TOPMENU, 
+          SH_SIDEMENU = @SH_SIDEMENU, POWER_USER = @POWER_USER, DEF_LANG = @DEF_LANG, 
+          DEF_INVOICE = @DEF_INVOICE, DEF_FORM = @DEF_FORM, DEF_SCREEN = @DEF_SCREEN, 
+          Employee_ACNO = @Employee_ACNO, SALE_CASH_AC = @SALE_CASH_AC, 
+          SALE_BANK_AC = @SALE_BANK_AC, Payments = @Payments
+        WHERE UserId = @UserId
+      `);
+    } else {
+      await reqPool.query(`
+        INSERT INTO dbo.UserInfo (
+          UserId, UserName, MOBILE_NO, Password, Superuser, 
+          Group_Name, WR_CODE, BRN_CODE, MENU_DOCK, SH_TOPMENU, 
+          SH_SIDEMENU, POWER_USER, DEF_LANG, DEF_INVOICE, DEF_FORM, 
+          DEF_SCREEN, Employee_ACNO, SALE_CASH_AC, SALE_BANK_AC, Payments
+        ) VALUES (
+          @UserId, @UserName, @MOBILE_NO, @Password, @Superuser, 
+          @Group_Name, @WR_CODE, @BRN_CODE, @MENU_DOCK, @SH_TOPMENU, 
+          @SH_SIDEMENU, @POWER_USER, @DEF_LANG, @DEF_INVOICE, @DEF_FORM, 
+          @DEF_SCREEN, @Employee_ACNO, @SALE_CASH_AC, @SALE_BANK_AC, @Payments
+        )
+      `);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("User Info Post Error:", err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
 

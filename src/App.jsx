@@ -14,6 +14,10 @@ import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import CustomerAccountForm from './pages/CustomerAccountForm';
 import ItemGroupPage from './pages/ItemGroupPage';
+import UnitMasterPage from './pages/UnitMasterPage';
+import TransactionTypesPage from './pages/TransactionTypesPage';
+import UserPrivilegesPage from './pages/UserPrivilegesPage';
+import UserInfoPage from './pages/UserInfoPage';
 import CustomerReceivablePage from './pages/CustomerReceivablePage';
 import { CacheProvider } from './context/CacheContext';
 
@@ -64,11 +68,11 @@ function App() {
     <CacheProvider>
       <div className={`flex h-screen overflow-hidden font-sans antialiased selection:bg-indigo-200 transition-colors duration-300 bg-background text-foreground ${(theme === 'dark' || theme === 'skyblue') ? 'dark' : ''} ${theme === 'skyblue' ? 'skyblue' : ''}`}>
         <Sidebar activePage={activePage} setActivePage={navigateTo} onLogout={handleLogout} user={user} />
-        
+
         <main className="flex-1 overflow-y-auto">
           {activePage === 'home' && <HomePage />}
-           {activePage === 'sales' && <SalesPage user={user} params={activePageParams} />}
-           {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} onBack={() => navigateTo('sales-history')} />}
+          {activePage === 'sales' && <SalesPage user={user} params={activePageParams} />}
+          {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} onBack={() => navigateTo('sales-history')} />}
           {activePage === 'sales-history' && <SalesHistoryPage setActivePage={navigateTo} />}
           {activePage === 'accounts' && <AccountsPage setActivePage={navigateTo} />}
           {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={navigateTo} />}
@@ -77,13 +81,17 @@ function App() {
           {activePage === 'purchase-accounts' && <PurchaseAccountsPage setActivePage={navigateTo} />}
           {activePage === 'customer-account-form' && <CustomerAccountForm setActivePage={navigateTo} params={activePageParams} />}
           {activePage === 'item-group' && <ItemGroupPage />}
+          {activePage === 'unit-master' && <UnitMasterPage />}
+          {activePage === 'transaction-types' && <TransactionTypesPage />}
+          {activePage === 'user-privileges' && <UserPrivilegesPage />}
+          {activePage === 'user-info' && <UserInfoPage />}
           {activePage === 'chart-of-accounts' && <ChartOfAccountsPage setActivePage={navigateTo} params={activePageParams} />}
           {activePage === 'create-account' && <CreateAccountPage setActivePage={navigateTo} initialData={activePageParams} prevPage={prevPage} />}
           {activePage === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}
           {activePage === 'customer-receivable' && <CustomerReceivablePage setActivePage={navigateTo} />}
-          {['home', 'sales', 'edit-sale', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'purchase', 'purchase-return'].includes(activePage) ? null : (
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'purchase', 'purchase-return'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
-               <p className="text-zinc-400 text-lg font-medium">Coming Soon</p>
+              <p className="text-zinc-400 text-lg font-medium">Coming Soon</p>
             </div>
           )}
         </main>

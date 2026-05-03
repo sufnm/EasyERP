@@ -29,12 +29,18 @@ export const API_ENDPOINTS = {
   PURCHASE_CACHE: `${API_BASE_URL}/api/purchases/cache`,
   ACCOUNT_HEADER_TYPES: `${API_BASE_URL}/api/accounts/header-types`,
   ITEM_GROUPS: `${API_BASE_URL}/api/item-groups`,
+  UNIT_MASTER: `${API_BASE_URL}/api/unit-master`,
+  TRANSACTION_TYPES: `${API_BASE_URL}/api/transaction-types`,
+  USER_PRIVILEGES: `${API_BASE_URL}/api/user-privileges`,
+  USER_INFO: `${API_BASE_URL}/api/user-info`,
   ACCOUNT_CREATE: `${API_BASE_URL}/api/accounts/create`,
   INVOICE_NEXT: `${API_BASE_URL}/api/invoice/next`,
   SALES_SAVE: `${API_BASE_URL}/api/sales/save`,
   SALES_HISTORY: `${API_BASE_URL}/api/sales`,
   SALE_ITEMS: (recNo) => `${API_BASE_URL}/api/sales/${recNo}/items`,
   WAREHOUSE_LIST: `${API_BASE_URL}/api/warehouses/list`,
+  BRANCHES: `${API_BASE_URL}/api/branches`,
+  SCREENS: `${API_BASE_URL}/api/screens`,
 };
 
 export default API_BASE_URL;
