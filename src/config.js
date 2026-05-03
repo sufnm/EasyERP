@@ -41,6 +41,7 @@ export const API_ENDPOINTS = {
   WAREHOUSE_LIST: `${API_BASE_URL}/api/warehouses/list`,
   BRANCHES: `${API_BASE_URL}/api/branches`,
   SCREENS: `${API_BASE_URL}/api/screens`,
+  CURRENCY_LIST: `${API_BASE_URL}/api/currencies/list`,
 };
 
 export default API_BASE_URL;

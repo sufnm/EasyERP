@@ -17,7 +17,8 @@ export default function Toolbar({
   visibleColumns, setVisibleColumns, 
   taxIncluded, setTaxIncluded, 
   enterToQty, setEnterToQty,
-  showInvoiceAfterSave, setShowInvoiceAfterSave
+  showInvoiceAfterSave, setShowInvoiceAfterSave,
+  currencies = [], selectedCurrency, setSelectedCurrency
 }) {
   const [showOptions, setShowOptions] = useState(false);
   const toggleColumn = (key) => setVisibleColumns?.(prev => ({ ...prev, [key]: !prev[key] }));
@@ -39,15 +40,15 @@ export default function Toolbar({
       {/* Options Modal */}
       {showOptions && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/60 backdrop-blur-sm p-4">
-          <div className="bg-card text-card-foreground rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border">
-            <div className="bg-zinc-800 dark:bg-zinc-900 p-4 flex justify-between items-center text-white">
+          <div className="bg-card text-card-foreground rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border">
+            <div className="bg-zinc-800 dark:bg-zinc-900 p-5 flex justify-between items-center text-white shrink-0">
                <h3 className="text-lg font-bold tracking-wide">System Options</h3>
                <button onClick={() => setShowOptions(false)} className="text-zinc-300 hover:text-white transition-colors bg-zinc-700 dark:bg-zinc-800 p-1.5 rounded-full hover:bg-rose-500">
                  <X size={18} />
                </button>
             </div>
             
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               <div className="mb-6">
                 <h4 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-3">General Settings</h4>
                 <div className="space-y-3">
@@ -63,12 +64,30 @@ export default function Toolbar({
                     <input type="checkbox" checked={showInvoiceAfterSave} onChange={() => setShowInvoiceAfterSave?.(!showInvoiceAfterSave)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
                     <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Show Invoice after Sale</span>
                   </label>
+                  
+                  <div className="flex flex-col gap-2 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border rounded-xl transition-all shadow-sm">
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Default Currency</span>
+                    <select 
+                      value={selectedCurrency} 
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setSelectedCurrency?.(val);
+                      }}
+                      className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-primary outline-none"
+                    >
+                      {currencies.map(curr => (
+                        <option key={curr.Currency_No} value={curr.Currency_No}>
+                          {curr.Currency_code} - {curr.Currency_Name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
               
               <div>
                 <h4 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-3">Visible Grid Columns</h4>
-                <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-2">
+                <div className="grid grid-cols-2 gap-2">
                   {visibleColumns && Object.keys(visibleColumns).map(key => (
                     <label key={key} className="flex items-center gap-3 cursor-pointer group p-2 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 rounded-lg border border-transparent hover:border-border transition-all">
                       <input type="checkbox" checked={visibleColumns[key]} onChange={() => toggleColumn(key)} className="w-4 h-4 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
@@ -79,8 +98,8 @@ export default function Toolbar({
               </div>
             </div>
             
-            <div className="bg-zinc-50 dark:bg-zinc-900/30 p-4 border-t border-border flex justify-end">
-              <button onClick={() => setShowOptions(false)} className="px-6 py-2 bg-zinc-800 dark:bg-zinc-950 text-white text-sm font-bold rounded-lg hover:bg-primary transition-colors shadow-md">
+            <div className="bg-zinc-50 dark:bg-zinc-900/30 p-5 border-t border-border flex justify-end shrink-0">
+              <button onClick={() => setShowOptions(false)} className="px-6 py-2.5 bg-zinc-800 dark:bg-zinc-950 text-white text-sm font-bold rounded-lg hover:bg-primary transition-colors shadow-md">
                 Save & Close
               </button>
             </div>

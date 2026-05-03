@@ -5,7 +5,7 @@ import { useCache } from '../context/CacheContext';
 import InvoiceModal from '../components/InvoiceModal';
 
 export default function SalesHistoryPage({ setActivePage }) {
-  const { cachedSales, isReady, historyInvoiceColumns } = useCache();
+  const { cachedSales, isReady, historyInvoiceColumns, defaultCurrency } = useCache();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(!isReady);
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,7 +25,8 @@ export default function SalesHistoryPage({ setActivePage }) {
     const matchesType = 
       filterType === 'all' || 
       (filterType === 'cash' && sale.TRN_TYPE === 6) || 
-      (filterType === 'credit' && sale.TRN_TYPE === 7);
+      (filterType === 'credit' && sale.TRN_TYPE === 7) ||
+      (filterType === 'pending' && (Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0)) !== Number(sale.NET_AMOUNT || 0));
 
     return matchesSearch && matchesType;
   });
@@ -49,7 +50,7 @@ export default function SalesHistoryPage({ setActivePage }) {
                 <div>
                   <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Total Revenue</p>
                   <p className="text-xl font-black text-emerald-600 leading-none">
-                    SAR {filteredSales.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {defaultCurrency.code} {filteredSales.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
@@ -63,7 +64,7 @@ export default function SalesHistoryPage({ setActivePage }) {
                 <div>
                   <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Avg. Value</p>
                   <p className="text-xl font-black text-amber-500 leading-none">
-                    SAR {filteredSales.length > 0 
+                    {defaultCurrency.code} {filteredSales.length > 0 
                       ? (filteredSales.reduce((acc, curr) => acc + (Number(curr.G_TOTAL) || 0), 0) / filteredSales.length).toLocaleString(undefined, { maximumFractionDigits: 0 }) 
                       : '0'}
                   </p>
@@ -115,6 +116,16 @@ export default function SalesHistoryPage({ setActivePage }) {
               }`}
             >
               Credit
+            </button>
+            <button 
+              onClick={() => setFilterType('pending')}
+              className={`flex-1 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
+                filterType === 'pending' 
+                ? 'bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-900/20' 
+                : 'bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
+              }`}
+            >
+              Pending
             </button>
           </div>
         </div>
@@ -182,7 +193,7 @@ export default function SalesHistoryPage({ setActivePage }) {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span className="font-black text-zinc-800 dark:text-zinc-100">
-                        SAR {(Number(sale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">

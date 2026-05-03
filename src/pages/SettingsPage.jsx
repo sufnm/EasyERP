@@ -3,7 +3,7 @@ import { Moon, Sun, Settings as SettingsIcon, Monitor, Bell, Shield, Table, Hist
 import { useCache } from '../context/CacheContext';
 
 export default function SettingsPage({ theme, setTheme }) {
-  const { historyInvoiceColumns, setHistoryInvoiceColumns } = useCache();
+  const { historyInvoiceColumns, setHistoryInvoiceColumns, currencies, defaultCurrency, setDefaultCurrency } = useCache();
 
   const toggleColumn = (key) => {
     setHistoryInvoiceColumns(prev => ({
@@ -44,23 +44,41 @@ export default function SettingsPage({ theme, setTheme }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Navigation - Sidebar subtle */}
         <div className="md:col-span-1 space-y-1">
-          <button className="w-full flex items-center gap-3 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 font-bold rounded-xl text-sm transition-all">
+          <button 
+            onClick={() => {
+               const el = document.getElementById('appearance-section');
+               el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 font-bold rounded-xl text-sm transition-all"
+          >
             <Monitor size={18} />
             Appearance
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-500 dark:text-zinc-400 font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl text-sm transition-all group">
+          <button 
+            onClick={() => {
+              const el = document.getElementById('software-section');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-500 dark:text-zinc-400 font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl text-sm transition-all group"
+          >
+            <SettingsIcon size={18} className="group-hover:text-zinc-700 dark:group-hover:text-zinc-200" />
+            Software Settings
+          </button>
+          <button 
+            onClick={() => {
+              const el = document.getElementById('columns-section');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-500 dark:text-zinc-400 font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl text-sm transition-all group"
+          >
             <History size={18} className="group-hover:text-zinc-700 dark:group-hover:text-zinc-200" />
             Invoice Layout
-          </button>
-          <button className="w-full flex items-center gap-3 px-4 py-2.5 text-zinc-500 dark:text-zinc-400 font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl text-sm transition-all group">
-            <Bell size={18} className="group-hover:text-zinc-700 dark:group-hover:text-zinc-200" />
-            Notifications
           </button>
         </div>
 
         {/* Content Area */}
         <div className="md:col-span-2 space-y-6">
-          <section className="bg-card p-6 rounded-2xl border border-border shadow-sm">
+          <section id="appearance-section" className="bg-card p-6 rounded-2xl border border-border shadow-sm">
             <h2 className="text-sm font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-6">Appearance Settings</h2>
             
             <div className="grid grid-cols-3 gap-4">
@@ -84,8 +102,41 @@ export default function SettingsPage({ theme, setTheme }) {
               ))}
             </div>
           </section>
+          
+          <section id="software-section" className="bg-card p-6 rounded-2xl border border-border shadow-sm">
+            <div className="flex items-center gap-3 mb-6">
+               <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600">
+                 <SettingsIcon size={16} />
+               </div>
+               <h2 className="text-sm font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest">Software Settings</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-2">Default Base Currency</label>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3 font-medium">
+                  This currency will be used for analytics, reports, and as the initial default for new sales.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {currencies.map((curr) => (
+                    <button
+                      key={curr.Currency_No}
+                      onClick={() => setDefaultCurrency({ code: curr.Currency_code, no: curr.Currency_No })}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                        defaultCurrency.no === curr.Currency_No
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20'
+                        : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-500 border-zinc-100 dark:border-zinc-800 hover:bg-zinc-100'
+                      }`}
+                    >
+                      {curr.Currency_code} - {curr.Currency_Name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
 
-          <section className="bg-card p-6 rounded-2xl border border-border shadow-sm">
+          <section id="columns-section" className="bg-card p-6 rounded-2xl border border-border shadow-sm">
             <div className="flex items-center gap-3 mb-6">
                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-indigo-600">
                  <Table size={16} />

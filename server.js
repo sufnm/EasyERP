@@ -209,6 +209,20 @@ app.get('/api/receivable/currencies', async (req, res) => {
   }
 });
 
+app.get('/api/currencies/list', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT [Currency_No], [Currency_code], [Currency_Name], [Currency_Rate]
+      FROM [dbo].[CURRENCY_MASTER]
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch currencies:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
 app.get('/api/receivable/cash-accounts', async (req, res) => {
   try {
     const pool = await getPool();
@@ -1439,7 +1453,9 @@ app.post('/api/sales/save', async (req, res) => {
     CASH_PAID = 0,
     OTHER_PAID = 0,
     USERNAME,
-    WR_CODE = 1
+    WR_CODE = 1,
+    CURRENCY,
+    CURRENCY_RATE
   } = req.body;
 
   const trnType = PAYMENT_METHOD === 'Cash' ? 6 : 7;
@@ -1486,11 +1502,13 @@ app.post('/api/sales/save', async (req, res) => {
           .input('otherPaid', sql.Decimal(18, 2), OTHER_PAID || 0)
           .input('cashAcc', sql.VarChar, String(cashAcc || ''))
           .input('wrCode', sql.SmallInt, Number(WR_CODE))
+          .input('currency', sql.Int, CURRENCY || 1)
           .query(`
             UPDATE dbo.DATA_ENTRY_WEB SET
               ACCODE = @accode, ENAME = @ename, G_TOTAL = @gTotal, DISC_AMT = @discAmt,
               NET_AMOUNT = @netAmount, VAT_AMOUNT = @vatAmount, CASH_PAID = @cashPaid,
-              OTHER_PAID = @otherPaid, CASH_ACC = @cashAcc, WR_CODE = @wrCode
+              OTHER_PAID = @otherPaid, CASH_ACC = @cashAcc, WR_CODE = @wrCode,
+              CURRENCY = @currency
             WHERE REC_NO = @recNo;
 
             SELECT INVOICE_NO, REC_NO FROM dbo.DATA_ENTRY_WEB WHERE REC_NO = @recNo;
@@ -1524,16 +1542,19 @@ app.post('/api/sales/save', async (req, res) => {
           .input('trnType', sql.Int, trnType)
           .input('orgDup', sql.Int, 1)
           .input('wrCode', sql.SmallInt, Number(WR_CODE))
+          .input('currency', sql.Int, CURRENCY || 1)
           .query(`
               INSERT INTO dbo.DATA_ENTRY_WEB (
                 ACCODE, ENAME, G_TOTAL, DISC_AMT, NET_AMOUNT, VAT_AMOUNT,
                 CASH_PAID, OTHER_PAID, CASH_ACC,
-                BRN_CODE, TRN_TYPE, ORG_DUP, WR_CODE, CURDATE
+                BRN_CODE, TRN_TYPE, ORG_DUP, WR_CODE, CURDATE,
+                CURRENCY
               )
               VALUES (
                 @accode, @ename, @gTotal, @discAmt, @netAmount, @vatAmount,
                 @cashPaid, @otherPaid, @cashAcc,
-                @brnCode, @trnType, @orgDup, @wrCode, GETDATE()
+                @brnCode, @trnType, @orgDup, @wrCode, GETDATE(),
+                @currency
               );
 
               DECLARE @NewRecNo INT = SCOPE_IDENTITY();
@@ -1663,18 +1684,22 @@ app.get('/api/sales', async (req, res) => {
     const pool = await getPool();
     const result = await pool.request().query(`
       SELECT 
-        REC_NO,
-        INVOICE_NO, 
-        ACCODE, 
-        ENAME, 
-        G_TOTAL, 
-        NET_AMOUNT, 
-        VAT_AMOUNT,
-        DISC_AMT,
-        TRN_TYPE,
-        CURDATE 
-      FROM dbo.DATA_ENTRY_WEB 
-      ORDER BY CURDATE DESC
+        D.REC_NO,
+        D.INVOICE_NO, 
+        D.ACCODE, 
+        D.ENAME, 
+        D.G_TOTAL, 
+        D.NET_AMOUNT, 
+        D.VAT_AMOUNT,
+        D.DISC_AMT,
+        D.TRN_TYPE,
+        D.CURDATE,
+        D.CASH_PAID,
+        D.OTHER_PAID,
+        C.Currency_code AS CURRENCY_CODE
+      FROM dbo.DATA_ENTRY_WEB D
+      LEFT JOIN dbo.CURRENCY_MASTER C ON D.CURRENCY = C.Currency_No
+      ORDER BY D.CURDATE DESC
     `);
     res.json(result.recordset);
   } catch (error) {

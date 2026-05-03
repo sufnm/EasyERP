@@ -17,7 +17,8 @@ export default function SalesPage({ user, params = {}, onBack }) {
     enterToQty, setEnterToQty,
     visibleColumns, setVisibleColumns,
     historyInvoiceColumns,
-    showInvoiceAfterSave, setShowInvoiceAfterSave
+    showInvoiceAfterSave, setShowInvoiceAfterSave,
+    defaultCurrency
   } = useCache();
 
   const [salesData, setSalesData] = useState([]);
@@ -52,6 +53,8 @@ export default function SalesPage({ user, params = {}, onBack }) {
   const [selectedWarehouse, setSelectedWarehouse] = useState('1');
   const [savedInvoice, setSavedInvoice] = useState(null);
   const [editingRecNo, setEditingRecNo] = useState(null);
+  const [currencies, setCurrencies] = useState([]);
+  const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency.no);
 
   const handleAddressChange = (field, value) => {
     setAddress(prev => ({ ...prev, [field]: value }));
@@ -142,6 +145,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
         USERNAME: user?.username || '',
         WR_CODE: selectedWarehouse,
         REC_NO: editingRecNo,
+        CURRENCY: selectedCurrency,
         ROWS: rows.filter(r => r.itemCode.trim() !== '')
       };
 
@@ -171,7 +175,10 @@ export default function SalesPage({ user, params = {}, onBack }) {
             VAT_NUMBER: vatNumber,
             TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7
           };
-          setSavedInvoice(invoiceData);
+          setSavedInvoice({
+              ...invoiceData,
+              CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
+            });
         } else {
           alert('Sale saved successfully!');
           resetPage();
@@ -224,6 +231,16 @@ export default function SalesPage({ user, params = {}, onBack }) {
         if (data.length > 0) setSelectedWarehouse(String(data[0].WR_CODE));
       })
       .catch(err => console.error("Failed to fetch warehouses:", err));
+
+    fetch(API_ENDPOINTS.CURRENCY_LIST)
+      .then(res => res.json())
+      .then(data => {
+        setCurrencies(data);
+        if (data.length > 0 && !editingRecNo) {
+          setSelectedCurrency(defaultCurrency.no);
+        }
+      })
+      .catch(err => console.error("Failed to fetch currencies:", err));
   }, []);
 
   // Handle Edit Mode from Params
@@ -306,6 +323,9 @@ export default function SalesPage({ user, params = {}, onBack }) {
               setEnterToQty={setEnterToQty}
               showInvoiceAfterSave={showInvoiceAfterSave}
               setShowInvoiceAfterSave={setShowInvoiceAfterSave}
+              currencies={currencies}
+              selectedCurrency={selectedCurrency}
+              setSelectedCurrency={setSelectedCurrency}
             />
           </div>
 
@@ -323,7 +343,6 @@ export default function SalesPage({ user, params = {}, onBack }) {
             </h2>
           </div>
         </div>
-
         <div className="flex flex-col flex-1 pb-6 gap-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch shrink-0">
             <InvoiceHeader 
@@ -342,7 +361,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
               handleAddressChange={handleAddressChange}
               validationErrors={validationErrors}
             />
-            </div>
+          </div>
 
           <SalesGrid initialData={[]} rows={rows} setRows={setRows} visibleColumns={visibleColumns} enterToQty={enterToQty} taxIncluded={taxIncluded} />
 
@@ -361,6 +380,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
             selectedAccount={selectedAccount}
             setSelectedAccount={setSelectedAccount}
             customerId={customer.id}
+            currencyCode={currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'}
           />
         </div>
       </div>

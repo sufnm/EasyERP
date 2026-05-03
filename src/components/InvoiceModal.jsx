@@ -200,10 +200,10 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                           {historyInvoiceColumns.description && <td className="px-4 py-3 font-bold text-zinc-700 dark:text-zinc-200">{item.DESCRIPTION}</td>}
                           {historyInvoiceColumns.unit && <td className="px-4 py-3 text-center font-medium">{item.UNIT || 'Pcs'}</td>}
                           {historyInvoiceColumns.qty && <td className="px-4 py-3 text-center">{qty.toFixed(2)}</td>}
-                          {historyInvoiceColumns.price && <td className="px-4 py-3 text-right text-zinc-500 font-bold">SAR {unitPrice.toFixed(2)}</td>}
+                          {historyInvoiceColumns.price && <td className="px-4 py-3 text-right text-zinc-500 font-bold">{sale.CURRENCY_CODE || 'SAR'} {unitPrice.toFixed(2)}</td>}
                           {historyInvoiceColumns.vatPercent && <td className="px-4 py-3 text-right text-zinc-400">{Number(item.VAT_PERCENT || 0).toFixed(0)}%</td>}
-                          {historyInvoiceColumns.vatAmt && <td className="px-4 py-3 text-right text-zinc-400">SAR {Number(item.VAT_AMOUNT || 0).toFixed(2)}</td>}
-                          {historyInvoiceColumns.total && <td className="px-4 py-3 text-right font-black text-zinc-800 dark:text-zinc-100">SAR {Number(item.ITM_TOTAL).toFixed(2)}</td>}
+                          {historyInvoiceColumns.vatAmt && <td className="px-4 py-3 text-right text-zinc-400">{sale.CURRENCY_CODE || 'SAR'} {Number(item.VAT_AMOUNT || 0).toFixed(2)}</td>}
+                          {historyInvoiceColumns.total && <td className="px-4 py-3 text-right font-black text-zinc-800 dark:text-zinc-100">{sale.CURRENCY_CODE || 'SAR'} {Number(item.ITM_TOTAL).toFixed(2)}</td>}
                         </tr>
                       );
                     })}
@@ -212,32 +212,69 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
               </div>
 
               {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4 print:mt-8">
-                <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800 print:bg-white print:border-none">
-                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Gross Total</p>
-                  <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
-                    SAR {(Number(sale.G_TOTAL) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="p-4 bg-rose-50/50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/30 print:bg-white print:border-none">
-                  <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Discount</p>
-                  <p className="text-lg font-black text-rose-600 dark:text-rose-400">
-                    SAR {(Number(sale.DISC_AMT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800 print:bg-white print:border-none">
-                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">VAT Amount</p>
-                  <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
-                    SAR {(Number(sale.VAT_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/30 ml-auto w-full text-right print:bg-white print:border-none">
-                  <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Net Total</p>
-                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 print:text-xl">
-                    SAR {(Number(sale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
+              {(() => {
+                const paidAmount = Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0);
+                const balanceAmount = Number(sale.NET_AMOUNT || 0) - paidAmount;
+                
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 print:grid-cols-6 print:mt-8">
+                    <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800 print:bg-white print:border-none">
+                      <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Gross Total</p>
+                      <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
+                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.G_TOTAL) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-rose-50/50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/30 print:bg-white print:border-none">
+                      <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Discount</p>
+                      <p className="text-lg font-black text-rose-600 dark:text-rose-400">
+                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.DISC_AMT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800 print:bg-white print:border-none">
+                      <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">VAT Amount</p>
+                      <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
+                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.VAT_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/30 print:bg-white print:border-none">
+                      <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Net Total</p>
+                      <p className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30 print:bg-white print:border-none">
+                      <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Paid Amount</p>
+                      <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                        {sale.CURRENCY_CODE || 'SAR'} {paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                      <div className="mt-1.5 pt-1.5 border-t border-emerald-500/10 flex flex-col gap-0.5">
+                        <p className="text-[8px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase flex justify-between">
+                          <span>Cash:</span> 
+                          <span>{sale.CURRENCY_CODE || 'SAR'} {Number(sale.CASH_PAID || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </p>
+                        <p className="text-[8px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase flex justify-between">
+                          <span>Other:</span> 
+                          <span>{sale.CURRENCY_CODE || 'SAR'} {Number(sale.OTHER_PAID || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`p-4 rounded-xl border print:bg-white print:border-none ${
+                      balanceAmount > 0 
+                      ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' 
+                      : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800'
+                    }`}>
+                      <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${
+                        balanceAmount > 0 ? 'text-amber-500' : 'text-zinc-400'
+                      }`}>Balance</p>
+                      <p className={`text-lg font-black ${
+                        balanceAmount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-700 dark:text-zinc-200'
+                      }`}>
+                        {sale.CURRENCY_CODE || 'SAR'} {balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

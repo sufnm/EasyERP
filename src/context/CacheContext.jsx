@@ -11,6 +11,8 @@ export function CacheProvider({ children }) {
   const [addressCache, setAddressCache] = useState({}); // { accNo: info }
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState(null);
+  const [currencies, setCurrencies] = useState([]);
+  const [defaultCurrency, setDefaultCurrency] = useState({ code: 'SAR', no: 1 });
 
   // Global App Settings (Preserved across page navigation)
   const [taxIncluded, setTaxIncluded] = useState(true);
@@ -43,17 +45,30 @@ export function CacheProvider({ children }) {
         }
       };
 
-      const [items, customers, sales, accounts] = await Promise.all([
+      const [items, customers, sales, accounts, currencyList] = await Promise.all([
         fetchWithLog('Items', API_ENDPOINTS.ITEM_CACHE),
         fetchWithLog('Customers', API_ENDPOINTS.CUSTOMER_CACHE),
         fetchWithLog('Sales', API_ENDPOINTS.SALES_HISTORY),
-        fetchWithLog('Accounts', API_ENDPOINTS.ACCOUNT_CACHE)
+        fetchWithLog('Accounts', API_ENDPOINTS.ACCOUNT_CACHE),
+        fetchWithLog('Currencies', API_ENDPOINTS.CURRENCY_LIST)
       ]);
 
       setCachedItems(items);
       setCachedCustomers(customers);
       setCachedSales(sales);
       setCachedAccounts(accounts);
+      setCurrencies(currencyList);
+      
+      // Set default currency if not already set (e.g., from localStorage)
+      const savedCurrency = localStorage.getItem('defaultCurrency');
+      if (savedCurrency) {
+        setDefaultCurrency(JSON.parse(savedCurrency));
+      } else if (currencyList.length > 0) {
+        const first = currencyList[0];
+        const initial = { code: first.Currency_code, no: first.Currency_No };
+        setDefaultCurrency(initial);
+        localStorage.setItem('defaultCurrency', JSON.stringify(initial));
+      }
       setIsReady(true);
       console.log('🚀 Global Cache is READY');
     } catch (err) {
@@ -115,6 +130,12 @@ export function CacheProvider({ children }) {
       setHistoryInvoiceColumns,
       showInvoiceAfterSave,
       setShowInvoiceAfterSave,
+      currencies,
+      defaultCurrency,
+      setDefaultCurrency: (curr) => {
+        setDefaultCurrency(curr);
+        localStorage.setItem('defaultCurrency', JSON.stringify(curr));
+      },
       refreshCache: loadCache 
     }}>
       {children}

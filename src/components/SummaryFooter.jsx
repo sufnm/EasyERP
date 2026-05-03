@@ -15,7 +15,8 @@ export default function SummaryFooter({
   accounts = [],
   selectedAccount,
   setSelectedAccount,
-  customerId
+  customerId,
+  currencyCode = 'SAR'
 }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -107,7 +108,7 @@ export default function SummaryFooter({
     if (String(customerId) === '6000') {
       const totalPaid = (Number(cashPaid) || 0) + (Number(otherPaid) || 0);
       if (Math.abs(totalPaid - netAmount) >= 0.01) {
-        alert(`Full payment is mandatory for walkthrough customers.\nTotal Paid: SAR ${totalPaid.toFixed(2)}\nNet Amount: SAR ${netAmount.toFixed(2)}`);
+        alert(`Full payment is mandatory for walkthrough customers.\nTotal Paid: ${currencyCode} ${totalPaid.toFixed(2)}\nNet Amount: ${currencyCode} ${netAmount.toFixed(2)}`);
         return;
       }
     }
@@ -140,7 +141,7 @@ export default function SummaryFooter({
             <div className="bg-zinc-950/50 dark:bg-zinc-900/50 border border-zinc-800 dark:border-zinc-700/50 px-6 py-2 rounded-2xl flex flex-col items-start shadow-inner min-w-[180px]">
                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-0.5">Net Payable</span>
                <div className="flex items-baseline gap-1">
-                 <span className="text-[10px] font-bold text-zinc-500">SAR</span>
+                 <span className="text-[10px] font-bold text-zinc-500">{currencyCode}</span>
                  <span className="text-3xl font-black text-white tracking-widest bg-gradient-to-r from-indigo-400 to-violet-300 bg-clip-text text-transparent drop-shadow-sm">
                    {netAmount.toFixed(2)}
                  </span>
@@ -149,12 +150,12 @@ export default function SummaryFooter({
 
             <div className="flex flex-col items-start">
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Gross</span>
-              <span className="text-sm font-black text-zinc-300">SAR {grossAmount.toFixed(2)}</span>
+              <span className="text-sm font-black text-zinc-300">{currencyCode} {grossAmount.toFixed(2)}</span>
             </div>
 
             <div className="flex flex-col items-start">
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">VAT Total</span>
-              <span className="text-sm font-black text-indigo-400">SAR {vatAmount.toFixed(2)}</span>
+              <span className="text-sm font-black text-indigo-400">{currencyCode} {vatAmount.toFixed(2)}</span>
             </div>
 
             <div className="flex flex-col items-start">
@@ -208,9 +209,9 @@ export default function SummaryFooter({
           ></div>
           
           {/* Modal Container */}
-          <div className="relative bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+          <div className="relative bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 fade-in duration-300">
             {/* Header */}
-            <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+            <div className="p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-500/10 rounded-xl">
                   <CreditCard className="text-indigo-400" size={24} />
@@ -229,11 +230,11 @@ export default function SummaryFooter({
             </div>
 
             {/* Body */}
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
               {/* Financial Summary Snippet */}
               <div className="bg-zinc-950 rounded-2xl p-4 border border-zinc-800/50 flex items-center justify-between">
                 <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Net Amount</span>
-                <span className="text-xl font-black text-white">SAR {netAmount.toFixed(2)}</span>
+                <span className="text-xl font-black text-white">{currencyCode} {netAmount.toFixed(2)}</span>
               </div>
 
               {/* Invoice Date */}
@@ -347,8 +348,8 @@ export default function SummaryFooter({
                       {paymentMethod === 'Both' && (
                         <div className={`mt-2 p-3 rounded-xl border text-center ${Math.abs((cashPaid + otherPaid) - netAmount) < 0.01 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
                           <p className="text-[10px] font-bold uppercase tracking-widest">
-                            Total Paid: SAR {(cashPaid + otherPaid).toFixed(2)} 
-                            {Math.abs((cashPaid + otherPaid) - netAmount) >= 0.01 && ` (Remaining: SAR ${(netAmount - (cashPaid + otherPaid)).toFixed(2)})`}
+                            Total Paid: {currencyCode} {(cashPaid + otherPaid).toFixed(2)} 
+                            {Math.abs((cashPaid + otherPaid) - netAmount) >= 0.01 && ` (Remaining: ${currencyCode} ${(netAmount - (cashPaid + otherPaid)).toFixed(2)})`}
                           </p>
                         </div>
                       )}
