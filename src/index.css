@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @variant dark (&:where(.dark, .dark *));
+@variant skyblue (&:where(.skyblue, .skyblue *));
 
 @theme {
   --color-card: var(--card);
@@ -9,25 +10,89 @@
   --color-primary: var(--primary);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-text-hover: var(--sidebar-text-hover);
+  --color-sidebar-active: var(--sidebar-active);
 }
 
 @layer base {
   :root {
-    --background: #fafafa; /* Neutral 50/Zinc 50 */
-    --foreground: #18181b; /* Zinc 950 */
+    --background: #fafafa;
+    --foreground: #18181b;
     --card: #ffffff;
-    --card-foreground: #27272a; /* Zinc 800 */
-    --border: #e4e4e7; /* Zinc 200 */
-    --primary: #4f46e5; /* Indigo 600 */
+    --card-foreground: #27272a;
+    --border: #e4e4e7;
+    --primary: #4f46e5;
+
+    --sidebar: #18181b;
+    --sidebar-border: #27272a;
+    --sidebar-hover: #27272a;
+    --sidebar-text: #d4d4d8;
+    --sidebar-text-hover: #e4e4e7;
+    --sidebar-active: #4f46e5;
   }
 
   .dark {
-    --background: #09090b; /* Zinc 950 */
-    --foreground: #f4f4f5; /* Zinc 100 */
-    --card: #18181b; /* Zinc 900 */
-    --card-foreground: #e4e4e7; /* Zinc 200 */
-    --border: #27272a; /* Zinc 800 */
-    --primary: #818cf8; /* Indigo 400 */
+    --background: #09090b;
+    --foreground: #f4f4f5;
+    --card: #18181b;
+    --card-foreground: #e4e4e7;
+    --border: #27272a;
+    --primary: #818cf8;
+
+    --sidebar: #09090b;
+    --sidebar-border: #27272a;
+    --sidebar-hover: #27272a;
+    --sidebar-text: #d4d4d8;
+    --sidebar-text-hover: #e4e4e7;
+    --sidebar-active: #4f46e5;
+  }
+
+  .skyblue {
+    --background: #0c4a6e; /* sky-900 */
+    --foreground: #f0f9ff;
+    --card: #075985; /* sky-800 */
+    --card-foreground: #e0f2fe;
+    --border: #0369a1;
+    --primary: #38bdf8;
+
+    --sidebar: #0c4a6e; /* sky-900 */
+    --sidebar-border: #075985; /* sky-800 */
+    --sidebar-hover: #075985; /* sky-800 */
+    --sidebar-text: #bae6fd; /* sky-200 */
+    --sidebar-text-hover: #e0f2fe; /* sky-100 */
+    --sidebar-active: #0284c7; /* sky-600 */
+    --primary: #38bdf8; /* Sky 400 */
+
+    /* Override Zinc scale to Sky scale */
+    --color-zinc-50: #f0f9ff;
+    --color-zinc-100: #e0f2fe;
+    --color-zinc-200: #bae6fd;
+    --color-zinc-300: #7dd3fc;
+    --color-zinc-400: #38bdf8;
+    --color-zinc-500: #0ea5e9;
+    --color-zinc-600: #0284c7;
+    --color-zinc-700: #0369a1;
+    --color-zinc-800: #075985;
+    --color-zinc-900: #0c4a6e;
+    --color-zinc-950: #082f49;
+
+    /* Override Indigo scale to Cyan/Lighter Sky scale */
+    --color-indigo-50: #ecfeff;
+    --color-indigo-100: #cffafe;
+    --color-indigo-200: #a5f3fc;
+    --color-indigo-300: #67e8f9;
+    --color-indigo-400: #22d3ee;
+    --color-indigo-500: #06b6d4;
+    --color-indigo-600: #0891b2;
+    --color-indigo-700: #0e7490;
+    --color-indigo-800: #155e75;
+    --color-indigo-900: #164e63;
+    --color-indigo-950: #083344;
   }
 
   body {

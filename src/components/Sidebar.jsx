@@ -1,13 +1,30 @@
 import React, { useState } from 'react';
-import { Home, ShoppingCart, Settings, Users, BarChart3, Book, Clock, LogOut, ChevronDown, ChevronRight } from 'lucide-react';
+import { Home, ShoppingCart, ShoppingBag, Settings, Users, BarChart3, Book, Clock, LogOut, ChevronDown, ChevronRight, Wallet } from 'lucide-react';
 
 export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
   const [openMenus, setOpenMenus] = useState(['accounts']);
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'sales', label: 'Sales', icon: ShoppingCart },
-    { id: 'sales-history', label: 'Sales History', icon: Clock },
+    { 
+      id: 'sales-n-return', 
+      label: 'Sales N Return', 
+      icon: ShoppingCart,
+      subItems: [
+        { id: 'sales', label: 'Sales' },
+        { id: 'sales-return', label: 'Sales Return' },
+        { id: 'sales-history', label: 'Sales History' }
+      ]
+    },
+    { 
+      id: 'purchase-n-return', 
+      label: 'Purchase N Return', 
+      icon: ShoppingBag,
+      subItems: [
+        { id: 'purchase', label: 'Purchase' },
+        { id: 'purchase-return', label: 'Purchase Return' }
+      ]
+    },
     { 
       id: 'accounts', 
       label: 'Accounts', 
@@ -17,8 +34,20 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
         { id: 'customers-account', label: 'Customer Account' },
         { id: 'supplier-accounts', label: 'Supplier Account' },
         { id: 'purchase-accounts', label: 'Purchase Account' },
-        { id: 'accounts', label: 'Bank and cash' },
-        { id: 'expense-accounts', label: 'Expense' }
+        { id: 'accounts', label: 'Bank N cash Accounts' },
+        { id: 'expense-accounts', label: 'Expense Accounts' }
+      ]
+    },
+    {
+      id: 'transactions',
+      label: 'Transactions',
+      icon: Wallet,
+      subItems: [
+        { id: 'customer-receivable', label: 'Customer Receivable' },
+        { id: 'supplier-payable', label: 'Supplier Payable' },
+        { id: 'general-voucher', label: 'General Voucher Entry' },
+        { id: 'expense-entry', label: 'Expense Entry' },
+        { id: 'employee-salary', label: 'Employees Salary Entry' }
       ]
     },
     { 
@@ -41,11 +70,11 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
   };
 
   return (
-    <div className="w-64 bg-zinc-900 dark:bg-zinc-950 border-r border-zinc-800 flex flex-col h-screen text-zinc-300">
+    <div className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col h-screen text-sidebar-text transition-colors duration-300">
       {/* Logo Section */}
-      <div className="h-16 flex items-center px-6 border-b border-zinc-800">
+      <div className="h-16 flex items-center px-6 border-b border-sidebar-border transition-colors duration-300">
          <div className="flex items-center gap-3 w-full">
-           <div className="bg-gradient-to-br from-indigo-400 to-indigo-600 w-8 h-8 rounded-lg shadow-lg flex items-center justify-center text-white font-bold text-lg">
+           <div className="bg-sidebar-active w-8 h-8 rounded-lg shadow-lg flex items-center justify-center text-white font-bold text-lg transition-colors duration-300">
              E
            </div>
            <div className="flex-1 overflow-hidden">
@@ -74,11 +103,11 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
                   isActive && !hasSubItems
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20' 
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                    ? 'bg-sidebar-active text-white shadow-md' 
+                    : 'text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-hover'
                 }`}
               >
-                <Icon size={18} className={isActive && !hasSubItems ? 'text-white' : 'text-zinc-500'} />
+                <Icon size={18} className={isActive && !hasSubItems ? 'text-white' : 'text-sidebar-text'} />
                 <span className="flex-1 text-left">{item.label}</span>
                 {hasSubItems && (
                   isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />
@@ -93,12 +122,13 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
                       <button
                         key={subItem.id}
                         onClick={() => setActivePage(subItem.id)}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                           isSubActive
-                            ? 'bg-zinc-800 text-white'
-                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                            ? 'text-sidebar-active font-bold' 
+                            : 'text-sidebar-text hover:text-sidebar-text-hover hover:bg-sidebar-hover/50'
                         }`}
                       >
+                        <div className={`w-1.5 h-1.5 rounded-full ${isSubActive ? 'bg-sidebar-active' : 'bg-sidebar-border'}`} />
                         {subItem.label}
                       </button>
                     );
@@ -111,20 +141,20 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user }) {
       </div>
 
       {/* User Profile & Logout */}
-      <div className="p-4 border-t border-zinc-800 space-y-4">
+      <div className="p-4 border-t border-sidebar-border space-y-4 transition-colors duration-300">
         <div className="flex items-center gap-3 px-2">
           <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white border border-white/10 shadow-sm">
             {user?.username?.substring(0, 2).toUpperCase() || 'AD'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-zinc-200 font-semibold text-sm truncate">{user?.username || 'Admin User'}</p>
-            <p className="text-zinc-500 text-[10px] uppercase tracking-wider font-medium">{user?.mobile || 'Administrator'}</p>
+            <p className="text-sidebar-text-hover font-semibold text-sm truncate">{user?.username || 'Admin User'}</p>
+            <p className="text-sidebar-text text-[10px] uppercase tracking-wider font-medium">{user?.mobile || 'Administrator'}</p>
           </div>
         </div>
         
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-zinc-400 hover:bg-red-500/10 hover:text-red-400 transition-all text-sm font-medium"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-text hover:bg-rose-500/10 hover:text-rose-500 transition-colors text-sm font-medium"
         >
           <LogOut size={18} />
           Sign Out

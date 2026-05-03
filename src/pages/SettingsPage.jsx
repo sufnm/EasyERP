@@ -1,8 +1,8 @@
 import React from 'react';
-import { Moon, Sun, Settings as SettingsIcon, Monitor, Bell, Shield, Table, History } from 'lucide-react';
+import { Moon, Sun, Settings as SettingsIcon, Monitor, Bell, Shield, Table, History, Cloud } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 
-export default function SettingsPage({ darkMode, setDarkMode }) {
+export default function SettingsPage({ theme, setTheme }) {
   const { historyInvoiceColumns, setHistoryInvoiceColumns } = useCache();
 
   const toggleColumn = (key) => {
@@ -21,6 +21,12 @@ export default function SettingsPage({ darkMode, setDarkMode }) {
     { key: 'vatPercent', label: 'VAT %' },
     { key: 'vatAmt', label: 'VAT Amount' },
     { key: 'total', label: 'Total Amount' },
+  ];
+
+  const themes = [
+    { id: 'light', label: 'Light', icon: Sun, color: 'bg-amber-100 text-amber-600' },
+    { id: 'dark', label: 'Dark', icon: Moon, color: 'bg-indigo-900/30 text-indigo-400' },
+    { id: 'skyblue', label: 'Sky Blue', icon: Cloud, color: 'bg-sky-100 text-sky-600' }
   ];
 
   return (
@@ -57,25 +63,25 @@ export default function SettingsPage({ darkMode, setDarkMode }) {
           <section className="bg-card p-6 rounded-2xl border border-border shadow-sm">
             <h2 className="text-sm font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-6">Appearance Settings</h2>
             
-            <div className="flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-100 dark:border-zinc-800/50">
-              <div className="flex items-center gap-4">
-                <div className={`p-2.5 rounded-lg transition-colors ${darkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-amber-100 text-amber-600'}`}>
-                  {darkMode ? <Moon size={20} /> : <Sun size={20} />}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Dark Mode</h3>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Switch between light and dark themes</p>
-                </div>
-              </div>
-              
-              <button 
-                onClick={() => setDarkMode(!darkMode)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ring-offset-2 ring-indigo-500 focus:ring-2 ${darkMode ? 'bg-indigo-600' : 'bg-zinc-300'}`}
-              >
-                <span 
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${darkMode ? 'translate-x-6' : 'translate-x-1'}`} 
-                />
-              </button>
+            <div className="grid grid-cols-3 gap-4">
+              {themes.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+                    theme === t.id 
+                    ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-900/20' 
+                    : 'border-transparent bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
+                  }`}
+                >
+                  <div className={`p-3 rounded-xl ${t.color}`}>
+                    <t.icon size={24} />
+                  </div>
+                  <span className={`text-xs font-bold ${theme === t.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-500'}`}>
+                    {t.label}
+                  </span>
+                </button>
+              ))}
             </div>
           </section>
 

@@ -31,19 +31,19 @@ function App() {
     const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('theme') === 'dark';
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('theme') || 'light';
   });
 
   useEffect(() => {
-    if (darkMode) {
+    document.documentElement.classList.remove('dark', 'skyblue');
+    if (theme === 'dark') {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+    } else if (theme === 'skyblue') {
+      document.documentElement.classList.add('dark', 'skyblue');
     }
-  }, [darkMode]);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const handleLogin = (userData) => {
     setUser(userData);
@@ -61,7 +61,7 @@ function App() {
 
   return (
     <CacheProvider>
-      <div className={`flex h-screen overflow-hidden font-sans antialiased selection:bg-indigo-200 transition-colors duration-300 bg-background text-foreground ${darkMode ? 'dark' : ''}`}>
+      <div className={`flex h-screen overflow-hidden font-sans antialiased selection:bg-indigo-200 transition-colors duration-300 bg-background text-foreground ${(theme === 'dark' || theme === 'skyblue') ? 'dark' : ''} ${theme === 'skyblue' ? 'skyblue' : ''}`}>
         <Sidebar activePage={activePage} setActivePage={navigateTo} onLogout={handleLogout} user={user} />
         
         <main className="flex-1 overflow-y-auto">
@@ -77,8 +77,8 @@ function App() {
           {activePage === 'item-group' && <ItemGroupPage />}
           {activePage === 'chart-of-accounts' && <ChartOfAccountsPage setActivePage={navigateTo} params={activePageParams} />}
           {activePage === 'create-account' && <CreateAccountPage setActivePage={navigateTo} initialData={activePageParams} prevPage={prevPage} />}
-          {activePage === 'settings' && <SettingsPage darkMode={darkMode} setDarkMode={setDarkMode} />}
-          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group'].includes(activePage) ? null : (
+          {activePage === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'purchase', 'purchase-return'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
                <p className="text-zinc-400 text-lg font-medium">Coming Soon</p>
             </div>
