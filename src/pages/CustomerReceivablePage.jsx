@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { Wallet, Search, CheckCircle2, FileText, Calendar, Building, CreditCard, Save, Globe } from 'lucide-react';
+import { Wallet, Search, CheckCircle2, FileText, Calendar, Building, CreditCard, Save, Globe, ShieldAlert, ShieldCheck, ShieldOff, Lock } from 'lucide-react';
 
 export default function CustomerReceivablePage({ setActivePage, user }) {
   const [invoices, setInvoices] = useState([]);
   const [cashAccounts, setCashAccounts] = useState([]);
   const [costCenters, setCostCenters] = useState([]);
   const [currencies, setCurrencies] = useState([]);
+  const [accountsInfo, setAccountsInfo] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savedTransactions, setSavedTransactions] = useState([]);
+  const [returnInvoice, setReturnInvoice] = useState(false);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  // Privileges
+  const [privileges, setPrivileges] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -17,6 +22,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
     paymentAmount: '',
     currency: '1',
     currencyRate: '1.00',
+    payFromAcc: '',
     paidToAcc: '',
     description: '',
     costCenter: '',
@@ -25,28 +31,71 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
 
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
+  // Fetch invoices when returnInvoice flag changes
+  // Fetch recent history
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/receivable/history');
+      const data = await res.json();
+      setSavedTransactions(data || []);
+    } catch (error) {
+      console.error('Error fetching history:', error);
+    }
+  };
+
+  const fetchInvoices = async (isReturn) => {
+    setInvoicesLoading(true);
+    try {
+      const res = await fetch(`http://localhost:3000/api/receivable/invoices?returnInvoice=${isReturn}`);
+      const data = await res.json();
+      setInvoices(data || []);
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+    } finally {
+      setInvoicesLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [invoicesRes, cashAccountsRes, costCentersRes, currenciesRes] = await Promise.all([
-          fetch('http://localhost:3000/api/receivable/invoices').then(res => res.json()),
+        const username = user?.username || '';
+        const [invoicesRes, cashAccountsRes, costCentersRes, currenciesRes, privRes, accountsInfoRes, historyRes] = await Promise.all([
+          fetch(`http://localhost:3000/api/receivable/invoices?returnInvoice=false`).then(res => res.json()),
           fetch('http://localhost:3000/api/receivable/cash-accounts').then(res => res.json()),
           fetch('http://localhost:3000/api/receivable/cost-centers').then(res => res.json()),
-          fetch('http://localhost:3000/api/receivable/currencies').then(res => res.json())
+          fetch('http://localhost:3000/api/receivable/currencies').then(res => res.json()),
+          fetch(`http://localhost:3000/api/privileges/100?username=${encodeURIComponent(username)}`).then(res => res.json()),
+          fetch('http://localhost:3000/api/receivable/accounts-info').then(res => res.json()),
+          fetch('http://localhost:3000/api/receivable/history').then(res => res.json())
         ]);
         
         setInvoices(invoicesRes || []);
         setCashAccounts(cashAccountsRes || []);
         setCostCenters(costCentersRes || []);
         setCurrencies(currenciesRes || []);
+        setPrivileges(privRes);
+        setAccountsInfo(accountsInfoRes || []);
+        setSavedTransactions(historyRes || []);
       } catch (error) {
         console.error("Error fetching data:", error);
+        // On connection error — don't deny access (backend may still be starting up)
+        setPrivileges({ canInsert: true, canUpdate: true, canDelete: true, canView: true, isSuperUser: false });
       } finally {
         setLoading(false);
       }
     };
     fetchData();
   }, []);
+
+  const handleReturnInvoiceToggle = (e) => {
+    const checked = e.target.checked;
+    setReturnInvoice(checked);
+    // Reset selected invoice when switching modes
+    setSelectedInvoice(null);
+    setFormData(prev => ({ ...prev, selectedInvoiceNo: '', paymentAmount: '' }));
+    fetchInvoices(checked);
+  };
 
   const handleInvoiceSelect = (e) => {
     const invNo = e.target.value;
@@ -58,9 +107,10 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
     setFormData(prev => ({
       ...prev,
       selectedInvoiceNo: invNo,
-      paymentAmount: invoice ? invoice.BALANCE_AMT || '' : '', // Auto-fill balance
+      paymentAmount: invoice ? invoice.BALANCE_AMT || '' : '',
       currency: currNo,
-      currencyRate: currObj ? currObj.Currency_Rate?.toString() : '1.00'
+      currencyRate: currObj ? currObj.Currency_Rate?.toString() : '1.00',
+      payFromAcc: invoice ? String(invoice.ACCODE) : prev.payFromAcc  // auto-fill from invoice ACCODE
     }));
     setSelectedInvoice(invoice || null);
   };
@@ -91,16 +141,17 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
     try {
       const payload = {
         ENTRY_DATE: formData.entryDate,
-        DOC_NO: selectedInvoice.INVOICE_NO,
-        DOC_TRN_TYPE: selectedInvoice.TRN_TYPE, // From DATA_ENTRY table
-        TRN_TYPE: 100, // Customer Receivable
-        PAY_FROM_ACC: selectedInvoice.ACCODE,
+        DOC_NO: selectedInvoice?.INVOICE_NO || '',
+        DOC_TRN_TYPE: selectedInvoice?.TRN_TYPE || 6,
+        TRN_TYPE: 100,
+        PAY_FROM_ACC: formData.payFromAcc,
         PAY_TO_ACC: formData.paidToAcc,
         DESCRIPTION: formData.description,
         PAY_AMOUNT: formData.paymentAmount,
-        USER_ID: user?.id || 1,
+        USER_ID: user?.userid || 1,
         CURRENCY_NO: formData.currency,
-        CURRENCY_RATE: formData.currencyRate
+        CURRENCY_RATE: formData.currencyRate,
+        IS_RETURN: returnInvoice
       };
 
       const res = await fetch('http://localhost:3000/api/receivable/save', {
@@ -113,16 +164,11 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
 
       const data = await res.json();
       
-      const newTransaction = {
-        transactionNo: data.transactionId,
-        invoiceNo: selectedInvoice.INVOICE_NO,
-        payFrom: selectedInvoice.ACCODE,
-        payTo: formData.paidToAcc,
-        paidAmount: formData.paymentAmount,
-        paidDate: formData.entryDate
-      };
-
-      setSavedTransactions(prev => [newTransaction, ...prev]);
+      // Refresh history and invoices
+      await Promise.all([
+        fetchHistory(),
+        fetchInvoices(returnInvoice)
+      ]);
 
       // Reset Form slightly but keep the generated entry number visible
       setFormData(prev => ({
@@ -131,7 +177,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
         paymentAmount: '',
         description: '',
         costCenter: '',
-        entryNumber: newTransaction.transactionNo
+        entryNumber: data.transactionId
       }));
       setSelectedInvoice(null);
     } catch (error) {
@@ -150,6 +196,30 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
     );
   }
 
+  // Access Denied screen
+  if (privileges && !privileges.canView) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+        <div className="p-5 bg-rose-100 dark:bg-rose-900/20 rounded-full">
+          <ShieldOff size={40} className="text-rose-500" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-xl font-black text-zinc-800 dark:text-zinc-100 mb-1">Access Denied</h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            You do not have permission to view <span className="font-bold text-zinc-700 dark:text-zinc-300">Customer Receivable</span>.
+          </p>
+          <p className="text-xs text-zinc-400 mt-1">Contact your administrator to request access.</p>
+        </div>
+        <button
+          onClick={() => setActivePage('home')}
+          className="mt-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold rounded-lg transition-colors"
+        >
+          Go to Home
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header - compact */}
@@ -157,10 +227,49 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
         <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl text-indigo-600">
           <Wallet size={20} strokeWidth={2.5} />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-lg font-black text-zinc-800 dark:text-zinc-100 tracking-tight leading-none">Customer Receivable</h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Receive payments against outstanding customer invoices.</p>
         </div>
+        {/* Privilege Badges */}
+        {privileges && (
+          <div className="flex items-center gap-1.5">
+            {privileges.isSuperUser ? (
+              /* Super User — single golden badge */
+              <span
+                title="Super User — all privileges bypassed"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700 shadow-sm"
+              >
+                <ShieldCheck size={10} />
+                Super User
+              </span>
+            ) : (
+              /* Normal privilege badges */
+              [
+                { label: 'View',   allowed: privileges.canView,   color: 'indigo' },
+                { label: 'Insert', allowed: privileges.canInsert, color: 'emerald' },
+                { label: 'Update', allowed: privileges.canUpdate, color: 'amber' },
+                { label: 'Delete', allowed: privileges.canDelete, color: 'rose' },
+              ].map(({ label, allowed, color }) => (
+                <span
+                  key={label}
+                  title={`${label}: ${allowed ? 'Allowed' : 'Denied'}`}
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
+                    allowed
+                      ? color === 'indigo'  ? 'bg-indigo-50  dark:bg-indigo-900/20 text-indigo-600  border-indigo-200  dark:border-indigo-700'
+                      : color === 'emerald' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 border-emerald-200 dark:border-emerald-700'
+                      : color === 'amber'   ? 'bg-amber-50   dark:bg-amber-900/20  text-amber-600   border-amber-200   dark:border-amber-700'
+                      :                      'bg-rose-50    dark:bg-rose-900/20   text-rose-600    border-rose-200    dark:border-rose-700'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700 line-through opacity-60'
+                  }`}
+                >
+                  {allowed ? <ShieldCheck size={9} /> : <Lock size={9} />}
+                  {label}
+                </span>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -200,25 +309,58 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
                 </div>
               </div>
 
-              {/* Select Invoice */}
+              {/* Select Invoice + Return Invoice Checkbox */}
               <div className="col-span-2 md:col-span-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Select Invoice</label>
+                <div className="flex items-center justify-between mb-0.5">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Select Invoice</label>
+                  {/* Return Invoice Checkbox */}
+                  <label className="flex items-center gap-1.5 cursor-pointer group">
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        id="returnInvoiceCheck"
+                        checked={returnInvoice}
+                        onChange={handleReturnInvoiceToggle}
+                        className="sr-only"
+                      />
+                      <div className={`w-8 h-4 rounded-full transition-all duration-300 ${
+                        returnInvoice ? 'bg-rose-500' : 'bg-zinc-300 dark:bg-zinc-600'
+                      }`}></div>
+                      <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-300 ${
+                        returnInvoice ? 'translate-x-4' : 'translate-x-0'
+                      }`}></div>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      returnInvoice ? 'text-rose-500' : 'text-zinc-400'
+                    }`}>Return</span>
+                  </label>
+                </div>
                 <div className="relative">
                   <FileText className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" size={13} />
-                  <select
-                    name="selectedInvoiceNo"
-                    value={formData.selectedInvoiceNo}
-                    onChange={handleInvoiceSelect}
-                    className="w-full pl-7 pr-2 py-1.5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-xs font-medium appearance-none"
-                    required
-                  >
-                    <option value="">-- Select Pending Invoice --</option>
-                    {invoices.map(inv => (
-                      <option key={inv.INVOICE_NO} value={inv.INVOICE_NO}>
-                        {inv.INVOICE_NO} - {inv.ENAME} (Bal: {inv.BALANCE_AMT})
-                      </option>
-                    ))}
-                  </select>
+                  {invoicesLoading ? (
+                    <div className="w-full pl-7 pr-2 py-1.5 bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-indigo-500"></div>
+                      <span className="text-xs text-zinc-400">Loading...</span>
+                    </div>
+                  ) : (
+                    <select
+                      name="selectedInvoiceNo"
+                      value={formData.selectedInvoiceNo}
+                      onChange={handleInvoiceSelect}
+                      className={`w-full pl-7 pr-2 py-1.5 bg-zinc-50 dark:bg-zinc-900/50 border rounded-lg focus:ring-1 focus:outline-none transition-all text-xs font-medium appearance-none ${
+                        returnInvoice
+                          ? 'border-rose-300 dark:border-rose-800 focus:ring-rose-400 focus:border-rose-400'
+                          : 'border-zinc-200 dark:border-zinc-800 focus:ring-indigo-500 focus:border-indigo-500'
+                      }`}
+                    >
+                      <option value="">{returnInvoice ? '-- Select Return Invoice --' : '-- Select Pending Invoice --'}</option>
+                      {invoices.map(inv => (
+                        <option key={inv.INVOICE_NO} value={inv.INVOICE_NO}>
+                          {inv.INVOICE_NO} - {inv.ENAME} (Bal: {inv.BALANCE_AMT})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 
@@ -259,6 +401,28 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
                     className="w-full pl-6 pr-2 py-1.5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-xs font-bold text-indigo-600 dark:text-indigo-400"
                     required
                   />
+                </div>
+              </div>
+
+              {/* Pay From A/C (from ACCOUNTS_INFO) */}
+              <div className="col-span-2 md:col-span-2">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Pay From A/C</label>
+                <div className="relative">
+                  <Building className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" size={13} />
+                  <select
+                    name="payFromAcc"
+                    value={formData.payFromAcc}
+                    onChange={handleInputChange}
+                    className="w-full pl-7 pr-2 py-1.5 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-xs font-medium appearance-none"
+                    required
+                  >
+                    <option value="">-- Select Account --</option>
+                    {accountsInfo.map(acc => (
+                      <option key={acc.ACC_NO} value={acc.ACC_NO}>
+                        {acc.ACC_NO} - {acc.ACC_NAME}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -337,15 +501,25 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
               </div>
             </div>
 
-            <div className="pt-2 mt-2 border-t border-border flex justify-end">
-              <button 
-                type="submit"
-                disabled={!selectedInvoice || !formData.paidToAcc || !formData.paymentAmount || isSubmitting}
-                className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white font-bold rounded-lg shadow-lg shadow-indigo-600/20 active:scale-95 transition-all text-xs"
-              >
-                <Save size={14} />
-                {isSubmitting ? 'Saving...' : 'Save Receivable'}
-              </button>
+            <div className="pt-2 mt-2 border-t border-border flex items-center justify-between">
+              {/* No-insert warning */}
+              {privileges && !privileges.canInsert && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-rose-500 uppercase tracking-wider">
+                  <Lock size={10} />
+                  You don&apos;t have insert permission
+                </span>
+              )}
+              <div className="ml-auto">
+                <button
+                  type="submit"
+                  disabled={!formData.payFromAcc || !formData.paidToAcc || !formData.paymentAmount || isSubmitting || (privileges && !privileges.canInsert)}
+                  title={privileges && !privileges.canInsert ? 'Insert permission denied' : 'Save receivable entry'}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-indigo-600 text-white font-bold rounded-lg shadow-lg shadow-indigo-600/20 active:scale-95 transition-all text-xs"
+                >
+                  {privileges && !privileges.canInsert ? <Lock size={14} /> : <Save size={14} />}
+                  {isSubmitting ? 'Saving...' : 'Save Receivable'}
+                </button>
+              </div>
             </div>
           </form>
         </div>

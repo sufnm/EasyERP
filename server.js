@@ -51,31 +51,134 @@ app.post('/api/login', async (req, res) => {
 
   try {
     const pool = await getPool();
+
+    // Step 1: Authenticate (no dynamic columns — always safe)
     const result = await pool.request()
       .input('username', sql.VarChar, username)
       .input('password', sql.VarChar, password)
       .query(`
-        SELECT UserName, MOBILE_NO
+        SELECT UserName, MOBILE_NO, USERID, GROUP_NAME,SUPERUSER
         FROM dbo.UserInfo
         WHERE UserName = @username AND Password = @password
       `);
 
-    if (result.recordset.length > 0) {
-      const user = result.recordset[0];
-      console.log(`🔐 Login successful for user: ${username}`);
-      res.json({
-        success: true,
-        user: {
-          username: user.UserName,
-          mobile: user.MOBILE_NO
-        }
-      });
-    } else {
+    if (result.recordset.length === 0) {
       console.log(`🚫 Login failed for user: ${username}`);
-      res.status(401).json({ error: 'Invalid username or password' });
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
+
+    const user = result.recordset[0];
+
+    // Step 2: Try to read superuser column — safe even if column doesn't exist yet
+    let isSuperUser = false;
+    try {
+      const superRes = await pool.request()
+        .input('username', sql.VarChar, username)
+        .query(`SELECT TOP 1 superuser FROM dbo.UserInfo WHERE UserName = @username`);
+      const val = superRes.recordset[0]?.superuser;
+      isSuperUser = val === true || val === 1;
+    } catch {
+      // superuser column doesn't exist yet — treat as false
+      isSuperUser = false;
+    }
+
+    console.log(`🔐 Login successful for user: ${username} | superuser: ${isSuperUser}`);
+    res.json({
+      success: true,
+      user: {
+        username: user.UserName,
+        mobile: user.MOBILE_NO,
+        userid: user.USERID,
+        group_name: user.GROUP_NAME,
+        is_super_user: isSuperUser
+      }
+    });
+
   } catch (error) {
     console.error("Login failed:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+// --- PRIVILEGES ENDPOINTS ---
+
+// GET /api/privileges/:trnCode?username=xxx
+// Returns ins/upd/del/dsp flags for the user's group and the screen linked to the trn_code
+app.get('/api/privileges/:trnCode', async (req, res) => {
+  const { trnCode } = req.params;
+  const { username } = req.query;
+
+  if (!username) {
+    return res.status(400).json({ error: 'username query param is required' });
+  }
+
+  try {
+    const pool = await getPool();
+
+    // --- SUPER USER BYPASS (safe — column may not exist yet) ---
+    let isSuperUser = false;
+    try {
+      const superCheck = await pool.request()
+        .input('username', sql.VarChar, username)
+        .query(`SELECT TOP 1 superuser FROM dbo.UserInfo WHERE UserName = @username`);
+      const val = superCheck.recordset[0]?.superuser;
+      isSuperUser = val === true || val === 1;
+    } catch {
+      isSuperUser = false; // column doesn't exist — treat as not super user
+    }
+
+    if (isSuperUser) {
+      console.log(`⚡ Super user "${username}" — bypassing privilege check, granting full access.`);
+      return res.json({
+        canInsert: true,
+        canUpdate: true,
+        canDelete: true,
+        canView: true,
+        isSuperUser: true
+      });
+    }
+
+    // --- NORMAL PRIVILEGE LOOKUP ---
+    const result = await pool.request()
+      .input('trnCode', sql.Int, parseInt(trnCode))
+      .input('username', sql.VarChar, username)
+      .query(`
+        SELECT 
+          P.[GROUP_NAME],
+          P.[form_id],
+          P.[ins]  AS [INSERT],
+          P.[upd]  AS [UPDATE],
+          P.[del]  AS [DELETE],
+          P.[dsp]  AS [VIEW],
+          P.[Menu_Name]
+        FROM [dbo].[UserPriv] P
+        WHERE P.Menu_Name = (
+            SELECT TOP 1 screen_name FROM dbo.trn_type WHERE trn_code = @trnCode
+          )
+          AND P.group_name = (
+            SELECT TOP 1 GROUP_NAME FROM dbo.UserInfo WHERE UserName = @username
+          )
+      `);
+
+    if (result.recordset.length > 0) {
+      const priv = result.recordset[0];
+      console.log(`🔑 Privileges for user "${username}" on trn_code ${trnCode}:`, priv);
+      res.json({
+        canInsert: priv.INSERT === true || priv.INSERT === 1,
+        canUpdate: priv.UPDATE === true || priv.UPDATE === 1,
+        canDelete: priv.DELETE === true || priv.DELETE === 1,
+        canView: priv.VIEW === true || priv.VIEW === 1,
+        isSuperUser: false,
+        menuName: priv.Menu_Name,
+        groupName: priv.GROUP_NAME
+      });
+    } else {
+      // No privilege row found → deny all by default
+      console.warn(`⚠️ No privilege record found for user "${username}" on trn_code ${trnCode}`);
+      res.json({ canInsert: false, canUpdate: false, canDelete: false, canView: false, isSuperUser: false });
+    }
+  } catch (error) {
+    console.error('❌ Privilege fetch failed:', error.message);
     res.status(500).json({ error: 'Database error', details: error.message });
   }
 });
@@ -183,10 +286,12 @@ app.get('/api/customers/search', async (req, res) => {
 app.get('/api/receivable/invoices', async (req, res) => {
   try {
     const pool = await getPool();
+    const isReturn = req.query.returnInvoice === 'true';
+    const trnTypes = isReturn ? '3,4' : '6,7';
     const result = await pool.request().query(`
       SELECT CURDATE, ENAME, ACCODE, INVOICE_NO, NET_AMOUNT, CASH_PAID, OTHER_PAID, BALANCE_AMT, TRN_TYPE, CURRENCY
       FROM DATA_ENTRY 
-      WHERE trn_type IN (6,7) AND net_amount - (CASH_PAID + OTHER_PAID) > 0;
+      WHERE trn_type IN (${trnTypes}) AND net_amount - (CASH_PAID + OTHER_PAID) > 0;
     `);
     res.json(result.recordset);
   } catch (error) {
@@ -253,6 +358,46 @@ app.get('/api/receivable/cost-centers', async (req, res) => {
   }
 });
 
+app.get('/api/receivable/accounts-info', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ACC_NO, ACC_NAME
+      FROM dbo.ACCOUNTS_INFO
+      ORDER BY ACC_NO
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch accounts info:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/receivable/history', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        T.ID as transactionNo,
+        T.DOC_NO as invoiceNo,
+        T.PAY_FROM_ACC,
+        ISNULL(A1.ACC_NAME, CAST(T.PAY_FROM_ACC AS VARCHAR)) as payFrom,
+        T.PAY_TO_ACC,
+        ISNULL(A2.ACC_NAME, CAST(T.PAY_TO_ACC AS VARCHAR)) as payTo,
+        T.PAY_AMOUNT as paidAmount,
+        T.ENTRY_DATE as paidDate
+      FROM dbo.TRN_ENTRY T
+      LEFT JOIN dbo.ACCOUNTS_INFO A1 ON T.PAY_FROM_ACC = A1.ACC_NO
+      LEFT JOIN dbo.ACCOUNTS A2 ON T.PAY_TO_ACC = A2.ACC_NO
+      WHERE T.TRN_TYPE = 100
+      ORDER BY T.ID DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch receivable history:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
 app.post('/api/receivable/save', async (req, res) => {
   try {
     const {
@@ -266,27 +411,29 @@ app.post('/api/receivable/save', async (req, res) => {
       PAY_AMOUNT,
       USER_ID,
       CURRENCY_NO,
-      CURRENCY_RATE
+      CURRENCY_RATE,
+      IS_RETURN
     } = req.body;
 
     const pool = await getPool();
     const request = pool.request();
-    
-    // Procedure Parameters
-    request.input('ID', sql.Numeric(18,0), null); // NULL for insert
-    request.input('ENTRY_DATE', sql.DateTime, new Date(ENTRY_DATE));
-    request.input('DOC_NO', sql.VarChar(50), DOC_NO);
-    request.input('DOC_TRN_TYPE', sql.Int, DOC_TRN_TYPE || 6);
-    request.input('TRN_TYPE', sql.Int, TRN_TYPE || 100); // Customer Receivable
-    request.input('PAY_FROM_ACC', sql.Numeric(18,0), PAY_FROM_ACC);
-    request.input('PAY_TO_ACC', sql.Numeric(18,0), PAY_TO_ACC);
-    request.input('TRN_NO', sql.Numeric(18,0), null);
-    request.input('TRN_NO2', sql.Numeric(18,0), null);
-    request.input('DESCRIPTION', sql.NVarChar(150), DESCRIPTION || '');
-    request.input('PAY_AMOUNT', sql.Real, PAY_AMOUNT);
-    request.input('USER_ID', sql.Int, USER_ID || 1);
-    request.input('CURRENCY_NO', sql.Int, CURRENCY_NO || 1);
-    request.input('CURRENCY_RATE', sql.Real, CURRENCY_RATE || 1);
+
+    // Procedure Parameters — verified against sys.parameters (SP_TRN_ENTRY_SAVE)
+    request.input('ID', sql.Numeric(18, 0), null);                   // 1  — NULL = INSERT
+    request.input('ENTRY_DATE', sql.DateTime, new Date(ENTRY_DATE));   // 2
+    request.input('DOC_NO', sql.VarChar(50), String(DOC_NO));         // 3
+    request.input('DOC_TRN_TYPE', sql.Int, DOC_TRN_TYPE || 6);      // 4
+    request.input('TRN_TYPE', sql.Int, TRN_TYPE || 100);        // 5
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), PAY_FROM_ACC);           // 6
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), PAY_TO_ACC);             // 7
+    request.input('TRN_NO', sql.Numeric(18, 0), null);                   // 8
+    request.input('TRN_NO2', sql.Numeric(18, 0), null);                   // 9
+    request.input('DESCRIPTION', sql.NVarChar(300), DESCRIPTION || '');      // 10 — DB has 300
+    request.input('PAY_AMOUNT', sql.Real, PAY_AMOUNT);             // 11
+    request.input('CURRENCY_NO', sql.Int, CURRENCY_NO || 1);       // 12
+    request.input('CURRENCY_RATE', sql.Real, CURRENCY_RATE || 1);     // 13
+    request.input('RETURN_INVOICE', sql.Bit, IS_RETURN ? 1 : 0);      // 14
+    request.input('USER_ID', sql.Int, USER_ID || 1);           // 15
 
     const result = await request.execute('dbo.SP_TRN_ENTRY_SAVE');
     const newId = result.recordset[0]?.NEW_ID || result.recordset[0]?.UPDATED_ID;
