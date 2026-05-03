@@ -14,6 +14,7 @@ import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import CustomerAccountForm from './pages/CustomerAccountForm';
 import ItemGroupPage from './pages/ItemGroupPage';
+import CustomerReceivablePage from './pages/CustomerReceivablePage';
 import { CacheProvider } from './context/CacheContext';
 
 function App() {
@@ -78,6 +79,7 @@ function App() {
           {activePage === 'chart-of-accounts' && <ChartOfAccountsPage setActivePage={navigateTo} params={activePageParams} />}
           {activePage === 'create-account' && <CreateAccountPage setActivePage={navigateTo} initialData={activePageParams} prevPage={prevPage} />}
           {activePage === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}
+          {activePage === 'customer-receivable' && <CustomerReceivablePage setActivePage={navigateTo} />}
           {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'purchase', 'purchase-return'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
                <p className="text-zinc-400 text-lg font-medium">Coming Soon</p>

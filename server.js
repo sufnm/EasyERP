@@ -174,6 +174,112 @@ app.get('/api/customers/search', async (req, res) => {
   }
 });
 
+// --- RECEIVABLE ENDPOINTS ---
+
+app.get('/api/receivable/invoices', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT CURDATE, ENAME, ACCODE, INVOICE_NO, NET_AMOUNT, CASH_PAID, OTHER_PAID, BALANCE_AMT, TRN_TYPE, CURRENCY
+      FROM DATA_ENTRY 
+      WHERE trn_type IN (6,7) AND net_amount - (CASH_PAID + OTHER_PAID) > 0;
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch receivable invoices:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/receivable/currencies', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT [Currency_No], [Currency_code], [Currency_Name], [Currency_Rate]
+      FROM [dbo].[CURRENCY_MASTER]
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch currencies:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/receivable/cash-accounts', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ACC_NO, ACC_NAME 
+      FROM ACCOUNTS AS A 
+      INNER JOIN AC_OPTIONS AS O ON O.ID=1 
+      WHERE A.LEVEL3_NO = O.CASH_AC_TYPE
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch cash accounts:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/receivable/cost-centers', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT [COST_CODE], [COST_NAME] 
+      FROM [COST_MASTER]
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch cost centers:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.post('/api/receivable/save', async (req, res) => {
+  try {
+    const {
+      ENTRY_DATE,
+      DOC_NO,
+      DOC_TRN_TYPE,
+      TRN_TYPE,
+      PAY_FROM_ACC,
+      PAY_TO_ACC,
+      DESCRIPTION,
+      PAY_AMOUNT,
+      USER_ID,
+      CURRENCY_NO,
+      CURRENCY_RATE
+    } = req.body;
+
+    const pool = await getPool();
+    const request = pool.request();
+    
+    // Procedure Parameters
+    request.input('ID', sql.Numeric(18,0), null); // NULL for insert
+    request.input('ENTRY_DATE', sql.DateTime, new Date(ENTRY_DATE));
+    request.input('DOC_NO', sql.VarChar(50), DOC_NO);
+    request.input('DOC_TRN_TYPE', sql.Int, DOC_TRN_TYPE || 6);
+    request.input('TRN_TYPE', sql.Int, TRN_TYPE || 100); // Customer Receivable
+    request.input('PAY_FROM_ACC', sql.Numeric(18,0), PAY_FROM_ACC);
+    request.input('PAY_TO_ACC', sql.Numeric(18,0), PAY_TO_ACC);
+    request.input('TRN_NO', sql.Numeric(18,0), null);
+    request.input('TRN_NO2', sql.Numeric(18,0), null);
+    request.input('DESCRIPTION', sql.NVarChar(150), DESCRIPTION || '');
+    request.input('PAY_AMOUNT', sql.Real, PAY_AMOUNT);
+    request.input('USER_ID', sql.Int, USER_ID || 1);
+    request.input('CURRENCY_NO', sql.Int, CURRENCY_NO || 1);
+    request.input('CURRENCY_RATE', sql.Real, CURRENCY_RATE || 1);
+
+    const result = await request.execute('dbo.SP_TRN_ENTRY_SAVE');
+    const newId = result.recordset[0]?.NEW_ID || result.recordset[0]?.UPDATED_ID;
+
+    res.json({ success: true, transactionId: newId });
+  } catch (error) {
+    console.error("Failed to save receivable entry:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
 // --- SUPPLIER ENDPOINTS ---
 
 // 1. List Suppliers from ACCOUNTS_INFO
