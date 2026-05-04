@@ -1388,7 +1388,7 @@ app.post('/api/transaction-types', async (req, res) => {
       .input('TRN_NO', sql.Int, data.TRN_NO || null)
       .input('BRN_CODE', sql.Int, data.BRN_CODE || 1)
       .input('TRN_ANAME', sql.NVarChar, data.TRN_ANAME || '')
-      .input('ACC_NO', sql.Numeric(18,0), data.ACC_NO ? Number(data.ACC_NO) : null)
+      .input('ACC_NO', sql.Numeric(18, 0), data.ACC_NO ? Number(data.ACC_NO) : null)
       .input('ABRV', sql.VarChar, data.ABRV || '')
       .input('DRCR', sql.VarChar, data.DRCR || 'D')
       .input('DRCR1', sql.VarChar, data.DRCR1 || 'D')
@@ -1396,8 +1396,8 @@ app.post('/api/transaction-types', async (req, res) => {
       .input('INV_PREFEX', sql.VarChar, data.INV_PREFEX || '')
       .input('AUTO_POST', sql.Int, data.AUTO_POST || 0)
       .input('ABRV_CODE', sql.VarChar, data.ABRV_CODE || '')
-      .input('VAT_ACC', sql.Numeric(18,0), data.VAT_ACC ? Number(data.VAT_ACC) : null)
-      .input('EXP_ACC', sql.Numeric(18,0), data.EXP_ACC ? Number(data.EXP_ACC) : null)
+      .input('VAT_ACC', sql.Numeric(18, 0), data.VAT_ACC ? Number(data.VAT_ACC) : null)
+      .input('EXP_ACC', sql.Numeric(18, 0), data.EXP_ACC ? Number(data.EXP_ACC) : null)
       .input('PIH', sql.Int, data.PIH || 0)
       .input('SCREEN_NAME', sql.NVarChar, data.SCREEN_NAME || '');
 
@@ -1540,9 +1540,9 @@ app.post('/api/user-info', async (req, res) => {
       .input('DEF_INVOICE', sql.VarChar, data.DEF_INVOICE || '')
       .input('DEF_FORM', sql.VarChar, data.DEF_FORM || '')
       .input('DEF_SCREEN', sql.VarChar, data.DEF_SCREEN || '')
-      .input('Employee_ACNO', sql.Numeric(18,0), data.Employee_ACNO ? Number(data.Employee_ACNO) : null)
-      .input('SALE_CASH_AC', sql.Numeric(18,0), data.SALE_CASH_AC ? Number(data.SALE_CASH_AC) : null)
-      .input('SALE_BANK_AC', sql.Numeric(18,0), data.SALE_BANK_AC ? Number(data.SALE_BANK_AC) : null)
+      .input('Employee_ACNO', sql.Numeric(18, 0), data.Employee_ACNO ? Number(data.Employee_ACNO) : null)
+      .input('SALE_CASH_AC', sql.Numeric(18, 0), data.SALE_CASH_AC ? Number(data.SALE_CASH_AC) : null)
+      .input('SALE_BANK_AC', sql.Numeric(18, 0), data.SALE_BANK_AC ? Number(data.SALE_BANK_AC) : null)
       .input('Payments', sql.VarChar, data.Payments || '');
 
     if (checkEx.recordset.length > 0) {
@@ -1673,7 +1673,7 @@ app.post('/api/sales/save', async (req, res) => {
 
             SELECT INVOICE_NO, REC_NO FROM dbo.DATA_ENTRY_WEB WHERE REC_NO = @recNo;
           `);
-        
+
         if (!headerResult.recordset || headerResult.recordset.length === 0) {
           throw new Error('Could not find the record to update.');
         }
@@ -2035,7 +2035,7 @@ app.listen(PORT, async () => {
   try {
     const pool = await getPool();
     console.log('✅ Successfully connected to the Microsoft SQL Server database!');
-    
+
     // Initialize translations table
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='WEB_TRANSLATIONS' AND xtype='U')
