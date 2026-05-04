@@ -203,6 +203,7 @@ app.get('/api/items/search', async (req, res) => {
           B.BARCODE, 
           B.SALE_PRICE, 
           B.DESCRIPTION, 
+          B.UNIT,
           ISNULL(H.VAT_PERCENT, 0) as VAT_PERCENT 
         FROM dbo.BARCODE B
         LEFT JOIN dbo.HD_ITEMMASTER H ON B.ITEM_CODE = H.ITEM_CODE
@@ -642,6 +643,7 @@ app.get('/api/items/cache', async (req, res) => {
         B.BARCODE, 
         B.SALE_PRICE, 
         B.DESCRIPTION, 
+        B.UNIT,
         ISNULL(H.VAT_PERCENT, 0) as VAT_PERCENT 
       FROM dbo.BARCODE B
       LEFT JOIN dbo.HD_ITEMMASTER H ON B.ITEM_CODE = H.ITEM_CODE
@@ -1602,10 +1604,17 @@ app.post('/api/sales/save', async (req, res) => {
     USERNAME,
     WR_CODE = 1,
     CURRENCY,
-    CURRENCY_RATE
+    CURRENCY_RATE,
+    TRN_TYPE,
+    REF_INV_NO,
+    ADDRESS
   } = req.body;
 
-  const trnType = PAYMENT_METHOD === 'Cash' ? 6 : 7;
+  const trnType = (req.body.TRN_TYPE !== undefined && req.body.TRN_TYPE !== null) 
+    ? req.body.TRN_TYPE 
+    : (req.body.trn_type !== undefined ? req.body.trn_type : (PAYMENT_METHOD === 'Cash' ? 6 : 7));
+    
+  console.log('🔍 DEBUG: Resolved trnType for DB:', trnType);
   const isUpdate = !!providedRecNo;
 
   try {
@@ -1650,12 +1659,14 @@ app.post('/api/sales/save', async (req, res) => {
           .input('cashAcc', sql.VarChar, String(cashAcc || ''))
           .input('wrCode', sql.SmallInt, Number(WR_CODE))
           .input('currency', sql.Int, CURRENCY || 1)
+          .input('trnType', sql.Int, trnType)
+          .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
           .query(`
             UPDATE dbo.DATA_ENTRY_WEB SET
               ACCODE = @accode, ENAME = @ename, G_TOTAL = @gTotal, DISC_AMT = @discAmt,
               NET_AMOUNT = @netAmount, VAT_AMOUNT = @vatAmount, CASH_PAID = @cashPaid,
               OTHER_PAID = @otherPaid, CASH_ACC = @cashAcc, WR_CODE = @wrCode,
-              CURRENCY = @currency
+              CURRENCY = @currency, TRN_TYPE = @trnType, REF_NO = @refNo
             WHERE REC_NO = @recNo;
 
             SELECT INVOICE_NO, REC_NO FROM dbo.DATA_ENTRY_WEB WHERE REC_NO = @recNo;
@@ -1690,18 +1701,19 @@ app.post('/api/sales/save', async (req, res) => {
           .input('orgDup', sql.Int, 1)
           .input('wrCode', sql.SmallInt, Number(WR_CODE))
           .input('currency', sql.Int, CURRENCY || 1)
+          .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
           .query(`
               INSERT INTO dbo.DATA_ENTRY_WEB (
                 ACCODE, ENAME, G_TOTAL, DISC_AMT, NET_AMOUNT, VAT_AMOUNT,
                 CASH_PAID, OTHER_PAID, CASH_ACC,
                 BRN_CODE, TRN_TYPE, ORG_DUP, WR_CODE, CURDATE,
-                CURRENCY
+                CURRENCY, REF_NO
               )
               VALUES (
                 @accode, @ename, @gTotal, @discAmt, @netAmount, @vatAmount,
                 @cashPaid, @otherPaid, @cashAcc,
                 @brnCode, @trnType, @orgDup, @wrCode, GETDATE(),
-                @currency
+                @currency, @refNo
               );
 
               DECLARE @NewRecNo INT = SCOPE_IDENTITY();
@@ -1718,6 +1730,42 @@ app.post('/api/sales/save', async (req, res) => {
 
         REC_NO = headerResult.recordset[0].REC_NO;
         INVOICE_NO = headerResult.recordset[0].INVOICE_NO;
+      }
+
+      // --- SAVE ADDRESS INFO TO dbo.CASH_ACC_INFO ---
+      if (ADDRESS && (ADDRESS.street || ADDRESS.city || ADDRESS.building)) {
+        const addrRequest = new sql.Request(transaction);
+        await addrRequest
+          .input('accNo', sql.VarChar, String(ACCODE || ''))
+          .input('trnType', sql.Int, trnType)
+          .input('invoiceNo', sql.VarChar, String(INVOICE_NO))
+          .input('accName', sql.VarChar, String(ENAME || ''))
+          .input('street', sql.NVarChar, String(ADDRESS.street || ''))
+          .input('building', sql.VarChar, String(ADDRESS.building || ''))
+          .input('subdivision', sql.NVarChar, String(ADDRESS.district || ''))
+          .input('city', sql.NVarChar, String(ADDRESS.city || ''))
+          .input('postal', sql.VarChar, String(ADDRESS.pincode || ''))
+          .query(`
+            IF EXISTS (SELECT 1 FROM dbo.CASH_ACC_INFO WHERE INVOICE_NO = @invoiceNo)
+            BEGIN
+              UPDATE dbo.CASH_ACC_INFO SET
+                ACC_NO = @accNo, TRN_TYPE = @trnType, ACC_NAME = @accName,
+                street_name = @street, building_no = @building,
+                city_subdivision_name = @subdivision, city_name = @city,
+                postal_zone = @postal, regsitered_name = @accName
+              WHERE INVOICE_NO = @invoiceNo
+            END
+            ELSE
+            BEGIN
+              INSERT INTO dbo.CASH_ACC_INFO (
+                ACC_NO, TRN_TYPE, INVOICE_NO, ACC_NAME,
+                street_name, building_no, city_subdivision_name, city_name, postal_zone, regsitered_name
+              ) VALUES (
+                @accNo, @trnType, @invoiceNo, @accName,
+                @street, @building, @subdivision, @city, @postal, @accName
+              )
+            END
+          `);
       }
 
       console.log(`✅ Header ${isUpdate ? 'updated' : 'saved'}. REC_NO: ${REC_NO}, Invoice No: ${INVOICE_NO}`);
@@ -1773,7 +1821,7 @@ app.post('/api/sales/save', async (req, res) => {
 
       await transaction.commit();
       console.log(`🎉 Sale ${isUpdate ? 'updated' : 'saved'} successfully: Invoice #${INVOICE_NO}`);
-      res.json({ success: true, message: `Sale ${isUpdate ? 'updated' : 'saved'} successfully`, REC_NO, INVOICE_NO });
+      res.json({ success: true, message: `Sale ${isUpdate ? 'updated' : 'saved'} successfully`, REC_NO, INVOICE_NO, debugTrnType: trnType });
 
     } catch (err) {
       console.error("❌ SQL Transaction Error:", err.message);
@@ -1826,11 +1874,21 @@ app.get('/api/sales/:recNo/items', async (req, res) => {
 });
 
 app.get('/api/sales', async (req, res) => {
+  const { q, trnType, searchField } = req.query;
   try {
-    console.log('📡 Fetching sales history...');
+    console.log(`📡 Fetching sales history (q: "${q}", field: "${searchField}", trnType: "${trnType}")...`);
     const pool = await getPool();
-    const result = await pool.request().query(`
-      SELECT 
+    
+    let trnFilter = '';
+    if (trnType) {
+      const types = trnType.split(',').map(t => parseInt(t)).filter(t => !isNaN(t));
+      if (types.length > 0) {
+        trnFilter = ` AND D.TRN_TYPE IN (${types.join(',')}) `;
+      }
+    }
+
+    let query = `
+      SELECT TOP 100
         D.REC_NO,
         D.INVOICE_NO, 
         D.ACCODE, 
@@ -1843,15 +1901,81 @@ app.get('/api/sales', async (req, res) => {
         D.CURDATE,
         D.CASH_PAID,
         D.OTHER_PAID,
+        D.VAT_NUMBER,
+        D.REF_NO,
         C.Currency_code AS CURRENCY_CODE
       FROM dbo.DATA_ENTRY_WEB D
       LEFT JOIN dbo.CURRENCY_MASTER C ON D.CURRENCY = C.Currency_No
-      ORDER BY D.CURDATE DESC
-    `);
+      WHERE 1=1 ${trnFilter}
+    `;
+    
+    const request = pool.request();
+    if (q) {
+      if (searchField === 'INVOICE_NO') {
+        query += ` AND D.INVOICE_NO LIKE @q `;
+      } else {
+        query += ` AND (D.INVOICE_NO LIKE @q OR D.ENAME LIKE @q OR D.ACCODE LIKE @q) `;
+      }
+      
+      request.input('q', sql.VarChar, `%${q}%`);
+      request.input('start', sql.VarChar, `${q}%`);
+      request.input('exact', sql.VarChar, q);
+
+      query += ` 
+        ORDER BY 
+          CASE 
+            WHEN D.INVOICE_NO = @exact THEN 0
+            WHEN D.INVOICE_NO LIKE @start THEN 1
+            ELSE 2 
+          END,
+          D.CURDATE DESC 
+      `;
+    } else {
+      query += ` ORDER BY D.CURDATE DESC `;
+    }
+    
+    const result = await request.query(query);
     res.json(result.recordset);
   } catch (error) {
-    console.error("Failed to fetch recent sales:", error);
-    res.status(500).json({ error: 'Failed to fetch recent sales' });
+    console.error("Failed to fetch sales history:", error);
+    res.status(500).json({ error: 'Failed to fetch sales history' });
+  }
+});
+
+// Get Invoice Address from CASH_ACC_INFO
+app.get('/api/sales/:invoiceNo/address', async (req, res) => {
+  const { invoiceNo } = req.params;
+  const { trnType } = req.query;
+  try {
+    const pool = await getPool();
+    const request = pool.request().input('invoiceNo', sql.VarChar, invoiceNo);
+    
+    let query = `
+      SELECT 
+        building_no as building,
+        street_name as street,
+        city_subdivision_name as district,
+        city_name as city,
+        postal_zone as pincode
+      FROM dbo.CASH_ACC_INFO
+      WHERE INVOICE_NO = @invoiceNo
+    `;
+
+    if (trnType) {
+      request.input('trnType', sql.Int, parseInt(trnType));
+      query += ` AND TRN_TYPE = @trnType`;
+    }
+
+    const result = await request.query(query);
+    
+    if (result.recordset.length > 0) {
+      res.json(result.recordset[0]);
+    } else {
+      res.json(null);
+    }
+  } catch (error) {
+    console.error("Failed to fetch invoice address:", error);
+    res.status(500).json({ error: 'Database error' });
   }
 });
 
@@ -1865,7 +1989,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // --- TRANSLATION API ---
 app.get('/api/translations', async (req, res) => {
@@ -1901,6 +2025,7 @@ app.post('/api/translations/save', async (req, res) => {
     res.status(500).json({ error: 'Database error' });
   }
 });
+
 
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);

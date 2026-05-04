@@ -42,6 +42,7 @@ export const API_ENDPOINTS = {
   BRANCHES: `${API_BASE_URL}/api/branches`,
   SCREENS: `${API_BASE_URL}/api/screens`,
   CURRENCY_LIST: `${API_BASE_URL}/api/currencies/list`,
+  INVOICE_ADDRESS: (invoiceNo, trnType) => `${API_BASE_URL}/api/sales/${invoiceNo}/address${trnType ? `?trnType=${trnType}` : ''}`,
 };
 
 export default API_BASE_URL;

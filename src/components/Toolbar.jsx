@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Plus, Save, Printer, Search, Trash2, Clock, LogOut, Settings, X } from 'lucide-react';
 
-const ToolbarButton = ({ icon: Icon, label, shortcut, colorClass = "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800" }) => (
-  <button className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 group shrink-0 min-w-[72px] ${colorClass}`}>
+const ToolbarButton = ({ icon: Icon, label, shortcut, onClick, colorClass = "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800" }) => (
+  <button 
+    onClick={onClick}
+    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 group shrink-0 min-w-[72px] ${colorClass}`}
+  >
     <div className="bg-card p-2 rounded-md shadow-sm border border-border group-hover:shadow group-hover:border-zinc-300 dark:group-hover:border-zinc-600 transition-all">
       <Icon size={20} className="mb-1" />
     </div>
@@ -18,15 +21,24 @@ export default function Toolbar({
   taxIncluded, setTaxIncluded, 
   enterToQty, setEnterToQty,
   showInvoiceAfterSave, setShowInvoiceAfterSave,
-  currencies = [], selectedCurrency, setSelectedCurrency
+  currencies = [], selectedCurrency, setSelectedCurrency,
+  onNew, onPending, onClear, pendingCount = 0
 }) {
   const [showOptions, setShowOptions] = useState(false);
   const toggleColumn = (key) => setVisibleColumns?.(prev => ({ ...prev, [key]: !prev[key] }));
   return (
     <div className="flex items-center gap-2 bg-card p-3 rounded-xl border border-border shadow-sm overflow-x-auto transition-colors duration-300">
-      <ToolbarButton icon={Plus} label="New" shortcut="F1" colorClass="text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" />
-      <ToolbarButton icon={Save} label="Save" shortcut="F2" colorClass="text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" />
+      <ToolbarButton icon={Plus} label="New" shortcut="F1" onClick={onNew} colorClass="text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" />
+      <ToolbarButton icon={Trash2} label="Clear" onClick={onClear} colorClass="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" />
+      <ToolbarButton 
+        icon={Clock} 
+        label="Pending" 
+        onClick={onPending} 
+        colorClass={pendingCount > 0 ? "text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 animate-pulse-subtle" : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"} 
+      />
+      
       <div className="w-px h-10 bg-border mx-1"></div>
+      
       <ToolbarButton icon={Printer} label="Print" />
       
       {/* Options Button replacing Zatca */}
@@ -109,9 +121,6 @@ export default function Toolbar({
 
       <ToolbarButton icon={Search} label="Search" />
       <div className="w-px h-10 bg-border mx-1"></div>
-      <ToolbarButton icon={Trash2} label="Delete" colorClass="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" />
-      <ToolbarButton icon={Clock} label="Pending" />
-      <div className="flex-1"></div>
       <ToolbarButton icon={LogOut} label="Exit" shortcut="F8" colorClass="text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20" />
     </div>
   );

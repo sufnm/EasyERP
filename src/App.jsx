@@ -20,6 +20,7 @@ import UserPrivilegesPage from './pages/UserPrivilegesPage';
 import UserInfoPage from './pages/UserInfoPage';
 import CustomerReceivablePage from './pages/CustomerReceivablePage';
 import TranslationManagerPage from './pages/TranslationManagerPage';
+import SalesReturnPage from './pages/SalesReturnPage';
 import { CacheProvider } from './context/CacheContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 
@@ -33,7 +34,9 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
       <main className="flex-1 overflow-y-auto">
         {activePage === 'home' && <HomePage />}
         {activePage === 'sales' && <SalesPage user={user} params={activePageParams} />}
+        {activePage === 'sales-return' && <SalesReturnPage user={user} params={activePageParams} />}
         {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} onBack={() => navigateTo('sales-history')} />}
+        {activePage === 'edit-sales-return' && <SalesReturnPage user={user} params={activePageParams} onBack={() => navigateTo('sales-history')} />}
         {activePage === 'sales-history' && <SalesHistoryPage setActivePage={navigateTo} />}
         {activePage === 'accounts' && <AccountsPage setActivePage={navigateTo} />}
         {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={navigateTo} />}
@@ -51,7 +54,7 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
         {activePage === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}
         {activePage === 'customer-receivable' && <CustomerReceivablePage setActivePage={navigateTo} user={user} />}
         {activePage === 'translation-manager' && <TranslationManagerPage />}
-        {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'purchase', 'purchase-return', 'translation-manager'].includes(activePage) ? null : (
+        {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager'].includes(activePage) ? null : (
           <div className="flex items-center justify-center p-12 h-screen">
             <p className="text-zinc-400 text-lg font-medium text-center w-full">Coming Soon</p>
           </div>

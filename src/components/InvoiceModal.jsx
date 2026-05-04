@@ -22,10 +22,18 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
       
       if (passedAddress) {
         setCustomerAddress(passedAddress);
-      } else if (sale.ACCODE && sale.ACCODE !== '6000') {
-        fetchCustomerAddress(sale.ACCODE);
       } else {
-        setCustomerAddress(null);
+        // First try to fetch ad-hoc address from CASH_ACC_INFO
+        fetchInvoiceAddress(sale.INVOICE_NO, sale.TRN_TYPE).then(adhocAddress => {
+          if (adhocAddress) {
+            setCustomerAddress(adhocAddress);
+          } else if (sale.ACCODE && sale.ACCODE !== '6000') {
+            // Fallback to customer master address
+            fetchCustomerAddress(sale.ACCODE);
+          } else {
+            setCustomerAddress(null);
+          }
+        });
       }
     }
   }, [sale, passedAddress]);
@@ -65,6 +73,19 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
     }
   };
 
+  const fetchInvoiceAddress = async (invoiceNo, trnType) => {
+    try {
+      const res = await fetch(API_ENDPOINTS.INVOICE_ADDRESS(invoiceNo, trnType));
+      if (res.ok) {
+        const data = await res.json();
+        return data; // returns building, street, district, city, pincode
+      }
+    } catch (err) {
+      console.error("Failed to fetch invoice address:", err);
+    }
+    return null;
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -88,6 +109,12 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                 <Calendar size={12} /> {sale.CURDATE ? new Date(sale.CURDATE).toLocaleDateString() : new Date().toLocaleDateString()}
                 <span className="mx-1">•</span>
                 <User size={12} /> {sale.ENAME || 'Cash Customer'}
+                {sale.REF_NO && (
+                  <>
+                    <span className="mx-1">•</span>
+                    <span className="text-indigo-600 dark:text-indigo-400">REF #{sale.REF_NO}</span>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -118,6 +145,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                     <div className="text-right">
                       <p className="text-lg font-black text-zinc-900">#{sale.INVOICE_NO}</p>
                       <p className="text-xs text-zinc-500 font-bold">{sale.CURDATE ? new Date(sale.CURDATE).toLocaleDateString() : new Date().toLocaleDateString()}</p>
+                      {sale.REF_NO && <p className="text-[10px] font-bold text-indigo-600 mt-1">Ref: #{sale.REF_NO}</p>}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-8 py-6 border-y border-zinc-100">
@@ -170,6 +198,12 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                         <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">VAT Number</span>
                         <span className="text-sm font-mono font-black text-indigo-600 dark:text-indigo-400">{sale.VAT_NUMBER || 'NOT REGISTERED'}</span>
                       </div>
+                      {sale.REF_NO && (
+                        <div className="flex justify-between items-center pt-2 border-t border-zinc-200/60 dark:border-zinc-700/60">
+                          <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">Reference #</span>
+                          <span className="text-sm font-mono font-black text-indigo-600 dark:text-indigo-400">#{sale.REF_NO}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                </div>

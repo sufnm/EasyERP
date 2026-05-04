@@ -8,11 +8,13 @@ export function CacheProvider({ children }) {
   const [cachedCustomers, setCachedCustomers] = useState([]);
   const [cachedSales, setCachedSales] = useState([]);
   const [cachedAccounts, setCachedAccounts] = useState([]);
+  const [cachedUnits, setCachedUnits] = useState([]);
   const [addressCache, setAddressCache] = useState({}); // { accNo: info }
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState(null);
   const [currencies, setCurrencies] = useState([]);
   const [defaultCurrency, setDefaultCurrency] = useState({ code: 'SAR', no: 1 });
+  const [pendingSales, setPendingSales] = useState([]);
 
   // Global App Settings (Preserved across page navigation)
   const [taxIncluded, setTaxIncluded] = useState(true);
@@ -45,12 +47,13 @@ export function CacheProvider({ children }) {
         }
       };
 
-      const [items, customers, sales, accounts, currencyList] = await Promise.all([
+      const [items, customers, sales, accounts, currencyList, units] = await Promise.all([
         fetchWithLog('Items', API_ENDPOINTS.ITEM_CACHE),
         fetchWithLog('Customers', API_ENDPOINTS.CUSTOMER_CACHE),
         fetchWithLog('Sales', API_ENDPOINTS.SALES_HISTORY),
         fetchWithLog('Accounts', API_ENDPOINTS.ACCOUNT_CACHE),
-        fetchWithLog('Currencies', API_ENDPOINTS.CURRENCY_LIST)
+        fetchWithLog('Currencies', API_ENDPOINTS.CURRENCY_LIST),
+        fetchWithLog('Units', API_ENDPOINTS.UNIT_MASTER)
       ]);
 
       setCachedItems(items);
@@ -58,6 +61,7 @@ export function CacheProvider({ children }) {
       setCachedSales(sales);
       setCachedAccounts(accounts);
       setCurrencies(currencyList);
+      setCachedUnits(units);
       
       // Set default currency if not already set (e.g., from localStorage)
       const savedCurrency = localStorage.getItem('defaultCurrency');
@@ -114,6 +118,7 @@ export function CacheProvider({ children }) {
       cachedCustomers, 
       cachedSales,
       cachedAccounts,
+      cachedUnits,
       isReady, 
       error, 
       searchItems, 
@@ -136,7 +141,11 @@ export function CacheProvider({ children }) {
         setDefaultCurrency(curr);
         localStorage.setItem('defaultCurrency', JSON.stringify(curr));
       },
-      refreshCache: loadCache 
+      refreshCache: loadCache,
+      pendingSales,
+      addPendingSale: (sale) => setPendingSales(prev => [sale, ...prev]),
+      removePendingSale: (id) => setPendingSales(prev => prev.filter(p => p.id !== id)),
+      clearPendingSales: () => setPendingSales([])
     }}>
       {children}
     </CacheContext.Provider>

@@ -11,7 +11,7 @@ import InvoiceModal from '../components/InvoiceModal';
 import PendingSalesModal from '../components/PendingSalesModal';
 import { useLanguage } from '../context/LanguageContext';
 
-export default function SalesPage({ user, params = {}, onBack }) {
+export default function SalesReturnPage({ user, params = {}, onBack }) {
   const { t, language } = useLanguage();
   const {
     refreshCache,
@@ -62,6 +62,11 @@ export default function SalesPage({ user, params = {}, onBack }) {
   
   const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
 
+  // RETURN RESTRICTION STATE
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [invoiceItems, setInvoiceItems] = useState(null);
+  const [manualReferenceNo, setManualReferenceNo] = useState('');
+
   const handleHoldAndNew = () => {
     const hasItems = rows.some(r => r.itemCode.trim() !== '');
     if (hasItems) {
@@ -76,7 +81,9 @@ export default function SalesPage({ user, params = {}, onBack }) {
         selectedCurrency,
         paymentMethod,
         cashPaid,
-        otherPaid
+        otherPaid,
+        selectedInvoice,
+        invoiceItems
       };
       addPendingSale(currentSale);
     }
@@ -94,6 +101,8 @@ export default function SalesPage({ user, params = {}, onBack }) {
     setPaymentMethod(sale.paymentMethod);
     setCashPaid(sale.cashPaid);
     setOtherPaid(sale.otherPaid);
+    setSelectedInvoice(sale.selectedInvoice || null);
+    setInvoiceItems(sale.invoiceItems || null);
     
     // Remove from pending
     removePendingSale(sale.id);
@@ -108,6 +117,73 @@ export default function SalesPage({ user, params = {}, onBack }) {
     setAddress(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleInvoiceSelect = async (inv) => {
+    if (!inv) {
+      setSelectedInvoice(null);
+      setInvoiceItems(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(API_ENDPOINTS.SALE_ITEMS(inv.REC_NO));
+      if (res.ok) {
+        const items = await res.json();
+        setInvoiceItems(items);
+        setSelectedInvoice(inv);
+        
+        // Populate Customer
+        setCustomer({ id: String(inv.ACCODE), name: inv.ENAME });
+        setVatNumber(inv.VAT_NUMBER === '0' ? '' : (inv.VAT_NUMBER || ''));
+        
+        // Reset rows to clear previous free-return data
+        setRows([
+          { id: Date.now(), itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+          { id: Date.now() + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+          { id: Date.now() + 2, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+          { id: Date.now() + 3, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+          { id: Date.now() + 4, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+        ]);
+
+        // Fetch Ad-hoc Address first
+        try {
+          const adhocRes = await fetch(API_ENDPOINTS.INVOICE_ADDRESS(inv.INVOICE_NO, inv.TRN_TYPE));
+          if (adhocRes.ok) {
+            const adhocData = await adhocRes.json();
+            if (adhocData) {
+              setAddress({
+                building: adhocData.building || '',
+                street: adhocData.street || '',
+                district: adhocData.district || '',
+                city: adhocData.city || '',
+                pincode: adhocData.pincode || ''
+              });
+            } else if (inv.ACCODE && inv.ACCODE !== '6000') {
+              // Fallback to Customer Master Address
+              const addrRes = await fetch(API_ENDPOINTS.CUSTOMER_INFO(inv.ACCODE));
+              if (addrRes.ok) {
+                const data = await addrRes.json();
+                if (data) {
+                  setAddress({
+                    building: data.building_no || '',
+                    street: data.street_name || '',
+                    district: data.district || '',
+                    city: data.city_name || '',
+                    pincode: data.postal_zone || ''
+                  });
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch address details:", err);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch invoice details:", err);
+      alert("Failed to load invoice items.");
+    }
+  };
+
   const fetchInvoiceNo = () => {
     if (editingRecNo) return; // Don't fetch if editing
     fetch(API_ENDPOINTS.INVOICE_NEXT)
@@ -118,6 +194,9 @@ export default function SalesPage({ user, params = {}, onBack }) {
 
   const resetPage = () => {
     setEditingRecNo(null);
+    setSelectedInvoice(null);
+    setInvoiceItems(null);
+    setManualReferenceNo('');
     fetchInvoiceNo();
     // Complete Reset
     setVatNumber('');
@@ -137,6 +216,8 @@ export default function SalesPage({ user, params = {}, onBack }) {
   };
 
   const handleSave = async (isQuickSave = false) => {
+    console.log('🚀 SalesReturnPage: handleSave called. isQuickSave:', isQuickSave);
+    setValidationErrors([]);
     if (invoiceNo === 'Loading...') {
       alert('Invoice number is still loading. Please wait.');
       return;
@@ -148,7 +229,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
     }
 
     if (!customer.id || customer.id === '6000') {
-      if (!isQuickSave && !confirm('Save as Cash Sale?')) return;
+      if (!isQuickSave && !confirm('Save as Return Sale?')) return;
       // If quick save is attempted for 6000, it should have been blocked in UI, 
       // but let's double check here just in case.
       if (isQuickSave) {
@@ -196,12 +277,13 @@ export default function SalesPage({ user, params = {}, onBack }) {
         WR_CODE: selectedWarehouse,
         REC_NO: editingRecNo,
         CURRENCY: selectedCurrency,
-        TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7,
+        TRN_TYPE: finalPaymentMethod === 'Cash' ? 3 : 4,
+        REF_INV_NO: selectedInvoice?.INVOICE_NO || manualReferenceNo || null,
         ADDRESS: address,
         ROWS: rows.filter(r => r.itemCode.trim() !== '')
       };
 
-      console.log('💎 SALES_PAGE: Sending payload:', payload);
+      console.log('🔄 SALES_RETURN_PAGE: Sending payload:', payload);
       const res = await fetch(API_ENDPOINTS.SALES_SAVE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -226,14 +308,15 @@ export default function SalesPage({ user, params = {}, onBack }) {
             NET_AMOUNT: totals.net,
             VAT_AMOUNT: totals.vat,
             VAT_NUMBER: vatNumber,
-            TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7
+            TRN_TYPE: finalPaymentMethod === 'Cash' ? 3 : 4,
+            REF_NO: selectedInvoice?.INVOICE_NO || manualReferenceNo || null
           };
           setSavedInvoice({
               ...invoiceData,
               CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
             });
         } else {
-          alert('Sale saved successfully!');
+          alert('Return sale saved successfully!');
           resetPage();
         }
       } else {
@@ -315,7 +398,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
       setInvoiceNo(sale.INVOICE_NO);
       setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
       setVatNumber(sale.VAT_NUMBER || '');
-      setPaymentMethod(sale.TRN_TYPE === 6 ? 'Cash' : 'Others');
+      setPaymentMethod(sale.TRN_TYPE === 3 ? 'Cash' : 'Others');
       
       // Fetch Sale Items
       fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO))
@@ -406,8 +489,8 @@ export default function SalesPage({ user, params = {}, onBack }) {
                 <ChevronRight className="rotate-180" size={24} />
               </button>
             )}
-            <h2 className={`text-2xl font-black ${editingRecNo ? 'text-indigo-600' : 'text-rose-500'} uppercase tracking-widest hidden sm:block drop-shadow-sm shrink-0`}>
-              {editingRecNo ? (language === 'ar' ? 'تعديل فاتورة' : 'EDIT SALE') : (language === 'ar' ? 'مبيعات آجلة' : 'CREDIT SALES')}
+            <h2 className={`text-2xl font-black ${editingRecNo ? 'text-indigo-600' : 'text-blue-600'} uppercase tracking-widest hidden sm:block drop-shadow-sm shrink-0`}>
+              {editingRecNo ? (language === 'ar' ? 'مرتجع تعديل' : 'EDIT RETURN') : (language === 'ar' ? 'مرتجع مبيعات' : 'RETURN SALES')}
             </h2>
           </div>
         </div>
@@ -418,6 +501,10 @@ export default function SalesPage({ user, params = {}, onBack }) {
               warehouses={warehouses}
               selectedWarehouse={selectedWarehouse}
               setSelectedWarehouse={setSelectedWarehouse}
+              isReturn={true}
+              onInvoiceSelect={handleInvoiceSelect}
+              selectedInvoice={selectedInvoice}
+              onReferenceChange={setManualReferenceNo}
             />
             <CustomerDetails
               customer={customer}
@@ -431,9 +518,18 @@ export default function SalesPage({ user, params = {}, onBack }) {
             />
           </div>
 
-          <SalesGrid initialData={[]} rows={rows} setRows={setRows} visibleColumns={visibleColumns} enterToQty={enterToQty} taxIncluded={taxIncluded} />
+          <SalesGrid 
+            initialData={[]} 
+            rows={rows} 
+            setRows={setRows} 
+            visibleColumns={visibleColumns} 
+            enterToQty={enterToQty} 
+            taxIncluded={taxIncluded} 
+            restrictedItems={invoiceItems}
+          />
 
           <SummaryFooter
+            isReturn={true}
             rows={rows}
             taxIncluded={taxIncluded}
             onTotalsChange={setTotals}

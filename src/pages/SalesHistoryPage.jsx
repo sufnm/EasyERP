@@ -10,6 +10,7 @@ export default function SalesHistoryPage({ setActivePage }) {
   const [loading, setLoading] = useState(!isReady);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all'); // all, sales, returns
   const [selectedSale, setSelectedSale] = useState(null);
 
   useEffect(() => {
@@ -24,15 +25,24 @@ export default function SalesHistoryPage({ setActivePage }) {
     
     const matchesType = 
       filterType === 'all' || 
-      (filterType === 'cash' && sale.TRN_TYPE === 6) || 
-      (filterType === 'credit' && sale.TRN_TYPE === 7) ||
+      (filterType === 'cash' && (sale.TRN_TYPE === 6 || sale.TRN_TYPE === 3)) || 
+      (filterType === 'credit' && (sale.TRN_TYPE === 7 || sale.TRN_TYPE === 4)) ||
       (filterType === 'pending' && (Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0)) !== Number(sale.NET_AMOUNT || 0));
+    
+    const matchesCategory = 
+      categoryFilter === 'all' ||
+      (categoryFilter === 'sales' && (sale.TRN_TYPE === 6 || sale.TRN_TYPE === 7)) ||
+      (categoryFilter === 'returns' && (sale.TRN_TYPE === 3 || sale.TRN_TYPE === 4));
 
-    return matchesSearch && matchesType;
+    return matchesSearch && matchesType && matchesCategory;
   });
 
   const handleEditInvoice = (sale) => {
-    setActivePage('edit-sale', { editSale: sale });
+    if (sale.TRN_TYPE === 3 || sale.TRN_TYPE === 4) {
+      setActivePage('edit-sales-return', { editSale: sale });
+    } else {
+      setActivePage('edit-sale', { editSale: sale });
+    }
   };
 
   return (
@@ -74,8 +84,8 @@ export default function SalesHistoryPage({ setActivePage }) {
         </div>
 
         {/* Controls */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6">
-          <div className="lg:col-span-8 relative">
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
             <input 
               type="text" 
@@ -85,48 +95,83 @@ export default function SalesHistoryPage({ setActivePage }) {
               className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all shadow-sm dark:text-zinc-200"
             />
           </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl gap-1 shadow-sm">
+              <button 
+                onClick={() => setCategoryFilter('all')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  categoryFilter === 'all' 
+                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-700'
+                }`}
+              >
+                All Transactions
+              </button>
+              <button 
+                onClick={() => setCategoryFilter('sales')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  categoryFilter === 'sales' 
+                  ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-700'
+                }`}
+              >
+                Sales
+              </button>
+              <button 
+                onClick={() => setCategoryFilter('returns')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  categoryFilter === 'returns' 
+                  ? 'bg-white dark:bg-zinc-700 text-rose-600 dark:text-rose-400 shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-700'
+                }`}
+              >
+                Returns
+              </button>
+            </div>
           
-          <div className="lg:col-span-4 flex gap-2">
-            <button 
-              onClick={() => setFilterType('all')}
-              className={`flex-1 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
-                filterType === 'all' 
-                ? 'bg-zinc-800 text-white border-zinc-800 shadow-lg shadow-zinc-900/20' 
-                : 'bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
-              }`}
-            >
-              All
-            </button>
-            <button 
-              onClick={() => setFilterType('cash')}
-              className={`flex-1 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
-                filterType === 'cash' 
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-900/20' 
-                : 'bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
-              }`}
-            >
-              Cash
-            </button>
-            <button 
-              onClick={() => setFilterType('credit')}
-              className={`flex-1 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
-                filterType === 'credit' 
-                ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-900/20' 
-                : 'bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
-              }`}
-            >
-              Credit
-            </button>
-            <button 
-              onClick={() => setFilterType('pending')}
-              className={`flex-1 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
-                filterType === 'pending' 
-                ? 'bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-900/20' 
-                : 'bg-white dark:bg-zinc-900 text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
-              }`}
-            >
-              Pending
-            </button>
+            <div className="flex gap-2 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl shadow-sm">
+              <button 
+                onClick={() => setFilterType('all')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filterType === 'all' 
+                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-700'
+                }`}
+              >
+                All
+              </button>
+              <button 
+                onClick={() => setFilterType('cash')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filterType === 'cash' 
+                  ? 'bg-emerald-600 text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-emerald-600'
+                }`}
+              >
+                Cash
+              </button>
+              <button 
+                onClick={() => setFilterType('credit')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filterType === 'credit' 
+                  ? 'bg-amber-500 text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-amber-500'
+                }`}
+              >
+                Credit
+              </button>
+              <button 
+                onClick={() => setFilterType('pending')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filterType === 'pending' 
+                  ? 'bg-rose-500 text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-rose-500'
+                }`}
+              >
+                Pending
+              </button>
+            </div>
           </div>
         </div>
 
@@ -183,11 +228,11 @@ export default function SalesHistoryPage({ setActivePage }) {
                     <td className="px-6 py-4">
                       <div className="flex justify-center">
                         <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-tighter ${
-                          sale.TRN_TYPE === 6 
+                          (sale.TRN_TYPE === 6 || sale.TRN_TYPE === 3)
                           ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800' 
                           : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800'
                         }`}>
-                          {sale.TRN_TYPE === 6 ? 'Cash' : 'Others'}
+                          {sale.TRN_TYPE === 6 ? 'Cash' : sale.TRN_TYPE === 3 ? 'Return Cash' : sale.TRN_TYPE === 4 ? 'Return Credit' : 'Others'}
                         </span>
                       </div>
                     </td>

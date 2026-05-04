@@ -1,19 +1,31 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, PlusCircle } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 import { API_ENDPOINTS } from '../config';
 
-export default function SalesGrid({ initialData = [], rows, setRows, visibleColumns = {}, enterToQty = false, taxIncluded = true }) {
-  const { searchItems } = useCache();
+export default function SalesGrid({ 
+  initialData = [], 
+  rows, 
+  setRows, 
+  visibleColumns = {}, 
+  enterToQty = false, 
+  taxIncluded = true,
+  restrictedItems = null
+}) {
+  const { searchItems, cachedUnits } = useCache();
   const [searchResults, setSearchResults] = useState([]);
+  const [unitSearchResults, setUnitSearchResults] = useState([]);
   const [activeSearchId, setActiveSearchId] = useState(null);
+  const [activeUnitSearchId, setActiveUnitSearchId] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = React.useRef(null);
 
   const updateDropdownPosition = React.useCallback(() => {
-    if (activeSearchId) {
-      const input = document.getElementById(`itemCode-${activeSearchId}`);
+    const activeId = activeSearchId || activeUnitSearchId;
+    if (activeId) {
+      const inputId = activeSearchId ? `itemCode-${activeSearchId}` : `unit-${activeUnitSearchId}`;
+      const input = document.getElementById(inputId);
       if (input) {
         const rect = input.getBoundingClientRect();
         setDropdownPos({
@@ -23,10 +35,10 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
         });
       }
     }
-  }, [activeSearchId]);
+  }, [activeSearchId, activeUnitSearchId]);
 
   React.useEffect(() => {
-    if (activeSearchId) {
+    if (activeSearchId || activeUnitSearchId) {
       window.addEventListener('scroll', updateDropdownPosition, true);
       window.addEventListener('resize', updateDropdownPosition);
       updateDropdownPosition();
@@ -35,13 +47,15 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
       window.removeEventListener('scroll', updateDropdownPosition, true);
       window.removeEventListener('resize', updateDropdownPosition);
     };
-  }, [activeSearchId, updateDropdownPosition]);
+  }, [activeSearchId, activeUnitSearchId, updateDropdownPosition]);
 
   React.useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setSearchResults([]);
         setActiveSearchId(null);
+        setUnitSearchResults([]);
+        setActiveUnitSearchId(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -69,11 +83,30 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
   }, [initialData]);
 
   const updateRow = (id, field, value) => {
-    setRows(rows.map(row => row.id === id ? { ...row, [field]: value } : row));
+    setRows(rows.map(row => {
+      if (row.id !== id) return row;
+      
+      let finalValue = value;
+      
+      // RESTRICTION: Clamp Quantity if restrictedItems is active
+      if (field === 'qty' && restrictedItems) {
+        const originalItem = restrictedItems.find(i => i.BARCODE === row.itemCode);
+        if (originalItem) {
+          const maxQty = Number(originalItem.QTY);
+          if (Number(value) > maxQty) {
+            alert(`Maximum return quantity for this item is ${maxQty}`);
+            finalValue = maxQty;
+          }
+        }
+      }
+
+      return { ...row, [field]: finalValue };
+    }));
   };
 
   const handleItemSearch = async (id, codeQuery, isSelection = false) => {
-    if (!codeQuery) {
+    // Allow empty query if in restricted mode to show all invoice items
+    if (!codeQuery && !restrictedItems) {
       setSearchResults([]);
       setActiveSearchId(null);
       return;
@@ -93,18 +126,32 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
       return;
     }
 
-    // 1. Try local cache first
-    let data = searchItems(codeQuery);
-    
-    // 2. If cache is empty or returns nothing, fallback to API search
-    if (!data || data.length === 0) {
-      try {
-        const res = await fetch(`${API_ENDPOINTS.ITEM_SEARCH}?q=${encodeURIComponent(codeQuery)}`);
-        if (res.ok) {
-          data = await res.json();
+    let data = [];
+
+    // IF RESTRICTED: Search only within provided items
+    if (restrictedItems) {
+      const q = (codeQuery || '').toLowerCase();
+      data = restrictedItems.filter(i => 
+        i.BARCODE.toLowerCase().includes(q) || 
+        i.DESCRIPTION.toLowerCase().includes(q)
+      ).map(i => ({
+        ...i,
+        SALE_PRICE: i.UNIT_PRICE // Map from original invoice field names
+      }));
+    } else {
+      // 1. Try local cache first
+      data = searchItems(codeQuery);
+      
+      // 2. If cache is empty or returns nothing, fallback to API search
+      if (!data || data.length === 0) {
+        try {
+          const res = await fetch(`${API_ENDPOINTS.ITEM_SEARCH}?q=${encodeURIComponent(codeQuery)}`);
+          if (res.ok) {
+            data = await res.json();
+          }
+        } catch (err) {
+          console.error("API search failed:", err);
         }
-      } catch (err) {
-        console.error("API search failed:", err);
       }
     }
     
@@ -130,17 +177,93 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
     }
   };
 
+  const handleUnitSearch = (id, query) => {
+    setActiveUnitSearchId(id);
+    const q = query.toLowerCase();
+    const filtered = cachedUnits.filter(u => 
+      (u.Unit_Name && u.Unit_Name.toLowerCase().includes(q)) ||
+      (u.Unit_id && String(u.Unit_id).includes(q))
+    ).slice(0, 10);
+    setUnitSearchResults(filtered);
+
+    const input = document.getElementById(`unit-${id}`);
+    if (input) {
+      const rect = input.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom,
+        left: rect.left,
+        width: rect.width
+      });
+    }
+  };
+  
+  const getUnitName = (unitId) => {
+    if (!unitId) return '';
+    const unit = cachedUnits.find(u => 
+      String(u.Unit_id || u.unit_id || '') === String(unitId)
+    );
+    return unit ? (unit.Unit_Name || unit.unit_name) : '';
+  };
+
   const selectItem = (id, item) => {
+    const wasDuplicate = rows.findIndex(r => r.id !== id && r.itemCode === item.BARCODE) !== -1;
+
     setRows(prevRows => {
+      // Check if item already exists in another row
+      const existingRowIndex = prevRows.findIndex(r => r.id !== id && r.itemCode === item.BARCODE);
+      
+      if (existingRowIndex !== -1) {
+        const nextRows = [...prevRows];
+        const existingRow = { ...nextRows[existingRowIndex] };
+        const newQty = Number(existingRow.qty || 0) + 1;
+        
+        // RESTRICTION: Check max qty if in restricted mode
+        if (restrictedItems) {
+          const originalItem = restrictedItems.find(i => i.BARCODE === item.BARCODE);
+          if (originalItem && newQty > Number(originalItem.QTY)) {
+            alert(`Maximum return quantity for this item is ${originalItem.QTY}`);
+            // Don't increment
+          } else {
+            existingRow.qty = newQty;
+          }
+        } else {
+          existingRow.qty = newQty;
+        }
+        
+        nextRows[existingRowIndex] = existingRow;
+        
+        // Clear the current editing row
+        const currentRowIndex = nextRows.findIndex(r => r.id === id);
+        nextRows[currentRowIndex] = { 
+          id: id, 
+          itemCode: '', 
+          description: '', 
+          unit: '', 
+          qty: '', 
+          price: '', 
+          aliasCode: '', 
+          vatAmt: '', 
+          vatPercent: 0, 
+          total: '', 
+          stock: '' 
+        };
+        
+        return nextRows;
+      }
+
+      // Standard logic for new item
       let nextRows = prevRows.map(row => 
         row.id === id 
           ? { 
               ...row, 
-              unit: item.isManual ? '' : item.SALE_PRICE, 
+              unit: item.isManual 
+                ? (cachedUnits.find(u => u.Unit_Name?.toUpperCase() === 'PCS')?.Unit_Name || '')
+                : (restrictedItems ? item.UNIT : getUnitName(item.UNIT)), 
               itemCode: item.BARCODE,
               description: item.DESCRIPTION || '',
               vatPercent: item.VAT_PERCENT || 0,
               qty: item.isManual ? '' : (Number(row.qty || 0) + 1),
+              price: item.isManual ? '' : item.SALE_PRICE,
               isManual: item.isManual || false
             }
           : row
@@ -156,6 +279,16 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
     setActiveSearchId(null);
 
     setTimeout(() => {
+      if (wasDuplicate) {
+        // If it was a duplicate, stay on the CURRENT row (which we just cleared)
+        const currentInput = document.getElementById(`itemCode-${id}`);
+        if (currentInput) {
+          currentInput.focus();
+          currentInput.select();
+        }
+        return;
+      }
+
       if (item.isManual) {
         document.getElementById(`description-${id}`)?.focus();
       } else if (enterToQty) {
@@ -174,6 +307,35 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
         });
       }
     }, 50);
+  };
+
+  const [isAllItemsImported, setIsAllItemsImported] = useState(false);
+
+  React.useEffect(() => {
+    if (!restrictedItems) {
+      setIsAllItemsImported(false);
+    }
+  }, [restrictedItems]);
+
+  const addAllFromInvoice = () => {
+    if (!restrictedItems) return;
+    
+    const newRows = restrictedItems.map((item, idx) => ({
+      id: Date.now() + idx,
+      itemCode: item.BARCODE,
+      description: item.DESCRIPTION,
+      unit: item.UNIT,
+      qty: item.QTY,
+      price: item.UNIT_PRICE,
+      vatPercent: item.VAT_PERCENT || 0,
+      vatAmt: '',
+      total: '',
+      aliasCode: '',
+      stock: ''
+    }));
+    
+    setIsAllItemsImported(true);
+    setRows(newRows);
   };
 
   const addRow = () => {
@@ -215,6 +377,11 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
                     onChange={(e) => {
                        updateRow(row.id, 'itemCode', e.target.value);
                        handleItemSearch(row.id, e.target.value);
+                    }}
+                    onFocus={() => {
+                      if (restrictedItems) {
+                        handleItemSearch(row.id, row.itemCode);
+                      }
                     }}
                     onKeyDown={(e) => { 
                       if (e.key === 'Enter') {
@@ -279,18 +446,57 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
                   }}
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded dark:text-zinc-100" 
                 /></td>}
-                {visibleColumns.unit && <td className="p-1"><input 
+                {visibleColumns.unit && <td className="p-1 relative"><input 
                   id={`unit-${row.id}`}
                   type="text" 
                   value={row.unit} 
-                  onChange={(e) => updateRow(row.id, 'unit', e.target.value)} 
+                  onChange={(e) => {
+                    updateRow(row.id, 'unit', e.target.value);
+                    handleUnitSearch(row.id, e.target.value);
+                  }} 
+                  onFocus={() => handleUnitSearch(row.id, row.unit || '')}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
+                      if (unitSearchResults.length > 0) {
+                        updateRow(row.id, 'unit', unitSearchResults[0].Unit_Name || unitSearchResults[0].unit_name);
+                        setActiveUnitSearchId(null);
+                      }
                       document.getElementById(`qty-${row.id}`)?.focus();
                     }
                   }}
                   className={`w-full p-2 outline-none rounded dark:text-zinc-200 ${row.isManual ? 'bg-card border border-border focus:ring-1 focus:ring-primary' : 'bg-transparent focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary'}`}
-                /></td>}
+                  autoComplete="off"
+                />
+                {activeUnitSearchId === row.id && unitSearchResults.length > 0 && createPortal(
+                  <div 
+                    ref={dropdownRef}
+                    style={{ 
+                      position: 'fixed', 
+                      top: dropdownPos.top, 
+                      left: dropdownPos.left, 
+                      width: dropdownPos.width,
+                      zIndex: 9999 
+                    }}
+                    className="bg-card border border-border shadow-2xl rounded-xl mt-1 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                  >
+                    <div className="max-h-48 overflow-y-auto">
+                      {unitSearchResults.map((u, idx) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => {
+                            updateRow(row.id, 'unit', u.Unit_Name || u.unit_name);
+                            setActiveUnitSearchId(null);
+                          }}
+                          className="p-2.5 hover:bg-primary/10 cursor-pointer border-b border-border last:border-0 flex justify-between items-center group transition-colors"
+                        >
+                          <span className="font-bold text-card-foreground text-sm group-hover:text-primary">{u.Unit_Name || u.unit_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>,
+                  document.body
+                )}
+                </td>}
                 {visibleColumns.qty && <td className="p-1"><input 
                   id={`qty-${row.id}`} 
                   type="number" 
@@ -317,7 +523,20 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
                   }} 
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
                 /></td>}
-                {visibleColumns.price && <td className="p-1"><input type="number" value={row.qty && row.unit ? ((Number(row.qty) || 0) * (Number(row.unit) || 0)).toFixed(2) : ''} className="w-full bg-zinc-100 dark:bg-zinc-900 border border-transparent dark:border-zinc-800 p-2 outline-none rounded text-right text-zinc-700 dark:text-zinc-400" readOnly /></td>}
+                {visibleColumns.price && <td className="p-1">
+                  <input 
+                    id={`price-${row.id}`}
+                    type="number" 
+                    value={row.price} 
+                    onChange={(e) => updateRow(row.id, 'price', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        document.getElementById(`aliasCode-${row.id}`)?.focus();
+                      }
+                    }}
+                    className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
+                  />
+                </td>}
                 {visibleColumns.aliasCode && <td className="p-1"><input 
                   id={`aliasCode-${row.id}`}
                   type="text" 
@@ -346,21 +565,21 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
                 /></td>}
                 {visibleColumns.vatAmt && <td className="p-1"><input 
                   type="number" 
-                  value={row.qty && row.unit ? (
+                  value={row.qty && row.price ? (
                     taxIncluded 
-                      ? (Number(row.qty) * (Number(row.unit) - (Number(row.unit) / (1 + Number(row.vatPercent)/100)))).toFixed(2)
-                      : (Number(row.qty) * Number(row.unit) * Number(row.vatPercent) / 100).toFixed(2)
+                      ? (Number(row.qty) * (Number(row.price) - (Number(row.price) / (1 + Number(row.vatPercent)/100)))).toFixed(2)
+                      : (Number(row.qty) * Number(row.price) * Number(row.vatPercent) / 100).toFixed(2)
                   ) : ''} 
-                  onChange={(e) => row.isManual && updateRow(row.id, 'vatPercent', (Number(e.target.value) / ((Number(row.qty)||1)*(Number(row.unit)||1)) * 100).toFixed(2))}
+                  onChange={(e) => row.isManual && updateRow(row.id, 'vatPercent', (Number(e.target.value) / ((Number(row.qty)||1)*(Number(row.price)||1)) * 100).toFixed(2))}
                   className={`w-full p-2 outline-none rounded text-right ${row.isManual ? 'bg-card border border-border focus:ring-1 focus:ring-primary dark:text-zinc-200' : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400'}`} 
                   readOnly={!row.isManual} 
                 /></td>}
                 {visibleColumns.total && <td className="p-1"><input 
                   type="number" 
-                  value={row.qty && row.unit ? (
+                  value={row.qty && row.price ? (
                     taxIncluded 
-                      ? (Number(row.qty) * Number(row.unit)).toFixed(2)
-                      : (Number(row.qty) * Number(row.unit) * (1 + Number(row.vatPercent)/100)).toFixed(2)
+                      ? (Number(row.qty) * Number(row.price)).toFixed(2)
+                      : (Number(row.qty) * Number(row.price) * (1 + Number(row.vatPercent)/100)).toFixed(2)
                   ) : ''} 
                   className="w-full bg-zinc-100 dark:bg-zinc-900 font-semibold p-2 outline-none rounded text-right text-zinc-900 dark:text-zinc-100 border border-transparent dark:border-zinc-800" 
                   readOnly 
@@ -377,9 +596,21 @@ export default function SalesGrid({ initialData = [], rows, setRows, visibleColu
         </table>
       </div>
       <div className="p-3 border-t border-border bg-white dark:bg-zinc-900 flex items-center justify-between">
-        <button onClick={addRow} className="flex items-center gap-1 text-sm font-semibold text-primary hover:text-indigo-500 px-3 py-1.5 rounded hover:bg-primary/10 transition-colors">
-          <Plus size={16} /> Add Row
-        </button>
+        <div className="flex items-center gap-2">
+          {!isAllItemsImported && (
+            <button onClick={addRow} className="flex items-center gap-1 text-sm font-semibold text-primary hover:text-indigo-500 px-3 py-1.5 rounded hover:bg-primary/10 transition-colors">
+              <Plus size={16} /> Add Row
+            </button>
+          )}
+          {restrictedItems && !isAllItemsImported && (
+            <button 
+              onClick={addAllFromInvoice}
+              className="flex items-center gap-1 text-sm font-semibold text-emerald-600 hover:text-emerald-500 px-3 py-1.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors border border-emerald-100 dark:border-emerald-900/30 ml-2"
+            >
+              <PlusCircle size={16} /> Add All from Invoice
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

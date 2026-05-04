@@ -16,7 +16,8 @@ export default function SummaryFooter({
   selectedAccount,
   setSelectedAccount,
   customerId,
-  currencyCode = 'SAR'
+  currencyCode = 'SAR',
+  isReturn = false
 }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -26,21 +27,21 @@ export default function SummaryFooter({
   
   const vatAmount = rows.reduce((acc, row) => {
     const qty = Number(row.qty) || 0;
-    const unit = Number(row.unit) || 0;
+    const price = Number(row.price) || 0;
     const vatRate = (Number(row.vatPercent) || 0) / 100;
     const lineVat = taxIncluded 
-      ? (qty * (unit - (unit / (1 + vatRate))))
-      : (qty * unit * vatRate);
+      ? (qty * (price - (price / (1 + vatRate))))
+      : (qty * price * vatRate);
     return acc + lineVat;
   }, 0);
 
   const totalPayable = rows.reduce((acc, row) => {
     const qty = Number(row.qty) || 0;
-    const unit = Number(row.unit) || 0;
+    const price = Number(row.price) || 0;
     const vatRate = (Number(row.vatPercent) || 0) / 100;
     const lineTotal = taxIncluded 
-      ? (qty * unit)
-      : (qty * unit * (1 + vatRate));
+      ? (qty * price)
+      : (qty * price * (1 + vatRate));
     return acc + lineTotal;
   }, 0);
 
@@ -217,8 +218,12 @@ export default function SummaryFooter({
                   <CreditCard className="text-indigo-400" size={24} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Complete Sale</h3>
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Finalize payment details</p>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">
+                    {isReturn ? 'Complete Return' : 'Complete Sale'}
+                  </h3>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                    {isReturn ? 'Finalize return details' : 'Finalize payment details'}
+                  </p>
                 </div>
               </div>
               <button 
@@ -302,7 +307,9 @@ export default function SummaryFooter({
                     <>
                       {(paymentMethod === 'Cash' || paymentMethod === 'Both') && (
                         <div className="space-y-2">
-                          <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest px-1">Cash Amount Paid</label>
+                          <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest px-1">
+                            {isReturn ? 'Cash Amount Returned' : 'Cash Amount Paid'}
+                          </label>
                           <input 
                             ref={cashInputRef}
                             type="number"
@@ -317,7 +324,9 @@ export default function SummaryFooter({
                       {(paymentMethod === 'Others' || paymentMethod === 'Both') && (
                         <div className="space-y-3">
                           <div className="space-y-2">
-                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest px-1">Other Amount Paid</label>
+                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest px-1">
+                               {isReturn ? 'Other Amount Returned' : 'Other Amount Paid'}
+                            </label>
                             <input 
                               ref={otherInputRef}
                               type="number"
