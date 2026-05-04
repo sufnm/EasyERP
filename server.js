@@ -1661,12 +1661,14 @@ app.post('/api/sales/save', async (req, res) => {
           .input('currency', sql.Int, CURRENCY || 1)
           .input('trnType', sql.Int, trnType)
           .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
+          .input('vatNumber', sql.VarChar, String(VAT_NUMBER || ''))
           .query(`
             UPDATE dbo.DATA_ENTRY_WEB SET
               ACCODE = @accode, ENAME = @ename, G_TOTAL = @gTotal, DISC_AMT = @discAmt,
               NET_AMOUNT = @netAmount, VAT_AMOUNT = @vatAmount, CASH_PAID = @cashPaid,
               OTHER_PAID = @otherPaid, CASH_ACC = @cashAcc, WR_CODE = @wrCode,
-              CURRENCY = @currency, TRN_TYPE = @trnType, REF_NO = @refNo
+              CURRENCY = @currency, TRN_TYPE = @trnType, REF_NO = @refNo,
+              VAT_NUMBER = @vatNumber
             WHERE REC_NO = @recNo;
 
             SELECT INVOICE_NO, REC_NO FROM dbo.DATA_ENTRY_WEB WHERE REC_NO = @recNo;
@@ -1702,18 +1704,19 @@ app.post('/api/sales/save', async (req, res) => {
           .input('wrCode', sql.SmallInt, Number(WR_CODE))
           .input('currency', sql.Int, CURRENCY || 1)
           .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
+          .input('vatNumber', sql.VarChar, String(VAT_NUMBER || ''))
           .query(`
               INSERT INTO dbo.DATA_ENTRY_WEB (
                 ACCODE, ENAME, G_TOTAL, DISC_AMT, NET_AMOUNT, VAT_AMOUNT,
                 CASH_PAID, OTHER_PAID, CASH_ACC,
                 BRN_CODE, TRN_TYPE, ORG_DUP, WR_CODE, CURDATE,
-                CURRENCY, REF_NO
+                CURRENCY, REF_NO, VAT_NUMBER
               )
               VALUES (
                 @accode, @ename, @gTotal, @discAmt, @netAmount, @vatAmount,
                 @cashPaid, @otherPaid, @cashAcc,
                 @brnCode, @trnType, @orgDup, @wrCode, GETDATE(),
-                @currency, @refNo
+                @currency, @refNo, @vatNumber
               );
 
               DECLARE @NewRecNo INT = SCOPE_IDENTITY();

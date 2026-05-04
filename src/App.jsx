@@ -33,10 +33,10 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
 
       <main className="flex-1 overflow-y-auto">
         {activePage === 'home' && <HomePage />}
-        {activePage === 'sales' && <SalesPage user={user} params={activePageParams} />}
-        {activePage === 'sales-return' && <SalesReturnPage user={user} params={activePageParams} />}
-        {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} onBack={() => navigateTo('sales-history')} />}
-        {activePage === 'edit-sales-return' && <SalesReturnPage user={user} params={activePageParams} onBack={() => navigateTo('sales-history')} />}
+        {activePage === 'sales' && <SalesPage user={user} params={activePageParams} navigateTo={navigateTo} />}
+        {activePage === 'sales-return' && <SalesReturnPage user={user} params={activePageParams} navigateTo={navigateTo} />}
+        {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('sales-history')} />}
+        {activePage === 'edit-sales-return' && <SalesReturnPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('sales-history')} />}
         {activePage === 'sales-history' && <SalesHistoryPage setActivePage={navigateTo} />}
         {activePage === 'accounts' && <AccountsPage setActivePage={navigateTo} />}
         {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={navigateTo} />}

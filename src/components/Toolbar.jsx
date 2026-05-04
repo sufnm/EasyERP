@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { Plus, Save, Printer, Search, Trash2, Clock, LogOut, Settings, X } from 'lucide-react';
+import { Plus, Save, Printer, Search, Trash2, Clock, LogOut, Settings, X, History, Undo2, ShoppingCart } from 'lucide-react';
 
 const ToolbarButton = ({ icon: Icon, label, shortcut, onClick, colorClass = "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800" }) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 group shrink-0 min-w-[72px] ${colorClass}`}
+    className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg transition-all duration-200 group shrink-0 min-w-[72px] ${colorClass}`}
   >
-    <div className="bg-card p-2 rounded-md shadow-sm border border-border group-hover:shadow group-hover:border-zinc-300 dark:group-hover:border-zinc-600 transition-all">
-      <Icon size={20} className="mb-1" />
+    <div className="bg-card p-1.5 rounded-md shadow-sm border border-border group-hover:shadow group-hover:border-zinc-300 dark:group-hover:border-zinc-600 transition-all">
+      <Icon size={20} className="mb-0.5" />
     </div>
-    <span className="text-xs font-semibold mt-1">
+    <span className="text-[10px] font-bold mt-0.5">
       {shortcut && <span className="text-primary mr-1">{shortcut}</span>}
       {label}
     </span>
@@ -22,12 +22,13 @@ export default function Toolbar({
   enterToQty, setEnterToQty,
   showInvoiceAfterSave, setShowInvoiceAfterSave,
   currencies = [], selectedCurrency, setSelectedCurrency,
-  onNew, onPending, onClear, pendingCount = 0
+  onNew, onPending, onHistory, onReturn, onClear, 
+  pendingCount = 0, isReturn = false
 }) {
   const [showOptions, setShowOptions] = useState(false);
   const toggleColumn = (key) => setVisibleColumns?.(prev => ({ ...prev, [key]: !prev[key] }));
   return (
-    <div className="flex items-center gap-2 bg-card p-3 rounded-xl border border-border shadow-sm overflow-x-auto transition-colors duration-300">
+    <div className="flex items-center gap-2 bg-card py-1.5 px-3 rounded-xl border border-border shadow-sm overflow-x-auto transition-colors duration-300">
       <ToolbarButton icon={Plus} label="New" shortcut="F1" onClick={onNew} colorClass="text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" />
       <ToolbarButton icon={Trash2} label="Clear" onClick={onClear} colorClass="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" />
       <ToolbarButton 
@@ -37,16 +38,16 @@ export default function Toolbar({
         colorClass={pendingCount > 0 ? "text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 animate-pulse-subtle" : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"} 
       />
       
-      <div className="w-px h-10 bg-border mx-1"></div>
+      <div className="w-px h-8 bg-border mx-1"></div>
       
-      <ToolbarButton icon={Printer} label="Print" />
+      <ToolbarButton icon={History} label="History" onClick={onHistory} colorClass="text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" />
       
       {/* Options Button replacing Zatca */}
-      <button onClick={() => setShowOptions(true)} className="flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 group shrink-0 min-w-[72px] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer">
-        <div className="bg-card p-2 rounded-md shadow-sm border border-border group-hover:shadow group-hover:border-zinc-300 dark:group-hover:border-zinc-600 transition-all">
-          <Settings size={20} className="mb-1" />
+      <button onClick={() => setShowOptions(true)} className="flex flex-col items-center justify-center py-1 px-2 rounded-lg transition-all duration-200 group shrink-0 min-w-[72px] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer">
+        <div className="bg-card p-1.5 rounded-md shadow-sm border border-border group-hover:shadow group-hover:border-zinc-300 dark:group-hover:border-zinc-600 transition-all">
+          <Settings size={20} className="mb-0.5" />
         </div>
-        <span className="text-xs font-semibold mt-1">Options</span>
+        <span className="text-[10px] font-bold mt-0.5">Options</span>
       </button>
 
       {/* Options Modal */}
@@ -119,9 +120,13 @@ export default function Toolbar({
         </div>
       )}
 
-      <ToolbarButton icon={Search} label="Search" />
-      <div className="w-px h-10 bg-border mx-1"></div>
-      <ToolbarButton icon={LogOut} label="Exit" shortcut="F8" colorClass="text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20" />
+      <ToolbarButton 
+        icon={isReturn ? ShoppingCart : Undo2} 
+        label={isReturn ? "Sales" : "Return"} 
+        onClick={onReturn}
+        colorClass={isReturn ? "text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20" : "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"} 
+      />
+      <div className="w-px h-8 bg-border mx-1"></div>
     </div>
   );
 }

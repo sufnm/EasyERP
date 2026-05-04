@@ -11,7 +11,7 @@ import InvoiceModal from '../components/InvoiceModal';
 import PendingSalesModal from '../components/PendingSalesModal';
 import { useLanguage } from '../context/LanguageContext';
 
-export default function SalesReturnPage({ user, params = {}, onBack }) {
+export default function SalesReturnPage({ user, params = {}, navigateTo, onBack }) {
   const { t, language } = useLanguage();
   const {
     refreshCache,
@@ -475,6 +475,9 @@ export default function SalesReturnPage({ user, params = {}, onBack }) {
               setSelectedCurrency={setSelectedCurrency}
               onNew={handleHoldAndNew}
               onPending={() => setIsPendingModalOpen(true)}
+              onHistory={() => navigateTo?.('sales-history')}
+              onReturn={() => navigateTo?.('sales')}
+              isReturn={true}
               onClear={resetPage}
               pendingCount={pendingSales.length}
             />

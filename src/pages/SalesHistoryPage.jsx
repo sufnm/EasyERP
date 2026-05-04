@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { Search, FileText, User, ChevronRight } from 'lucide-react';
+import { Search, FileText, User, ChevronRight, ArrowLeft } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 import InvoiceModal from '../components/InvoiceModal';
 
@@ -50,9 +50,18 @@ export default function SalesHistoryPage({ setActivePage }) {
       <div className="max-w-7xl mx-auto w-full">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight uppercase">Sales Dashboard</h1>
-            <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">Real-time performance metrics and history</p>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setActivePage('sales')}
+              className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-all text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              title="Back to Sales"
+            >
+              <ArrowLeft size={24} />
+            </button>
+            <div>
+              <h1 className="text-3xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight uppercase">Sales Dashboard</h1>
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">Real-time performance metrics and history</p>
+            </div>
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
