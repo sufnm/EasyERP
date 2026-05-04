@@ -229,7 +229,7 @@ export default function SalesReturnPage({ user, params = {}, onBack }) {
     }
 
     if (!customer.id || customer.id === '6000') {
-      if (!isQuickSave && !confirm('Save as Return Sale?')) return;
+      if (!isQuickSave && false) return; // Removed confirmation prompt
       // If quick save is attempted for 6000, it should have been blocked in UI, 
       // but let's double check here just in case.
       if (isQuickSave) {

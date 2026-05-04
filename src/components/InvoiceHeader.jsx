@@ -11,7 +11,8 @@ export default function InvoiceHeader({
   isReturn = false,
   onInvoiceSelect,
   selectedInvoice = null,
-  onReferenceChange
+  onReferenceChange,
+  referenceNo = ''
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -79,6 +80,8 @@ export default function InvoiceHeader({
               <input 
                 type="text" 
                 placeholder="Reference"
+                value={referenceNo}
+                onChange={(e) => onReferenceChange && onReferenceChange(e.target.value)}
                 className="w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-sm focus:border-primary focus:ring-2 focus:ring-indigo-50 dark:focus:ring-indigo-900/10 outline-none transition-all hover:border-zinc-300 dark:text-zinc-200" 
               />
             </div>

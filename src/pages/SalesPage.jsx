@@ -41,6 +41,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
   const [address, setAddress] = useState({
     street: '', city: '', district: '', building: '', pincode: ''
   });
+  const [referenceNo, setReferenceNo] = useState('');
 
   // Totals for saving
   const [totals, setTotals] = useState({
@@ -76,7 +77,8 @@ export default function SalesPage({ user, params = {}, onBack }) {
         selectedCurrency,
         paymentMethod,
         cashPaid,
-        otherPaid
+        otherPaid,
+        referenceNo
       };
       addPendingSale(currentSale);
     }
@@ -94,6 +96,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
     setPaymentMethod(sale.paymentMethod);
     setCashPaid(sale.cashPaid);
     setOtherPaid(sale.otherPaid);
+    setReferenceNo(sale.referenceNo || '');
     
     // Remove from pending
     removePendingSale(sale.id);
@@ -127,6 +130,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
     setCustomer({ id: '6000', name: 'CASH CUSTOMER' });
     setValidationErrors([]);
     setAddress({ street: '', city: '', district: '', building: '', pincode: '' });
+    setReferenceNo('');
     setRows([
       { id: Date.now(), itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
       { id: Date.now() + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
@@ -148,7 +152,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
     }
 
     if (!customer.id || customer.id === '6000') {
-      if (!isQuickSave && !confirm('Save as Cash Sale?')) return;
+      if (!isQuickSave && false) return; // Removed confirmation prompt
       // If quick save is attempted for 6000, it should have been blocked in UI, 
       // but let's double check here just in case.
       if (isQuickSave) {
@@ -198,6 +202,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
         CURRENCY: selectedCurrency,
         TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7,
         ADDRESS: address,
+        REF_INV_NO: referenceNo,
         ROWS: rows.filter(r => r.itemCode.trim() !== '')
       };
 
@@ -226,7 +231,8 @@ export default function SalesPage({ user, params = {}, onBack }) {
             NET_AMOUNT: totals.net,
             VAT_AMOUNT: totals.vat,
             VAT_NUMBER: vatNumber,
-            TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7
+            TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7,
+            REF_NO: referenceNo
           };
           setSavedInvoice({
               ...invoiceData,
@@ -316,6 +322,7 @@ export default function SalesPage({ user, params = {}, onBack }) {
       setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
       setVatNumber(sale.VAT_NUMBER || '');
       setPaymentMethod(sale.TRN_TYPE === 6 ? 'Cash' : 'Others');
+      setReferenceNo(sale.REF_NO || '');
       
       // Fetch Sale Items
       fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO))
@@ -418,6 +425,8 @@ export default function SalesPage({ user, params = {}, onBack }) {
               warehouses={warehouses}
               selectedWarehouse={selectedWarehouse}
               setSelectedWarehouse={setSelectedWarehouse}
+              referenceNo={referenceNo}
+              onReferenceChange={setReferenceNo}
             />
             <CustomerDetails
               customer={customer}

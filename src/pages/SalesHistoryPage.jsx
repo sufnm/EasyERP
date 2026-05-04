@@ -211,7 +211,10 @@ export default function SalesHistoryPage({ setActivePage }) {
                         <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
                           <FileText size={16} />
                         </div>
-                        <span className="font-bold text-zinc-700 dark:text-zinc-200">#{sale.INVOICE_NO}</span>
+                        <div>
+                          <span className="font-bold text-zinc-700 dark:text-zinc-200 block">#{sale.INVOICE_NO}</span>
+                          {sale.REF_NO && <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 block uppercase tracking-tighter">Ref: #{sale.REF_NO}</span>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-zinc-500 dark:text-zinc-400">
