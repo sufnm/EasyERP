@@ -19,47 +19,76 @@ import TransactionTypesPage from './pages/TransactionTypesPage';
 import UserPrivilegesPage from './pages/UserPrivilegesPage';
 import UserInfoPage from './pages/UserInfoPage';
 import CustomerReceivablePage from './pages/CustomerReceivablePage';
+import SupplierPayablePage from './pages/SupplierPayablePage';
 import TranslationManagerPage from './pages/TranslationManagerPage';
 import SalesReturnPage from './pages/SalesReturnPage';
+import GeneralVoucherPage from './pages/GeneralVoucherPage';
 import { CacheProvider } from './context/CacheContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
+import { Menu } from 'lucide-react';
 
 function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo, user, handleLogout, prevPage }) {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <div className={`flex h-screen overflow-hidden font-sans antialiased selection:bg-indigo-200 transition-colors duration-300 bg-background text-foreground ${(theme === 'dark' || theme === 'skyblue') ? 'dark' : ''} ${theme === 'skyblue' ? 'skyblue' : ''} ${language === 'ar' ? 'rtl' : ''}`}>
-      <Sidebar activePage={activePage} setActivePage={navigateTo} onLogout={handleLogout} user={user} />
+      <Sidebar 
+        activePage={activePage} 
+        setActivePage={navigateTo} 
+        onLogout={handleLogout} 
+        user={user} 
+        isMobileOpen={isMobileMenuOpen}
+        onMobileClose={() => setIsMobileMenuOpen(false)}
+      />
 
-      <main className="flex-1 overflow-y-auto">
-        {activePage === 'home' && <HomePage />}
-        {activePage === 'sales' && <SalesPage user={user} params={activePageParams} navigateTo={navigateTo} />}
-        {activePage === 'sales-return' && <SalesReturnPage user={user} params={activePageParams} navigateTo={navigateTo} />}
-        {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('sales-history')} />}
-        {activePage === 'edit-sales-return' && <SalesReturnPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('sales-history')} />}
-        {activePage === 'sales-history' && <SalesHistoryPage setActivePage={navigateTo} />}
-        {activePage === 'accounts' && <AccountsPage setActivePage={navigateTo} />}
-        {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={navigateTo} />}
-        {activePage === 'customers-account' && <CustomersAccountPage setActivePage={navigateTo} />}
-        {activePage === 'supplier-accounts' && <SupplierAccountsPage setActivePage={navigateTo} />}
-        {activePage === 'purchase-accounts' && <PurchaseAccountsPage setActivePage={navigateTo} />}
-        {activePage === 'customer-account-form' && <CustomerAccountForm setActivePage={navigateTo} params={activePageParams} />}
-        {activePage === 'item-group' && <ItemGroupPage />}
-        {activePage === 'unit-master' && <UnitMasterPage />}
-        {activePage === 'transaction-types' && <TransactionTypesPage />}
-        {activePage === 'user-privileges' && <UserPrivilegesPage />}
-        {activePage === 'user-info' && <UserInfoPage />}
-        {activePage === 'chart-of-accounts' && <ChartOfAccountsPage setActivePage={navigateTo} params={activePageParams} />}
-        {activePage === 'create-account' && <CreateAccountPage setActivePage={navigateTo} initialData={activePageParams} prevPage={prevPage} />}
-        {activePage === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}
-        {activePage === 'customer-receivable' && <CustomerReceivablePage setActivePage={navigateTo} user={user} />}
-        {activePage === 'translation-manager' && <TranslationManagerPage />}
-        {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager'].includes(activePage) ? null : (
-          <div className="flex items-center justify-center p-12 h-screen">
-            <p className="text-zinc-400 text-lg font-medium text-center w-full">Coming Soon</p>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Navbar */}
+        <header className="lg:hidden h-14 bg-card border-b border-border flex items-center justify-between px-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+              <Menu size={18} onClick={() => setIsMobileMenuOpen(true)} className="cursor-pointer" />
+            </div>
+            <span className="font-black text-foreground uppercase tracking-tighter text-lg">EazyERP</span>
           </div>
-        )}
-      </main>
+          
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-xs">
+            {user?.username?.substring(0, 1).toUpperCase() || 'A'}
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto">
+          {activePage === 'home' && <HomePage />}
+          {activePage === 'sales' && <SalesPage user={user} params={activePageParams} navigateTo={navigateTo} />}
+          {activePage === 'sales-return' && <SalesReturnPage user={user} params={activePageParams} navigateTo={navigateTo} />}
+          {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('sales-history')} />}
+          {activePage === 'edit-sales-return' && <SalesReturnPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('sales-history')} />}
+          {activePage === 'sales-history' && <SalesHistoryPage setActivePage={navigateTo} />}
+          {activePage === 'accounts' && <AccountsPage setActivePage={navigateTo} />}
+          {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={navigateTo} />}
+          {activePage === 'customers-account' && <CustomersAccountPage setActivePage={navigateTo} />}
+          {activePage === 'supplier-accounts' && <SupplierAccountsPage setActivePage={navigateTo} />}
+          {activePage === 'purchase-accounts' && <PurchaseAccountsPage setActivePage={navigateTo} />}
+          {activePage === 'customer-account-form' && <CustomerAccountForm setActivePage={navigateTo} params={activePageParams} />}
+          {activePage === 'item-group' && <ItemGroupPage />}
+          {activePage === 'unit-master' && <UnitMasterPage />}
+          {activePage === 'transaction-types' && <TransactionTypesPage />}
+          {activePage === 'user-privileges' && <UserPrivilegesPage />}
+          {activePage === 'user-info' && <UserInfoPage />}
+          {activePage === 'chart-of-accounts' && <ChartOfAccountsPage setActivePage={navigateTo} params={activePageParams} />}
+          {activePage === 'create-account' && <CreateAccountPage setActivePage={navigateTo} initialData={activePageParams} prevPage={prevPage} />}
+          {activePage === 'settings' && <SettingsPage theme={theme} setTheme={setTheme} />}
+          {activePage === 'customer-receivable' && <CustomerReceivablePage setActivePage={navigateTo} user={user} />}
+          {activePage === 'supplier-payable' && <SupplierPayablePage setActivePage={navigateTo} user={user} />}
+          {activePage === 'general-voucher' && <GeneralVoucherPage setActivePage={navigateTo} user={user} />}
+          {activePage === 'translation-manager' && <TranslationManagerPage />}
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager'].includes(activePage) ? null : (
+            <div className="flex items-center justify-center p-12 h-screen">
+              <p className="text-zinc-400 text-lg font-medium text-center w-full">{t('comingSoon')}</p>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
@@ -106,7 +135,9 @@ function App() {
   if (!user) {
     return (
       <LanguageProvider>
-        <LoginPage onLogin={handleLogin} />
+        <CacheProvider>
+          <LoginPage onLogin={handleLogin} />
+        </CacheProvider>
       </LanguageProvider>
     );
   }
@@ -116,8 +147,8 @@ function App() {
       <CacheProvider>
         <AppContent 
           theme={theme} 
-          setTheme={setTheme}
-          activePage={activePage}
+          setTheme={setTheme} 
+          activePage={activePage} 
           activePageParams={activePageParams}
           navigateTo={navigateTo}
           user={user}

@@ -1,7 +1,7 @@
 import express from 'express';
-import sql from 'mssql';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { sql, getPool } from './db.js';
 
 dotenv.config();
 
@@ -9,36 +9,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// MSSQL connection configuration
-const dbConfig = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER || process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  options: {
-    encrypt: false,
-    trustServerCertificate: true,
-    connectionTimeout: 15000, // 15 seconds
-    requestTimeout: 30000     // 30 seconds
+// --- LANGUAGE MIDDLEWARE ---
+app.use((req, res, next) => {
+  const lang = req.headers['accept-language'] || 'en';
+  req.lang = lang.toLowerCase().startsWith('ar') ? 'ar' : 'en';
+  // console.log(`🌐 Language detected: ${req.lang} (from header: ${lang})`);
+  next();
+});
+
+// Helper to get language-specific name column with fallback
+const getLangCol = (colName, lang) => {
+  if (lang === 'ar') {
+    // Only attempt _ANAME replacement for known columns that have it (like account names)
+    if (colName.toUpperCase().includes('ACC_NAME')) {
+      const aCol = colName.toUpperCase().replace('_NAME', '_ANAME');
+      return `COALESCE(${aCol}, ${colName})`;
+    }
+    // For other columns, fallback to English if unsure
+    return colName;
   }
+  return colName;
 };
-
-console.log(`📡 Attempting to connect to database on server: ${dbConfig.server}`);
-
-// MSSQL connection pool
-let pool;
-
-async function getPool() {
-  if (pool) return pool;
-  try {
-    pool = await sql.connect(dbConfig);
-    console.log('✅ Connected to MSSQL');
-    return pool;
-  } catch (err) {
-    console.error('❌ Database connection failed:', err.message);
-    throw err;
-  }
-}
 
 // --- AUTH ENDPOINTS ---
 
@@ -112,6 +103,7 @@ app.get('/api/privileges/:trnCode', async (req, res) => {
     return res.status(400).json({ error: 'username query param is required' });
   }
 
+  console.log(`🔐 Checking privileges for user: "${username}" on TRN_TYPE: ${trnCode}`);
   try {
     const pool = await getPool();
 
@@ -301,21 +293,7 @@ app.get('/api/receivable/invoices', async (req, res) => {
   }
 });
 
-app.get('/api/receivable/currencies', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const result = await pool.request().query(`
-      SELECT [Currency_No], [Currency_code], [Currency_Name], [Currency_Rate]
-      FROM [dbo].[CURRENCY_MASTER]
-    `);
-    res.json(result.recordset);
-  } catch (error) {
-    console.error("Failed to fetch currencies:", error);
-    res.status(500).json({ error: 'Database error', details: error.message });
-  }
-});
-
-app.get('/api/currencies/list', async (req, res) => {
+app.get(['/api/receivable/currencies', '/api/currencies/list'], async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
@@ -332,11 +310,13 @@ app.get('/api/currencies/list', async (req, res) => {
 app.get('/api/receivable/cash-accounts', async (req, res) => {
   try {
     const pool = await getPool();
+    const nameCol = getLangCol('ACC_NAME', req.lang);
     const result = await pool.request().query(`
-      SELECT ACC_NO, ACC_NAME 
-      FROM ACCOUNTS AS A 
-      INNER JOIN AC_OPTIONS AS O ON O.ID=1 
-      WHERE A.LEVEL3_NO = O.CASH_AC_TYPE
+      SELECT ACC_NO, ${nameCol} AS ACC_NAME 
+      FROM dbo.ACCOUNTS 
+      WHERE ACC_LEVEL = 4 
+      AND LEVEL3_NO = (SELECT CASH_AC_TYPE FROM dbo.AC_OPTIONS WHERE ID = 1)
+      ORDER BY ACC_NAME
     `);
     res.json(result.recordset);
   } catch (error) {
@@ -349,8 +329,9 @@ app.get('/api/receivable/cost-centers', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT [COST_CODE], [COST_NAME] 
+      SELECT [COST_CODE] AS CC_CODE, [COST_NAME] AS CC_NAME 
       FROM [COST_MASTER]
+      ORDER BY COST_NAME
     `);
     res.json(result.recordset);
   } catch (error) {
@@ -362,8 +343,9 @@ app.get('/api/receivable/cost-centers', async (req, res) => {
 app.get('/api/receivable/accounts-info', async (req, res) => {
   try {
     const pool = await getPool();
+    const nameCol = getLangCol('ACC_NAME', req.lang);
     const result = await pool.request().query(`
-      SELECT ACC_NO, ACC_NAME
+      SELECT ACC_NO, ${nameCol} AS ACC_NAME
       FROM dbo.ACCOUNTS_INFO
       ORDER BY ACC_NO
     `);
@@ -379,19 +361,24 @@ app.get('/api/receivable/history', async (req, res) => {
     const pool = await getPool();
     const result = await pool.request().query(`
       SELECT 
-        T.ID as transactionNo,
-        T.DOC_NO as invoiceNo,
-        T.PAY_FROM_ACC,
-        ISNULL(A1.ACC_NAME, CAST(T.PAY_FROM_ACC AS VARCHAR)) as payFrom,
-        T.PAY_TO_ACC,
-        ISNULL(A2.ACC_NAME, CAST(T.PAY_TO_ACC AS VARCHAR)) as payTo,
-        T.PAY_AMOUNT as paidAmount,
-        T.ENTRY_DATE as paidDate
-      FROM dbo.TRN_ENTRY T
-      LEFT JOIN dbo.ACCOUNTS_INFO A1 ON T.PAY_FROM_ACC = A1.ACC_NO
-      LEFT JOIN dbo.ACCOUNTS A2 ON T.PAY_TO_ACC = A2.ACC_NO
-      WHERE T.TRN_TYPE = 100
-      ORDER BY T.ID DESC
+        ID, 
+        ENTRY_DATE, 
+        DOC_NO, 
+        ACC_NAME1 AS [FROM ACC], 
+        ACC_NAME2 AS TO_ACC, 
+        PAY_AMOUNT, 
+        DESCRIPTION, 
+        RETURN_INVOICE,
+        Currency_no AS CURRENCY,
+        Currency_rate AS CURRENCY_RATE,
+        COST_CENTER,
+        BRN_CODE,
+        REF_NO,
+        PAY_FROM_ACC,
+        PAY_TO_ACC
+      FROM dbo.TRN_ENTRY 
+      WHERE TRN_TYPE = 100 
+      ORDER BY ID DESC
     `);
     res.json(result.recordset);
   } catch (error) {
@@ -399,52 +386,233 @@ app.get('/api/receivable/history', async (req, res) => {
     res.status(500).json({ error: 'Database error', details: error.message });
   }
 });
-app.post('/api/receivable/save', async (req, res) => {
-  try {
-    const {
-      ENTRY_DATE,
-      DOC_NO,
-      DOC_TRN_TYPE,
-      TRN_TYPE,
-      PAY_FROM_ACC,
-      PAY_TO_ACC,
-      DESCRIPTION,
-      PAY_AMOUNT,
-      USER_ID,
-      CURRENCY_NO,
-      CURRENCY_RATE,
-      IS_RETURN
-    } = req.body;
 
+app.post('/api/receivable/save', async (req, res) => {
+  const data = req.body;
+  console.log('🔍 DEBUG: Receivable Save Payload:', JSON.stringify(data, null, 2));
+  try {
     const pool = await getPool();
     const request = pool.request();
 
-    // Procedure Parameters — verified against sys.parameters (SP_TRN_ENTRY_SAVE)
-    request.input('ID', sql.Numeric(18, 0), null);                   // 1  — NULL = INSERT
-    request.input('ENTRY_DATE', sql.DateTime, new Date(ENTRY_DATE));   // 2
-    request.input('DOC_NO', sql.VarChar(50), String(DOC_NO));         // 3
-    request.input('DOC_TRN_TYPE', sql.Int, DOC_TRN_TYPE || 6);      // 4
-    request.input('TRN_TYPE', sql.Int, TRN_TYPE || 100);        // 5
-    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), PAY_FROM_ACC);           // 6
-    request.input('PAY_TO_ACC', sql.Numeric(18, 0), PAY_TO_ACC);             // 7
-    request.input('TRN_NO', sql.Numeric(18, 0), null);                   // 8
-    request.input('TRN_NO2', sql.Numeric(18, 0), null);                   // 9
-    request.input('DESCRIPTION', sql.NVarChar(300), DESCRIPTION || '');      // 10 — DB has 300
-    request.input('PAY_AMOUNT', sql.Real, PAY_AMOUNT);             // 11
-    request.input('CURRENCY_NO', sql.Int, CURRENCY_NO || 1);       // 12
-    request.input('CURRENCY_RATE', sql.Real, CURRENCY_RATE || 1);     // 13
-    request.input('RETURN_INVOICE', sql.Bit, IS_RETURN ? 1 : 0);      // 14
-    request.input('USER_ID', sql.Int, USER_ID || 1);           // 15
+    request.input('ID', sql.Numeric(18, 0), data.ID || null);
+    request.input('ENTRY_DATE', sql.DateTime, new Date(data.ENTRY_DATE));
+    request.input('DOC_NO', sql.VarChar(50), String(data.DOC_NO));
+    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 6); 
+    request.input('TRN_TYPE', sql.Int, 100); 
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC); 
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC); 
+    request.input('TRN_NO', sql.Numeric(18, 0), null);
+    request.input('TRN_NO2', sql.Numeric(18, 0), null);
+    request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
+    request.input('PAY_AMOUNT', sql.Real, data.PAY_AMOUNT);
+    request.input('CURRENCY_NO', sql.Int, data.CURRENCY || 1);
+    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || 1);
+    request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
+    request.input('USER_ID', sql.Int, data.USER_ID || 1);
+    request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
+    request.input('cost_center', sql.VarChar(50), data.COST_CENTER || '');
+    request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
+    request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
+    request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
 
+    console.log('📡 Executing SP_TRN_ENTRY_SAVE for Receivable...');
     const result = await request.execute('dbo.SP_TRN_ENTRY_SAVE');
-    const newId = result.recordset[0]?.NEW_ID || result.recordset[0]?.UPDATED_ID;
-
+    const newId = result.recordset[0]?.NEW_ID || result.recordset[0]?.UPDATED_ID || result.recordset[0]?.ID;
     res.json({ success: true, transactionId: newId });
   } catch (error) {
     console.error("Failed to save receivable entry:", error);
     res.status(500).json({ error: 'Database error', details: error.message });
   }
 });
+
+// --- PAYABLE ENDPOINTS ---
+
+app.get('/api/payable/invoices', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const isReturn = req.query.returnInvoice === 'true';
+    const trnTypes = isReturn ? '8,9' : '1,2';
+    const result = await pool.request().query(`
+      SELECT CURDATE, ENAME, ACCODE, INVOICE_NO, NET_AMOUNT, CASH_PAID, OTHER_PAID, BALANCE_AMT, TRN_TYPE, CURRENCY
+      FROM DATA_ENTRY 
+      WHERE trn_type IN (${trnTypes}) AND net_amount - (CASH_PAID + OTHER_PAID) > 0;
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch payable invoices:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/payable/history', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        ID, 
+        ENTRY_DATE, 
+        DOC_NO, 
+        ACC_NAME1 AS [TO ACC], 
+        ACC_NAME2 AS FROM_ACC, 
+        PAY_AMOUNT, 
+        DESCRIPTION, 
+        RETURN_INVOICE,
+        Currency_no AS CURRENCY,
+        Currency_rate AS CURRENCY_RATE,
+        COST_CENTER,
+        BRN_CODE,
+        REF_NO,
+        PAY_FROM_ACC,
+        PAY_TO_ACC
+      FROM dbo.TRN_ENTRY 
+      WHERE TRN_TYPE = 200 
+      ORDER BY ID DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch payable history:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.post('/api/payable/save', async (req, res) => {
+  const data = req.body;
+  console.log('🔍 DEBUG: Payable Save Payload:', JSON.stringify(data, null, 2));
+  try {
+    const pool = await getPool();
+    const request = pool.request();
+
+    request.input('ID', sql.Numeric(18, 0), data.ID || null);
+    request.input('ENTRY_DATE', sql.DateTime, new Date(data.ENTRY_DATE));
+    request.input('DOC_NO', sql.VarChar(50), String(data.DOC_NO));
+    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 7); 
+    request.input('TRN_TYPE', sql.Int, 200); 
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC); 
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC); 
+    request.input('TRN_NO', sql.Numeric(18, 0), null);
+    request.input('TRN_NO2', sql.Numeric(18, 0), null);
+    request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
+    request.input('PAY_AMOUNT', sql.Real, data.PAY_AMOUNT);
+    request.input('CURRENCY_NO', sql.Int, data.CURRENCY || 1);
+    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || 1);
+    request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
+    request.input('USER_ID', sql.Int, data.USER_ID || 1);
+    request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
+    request.input('cost_center', sql.VarChar(50), data.COST_CENTER || '');
+    request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
+    request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
+    request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
+
+    console.log('📡 Executing SP_TRN_ENTRY_SAVE for Payable...');
+    const result = await request.execute('dbo.SP_TRN_ENTRY_SAVE');
+    const newId = result.recordset[0]?.NEW_ID || result.recordset[0]?.UPDATED_ID || result.recordset[0]?.ID;
+    res.json({ success: true, transactionId: newId });
+  } catch (error) {
+    console.error("Failed to save payable entry:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+// --- GENERAL VOUCHER ENDPOINTS ---
+
+app.get('/api/general-voucher/types', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT id, type_name, type_aname FROM dbo.gl_voucher_type
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch voucher types:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/general-voucher/accounts', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT acc_no, acc_name, acc_aname FROM dbo.accounts WHERE acc_level = 4
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch general accounts:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/general-voucher/history', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        ID, 
+        ENTRY_DATE, 
+        DOC_NO, 
+        ACC_NAME1 AS [TO ACC], 
+        ACC_NAME2 AS FROM_ACC, 
+        PAY_AMOUNT, 
+        DESCRIPTION, 
+        RETURN_INVOICE,
+        Currency_no AS CURRENCY,
+        Currency_rate AS CURRENCY_RATE,
+        COST_CENTER,
+        BRN_CODE,
+        REF_NO,
+        PAY_FROM_ACC,
+        PAY_TO_ACC,
+        DOC_TRN_TYPE
+      FROM dbo.TRN_ENTRY 
+      WHERE TRN_TYPE = 101 
+      ORDER BY ID DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch general voucher history:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.post('/api/general-voucher/save', async (req, res) => {
+  const data = req.body;
+  console.log('🔍 DEBUG: General Voucher Save Payload:', JSON.stringify(data, null, 2));
+  try {
+    const pool = await getPool();
+    const request = pool.request();
+
+    request.input('ID', sql.Numeric(18, 0), data.ID || null);
+    request.input('ENTRY_DATE', sql.DateTime, new Date(data.ENTRY_DATE));
+    request.input('DOC_NO', sql.VarChar(50), String(data.DOC_NO));
+    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 1); 
+    request.input('TRN_TYPE', sql.Int, 101); 
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC); 
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC); 
+    request.input('TRN_NO', sql.Numeric(18, 0), null);
+    request.input('TRN_NO2', sql.Numeric(18, 0), null);
+    request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
+    request.input('PAY_AMOUNT', sql.Real, data.PAY_AMOUNT);
+    request.input('CURRENCY_NO', sql.Int, data.CURRENCY || 1);
+    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || 1);
+    request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
+    request.input('USER_ID', sql.Int, data.USER_ID || 1);
+    request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
+    request.input('cost_center', sql.VarChar(50), data.COST_CENTER || '');
+    request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
+    request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
+    request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
+
+    console.log('📡 Executing SP_TRN_ENTRY_SAVE for General Voucher...');
+    const result = await request.execute('dbo.SP_TRN_ENTRY_SAVE');
+    const newId = result.recordset[0]?.NEW_ID || result.recordset[0]?.UPDATED_ID || result.recordset[0]?.ID;
+    res.json({ success: true, transactionId: newId });
+  } catch (error) {
+    console.error("Failed to save general voucher entry:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+
+
 
 // --- SUPPLIER ENDPOINTS ---
 
@@ -491,11 +659,12 @@ app.get('/api/suppliers/search', async (req, res) => {
   const q = req.query.q || '';
   try {
     const pool = await getPool();
+    const nameCol = req.lang === 'ar' ? 'ACC_ANAME' : 'ACC_NAME';
     const result = await pool.request()
       .input('query', sql.VarChar, `%${q}%`)
       .query(`
-        SELECT TOP 20 ACC_NO, ACC_NAME FROM dbo.ACCOUNTS_INFO
-        WHERE ACC_TYPE = 2 AND (ACC_NO LIKE @query OR ACC_NAME LIKE @query)
+        SELECT TOP 20 ACC_NO, ${nameCol} AS ACC_NAME FROM dbo.ACCOUNTS_INFO
+        WHERE ACC_TYPE = 2 AND (ACC_NO LIKE @query OR ${nameCol} LIKE @query)
       `);
     console.log(`👤 Supplier Search: Query "${q}" returned ${result.recordset.length} results`);
     res.json(result.recordset);
@@ -717,10 +886,11 @@ app.get('/api/accounts/subclasses', async (req, res, next) => {
 
   try {
     const pool = await getPool();
+    const nameCol = req.lang === 'ar' ? 'ACC_ANAME' : 'ACC_NAME';
     const result = await pool.request()
       .input('classCode', sql.Int, classCode)
       .query(`
-        SELECT ACC_NO as acc_no, ACC_NAME as acc_name 
+        SELECT ACC_NO as acc_no, ${nameCol} as acc_name 
         FROM dbo.ACCOUNTS 
         WHERE ACC_CLASS = @classCode AND ACC_LEVEL = 2
         ORDER BY ISNULL(LEVEL1_NO, 9), ISNULL(LEVEL2_NO, 9), ISNULL(LEVEL3_NO, 9), ACC_NO
@@ -738,10 +908,11 @@ app.get('/api/accounts/header-accounts', async (req, res, next) => {
 
   try {
     const pool = await getPool();
+    const nameCol = req.lang === 'ar' ? 'ACC_ANAME' : 'ACC_NAME';
     const result = await pool.request()
       .input('subClassCode', sql.Numeric(18, 0), subClassCode)
       .query(`
-        SELECT ACC_NO as acc_no, ACC_NAME as acc_name 
+        SELECT ACC_NO as acc_no, ${nameCol} as acc_name 
         FROM dbo.ACCOUNTS 
         WHERE LEVEL2_NO = @subClassCode AND ACC_LEVEL = 3
         ORDER BY ISNULL(LEVEL1_NO, 9), ISNULL(LEVEL2_NO, 9), ISNULL(LEVEL3_NO, 9), ACC_NO
@@ -853,6 +1024,7 @@ app.get('/api/accounts/by-level', async (req, res, next) => {
 
   try {
     const pool = await getPool();
+    const nameCol = req.lang === 'ar' ? 'ACC_ANAME' : 'ACC_NAME';
     const result = await pool.request()
       .input('classCode', sql.Int, classCode)
       .input('level', sql.Int, level)
@@ -860,7 +1032,7 @@ app.get('/api/accounts/by-level', async (req, res, next) => {
         SELECT 
           ACC_LEVEL as acc_level,
           ACC_NO as acc_no, 
-          ACC_NAME as acc_name, 
+          ${nameCol} as acc_name, 
           LEVEL2_NO, 
           LEVEL3_NO,
           OB_DR_AMOUNT, OB_CR_AMOUNT, CB_DR_AMOUNT, CB_CR_AMOUNT
@@ -1610,10 +1782,10 @@ app.post('/api/sales/save', async (req, res) => {
     ADDRESS
   } = req.body;
 
-  const trnType = (req.body.TRN_TYPE !== undefined && req.body.TRN_TYPE !== null) 
-    ? req.body.TRN_TYPE 
+  const trnType = (req.body.TRN_TYPE !== undefined && req.body.TRN_TYPE !== null)
+    ? req.body.TRN_TYPE
     : (req.body.trn_type !== undefined ? req.body.trn_type : (PAYMENT_METHOD === 'Cash' ? 6 : 7));
-    
+
   console.log('🔍 DEBUG: Resolved trnType for DB:', trnType);
   const isUpdate = !!providedRecNo;
 
@@ -1881,7 +2053,7 @@ app.get('/api/sales', async (req, res) => {
   try {
     console.log(`📡 Fetching sales history (q: "${q}", field: "${searchField}", trnType: "${trnType}")...`);
     const pool = await getPool();
-    
+
     let trnFilter = '';
     if (trnType) {
       const types = trnType.split(',').map(t => parseInt(t)).filter(t => !isNaN(t));
@@ -1911,7 +2083,7 @@ app.get('/api/sales', async (req, res) => {
       LEFT JOIN dbo.CURRENCY_MASTER C ON D.CURRENCY = C.Currency_No
       WHERE 1=1 ${trnFilter}
     `;
-    
+
     const request = pool.request();
     if (q) {
       if (searchField === 'INVOICE_NO') {
@@ -1919,7 +2091,7 @@ app.get('/api/sales', async (req, res) => {
       } else {
         query += ` AND (D.INVOICE_NO LIKE @q OR D.ENAME LIKE @q OR D.ACCODE LIKE @q) `;
       }
-      
+
       request.input('q', sql.VarChar, `%${q}%`);
       request.input('start', sql.VarChar, `${q}%`);
       request.input('exact', sql.VarChar, q);
@@ -1936,7 +2108,7 @@ app.get('/api/sales', async (req, res) => {
     } else {
       query += ` ORDER BY D.CURDATE DESC `;
     }
-    
+
     const result = await request.query(query);
     res.json(result.recordset);
   } catch (error) {
@@ -1952,7 +2124,7 @@ app.get('/api/sales/:invoiceNo/address', async (req, res) => {
   try {
     const pool = await getPool();
     const request = pool.request().input('invoiceNo', sql.VarChar, invoiceNo);
-    
+
     let query = `
       SELECT 
         building_no as building,
@@ -1970,7 +2142,7 @@ app.get('/api/sales/:invoiceNo/address', async (req, res) => {
     }
 
     const result = await request.query(query);
-    
+
     if (result.recordset.length > 0) {
       res.json(result.recordset[0]);
     } else {
@@ -2028,6 +2200,21 @@ app.post('/api/translations/save', async (req, res) => {
     res.status(500).json({ error: 'Database error' });
   }
 });
+
+// --- CUSTOMER RECEIVABLE API ---
+
+app.get('/api/branches', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query('SELECT Branch_Code, Branch_Name FROM dbo.BRANCHES ORDER BY Branch_Name');
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch branches:", err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+
 
 
 app.listen(PORT, async () => {

@@ -10,17 +10,17 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="p-6 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-card-foreground">Overview</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Welcome back. Here's what's happening today.</p>
+    <div className="p-4 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1600px] mx-auto">
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-3xl font-black tracking-tight text-card-foreground uppercase tracking-tighter">Overview</h1>
+        <p className="text-[10px] md:text-sm text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest mt-1">Business Intelligence Dashboard</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-8">
         {stats.map((stat, i) => {
           const Icon = stat.icon;
           return (
-            <div key={i} className="bg-card p-6 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow">
+            <div key={i} className="bg-card p-4 md:p-6 rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">{stat.label}</p>

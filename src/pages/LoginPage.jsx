@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, User, Eye, EyeOff, LogIn, ShieldCheck, ChevronRight } from 'lucide-react';
+import { API_ENDPOINTS } from '../config';
 
 export default function LoginPage({ onLogin }) {
   const [username, setUsername] = useState('');
@@ -14,7 +15,7 @@ export default function LoginPage({ onLogin }) {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3000/api/login', {
+      const response = await fetch(API_ENDPOINTS.LOGIN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

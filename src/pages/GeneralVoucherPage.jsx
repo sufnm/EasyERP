@@ -3,18 +3,15 @@ import { API_ENDPOINTS } from '../config';
 import { Wallet, Search, CheckCircle2, FileText, Calendar, Building, CreditCard, Save, Globe, ShieldAlert, ShieldCheck, ShieldOff, Lock, Pencil, MapPin, Printer, Plus } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
-export default function CustomerReceivablePage({ setActivePage, user }) {
+export default function GeneralVoucherPage({ setActivePage, user }) {
   const { t, language } = useLanguage();
-  const [invoices, setInvoices] = useState([]);
-  const [cashAccounts, setCashAccounts] = useState([]);
+  const [voucherTypes, setVoucherTypes] = useState([]);
+  const [generalAccounts, setGeneralAccounts] = useState([]);
   const [costCenters, setCostCenters] = useState([]);
   const [currencies, setCurrencies] = useState([]);
-  const [accountsInfo, setAccountsInfo] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savedTransactions, setSavedTransactions] = useState([]);
-  const [returnInvoice, setReturnInvoice] = useState(false);
-  const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeEditId, setActiveEditId] = useState(null);
   const [lastSavedId, setLastSavedId] = useState(null);
@@ -24,7 +21,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
     ID: null,
     ENTRY_DATE: new Date().toISOString().split('T')[0],
     DOC_NO: '',
-    DOC_TRN_TYPE: 6,
+    DOC_TRN_TYPE: '',
     PAY_FROM_ACC: '',
     PAY_TO_ACC: '',
     DESCRIPTION: '',
@@ -40,31 +37,27 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
     paymentAmount: ''
   });
 
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
-
   useEffect(() => {
     const fetchData = async () => {
       try {
         const username = user?.username || 'admin';
         const headers = { 'Accept-Language': language };
         
-        const [invoicesRes, cashAccountsRes, costCentersRes, currenciesRes, privRes, accountsInfoRes, historyRes, branchesRes] = await Promise.all([
-          fetch(API_ENDPOINTS.RECEIVABLE_INVOICES(returnInvoice), { headers }).then(res => res.json()),
-          fetch(API_ENDPOINTS.RECEIVABLE_CASH_ACCOUNTS, { headers }).then(res => res.json()),
+        const [typesRes, accountsRes, costCentersRes, currenciesRes, privRes, historyRes, branchesRes] = await Promise.all([
+          fetch(API_ENDPOINTS.GENERAL_VOUCHER_TYPES, { headers }).then(res => res.json()),
+          fetch(API_ENDPOINTS.GENERAL_VOUCHER_ACCOUNTS, { headers }).then(res => res.json()),
           fetch(API_ENDPOINTS.RECEIVABLE_COST_CENTERS, { headers }).then(res => res.json()),
           fetch(API_ENDPOINTS.RECEIVABLE_CURRENCIES, { headers }).then(res => res.json()),
-          fetch(`${API_ENDPOINTS.BASE_URL}/api/privileges/100?username=${encodeURIComponent(username)}`, { headers }).then(res => res.json()),
-          fetch(API_ENDPOINTS.RECEIVABLE_ACCOUNTS_INFO, { headers }).then(res => res.json()),
-          fetch(API_ENDPOINTS.RECEIVABLE_HISTORY, { headers }).then(res => res.json()),
+          fetch(`${API_ENDPOINTS.BASE_URL}/api/privileges/101?username=${encodeURIComponent(username)}`, { headers }).then(res => res.json()),
+          fetch(API_ENDPOINTS.GENERAL_VOUCHER_HISTORY, { headers }).then(res => res.json()),
           fetch(API_ENDPOINTS.BRANCHES, { headers }).then(res => res.json())
         ]);
 
-        setInvoices(invoicesRes || []);
-        setCashAccounts(cashAccountsRes || []);
+        setVoucherTypes(typesRes || []);
+        setGeneralAccounts(accountsRes || []);
         setCostCenters(costCentersRes || []);
         setCurrencies(currenciesRes || []);
         setPrivileges(privRes);
-        setAccountsInfo(accountsInfoRes || []);
         setSavedTransactions(historyRes || []);
         setBranches(branchesRes || []);
         setLoading(false);
@@ -74,7 +67,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
       }
     };
     fetchData();
-  }, [user, returnInvoice, language]);
+  }, [user, language]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -85,34 +78,16 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
       
       // Auto-fill account names for labels if IDs change
       if (name === 'PAY_FROM_ACC') {
-        const acc = accountsInfo.find(a => a.ACC_NO.toString() === value);
-        newData.ACC_NAME1 = acc ? acc.ACC_NAME : '';
+        const acc = generalAccounts.find(a => a.acc_no.toString() === value);
+        newData.ACC_NAME1 = acc ? acc.acc_name : '';
       }
       if (name === 'PAY_TO_ACC') {
-        const acc = cashAccounts.find(a => a.ACC_NO.toString() === value);
-        newData.ACC_NAME2 = acc ? acc.ACC_NAME : '';
+        const acc = generalAccounts.find(a => a.acc_no.toString() === value);
+        newData.ACC_NAME2 = acc ? acc.acc_name : '';
       }
       if (name === 'CURRENCY') {
         const curr = currencies.find(c => c.Currency_No.toString() === value);
         newData.CURRENCY_RATE = curr ? curr.Currency_Rate.toString() : '1';
-      }
-
-      // Special handling for invoice dropdown
-      if (name === 'DOC_NO') {
-        const inv = invoices.find(i => i.INVOICE_NO === value);
-        if (inv) {
-          setSelectedInvoice(inv);
-          newData.DOC_TRN_TYPE = inv.TRN_TYPE;
-          newData.paymentAmount = inv.BALANCE_AMT.toString();
-          newData.PAY_FROM_ACC = inv.ACCODE.toString();
-          const acc = accountsInfo.find(a => a.ACC_NO.toString() === inv.ACCODE.toString());
-          newData.ACC_NAME1 = acc ? acc.ACC_NAME : inv.ENAME;
-        } else {
-          setSelectedInvoice(null);
-          newData.paymentAmount = '';
-          newData.PAY_FROM_ACC = '';
-          newData.ACC_NAME1 = '';
-        }
       }
       
       return newData;
@@ -124,7 +99,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
       ID: null,
       ENTRY_DATE: new Date().toISOString().split('T')[0],
       DOC_NO: '',
-      DOC_TRN_TYPE: 6,
+      DOC_TRN_TYPE: '',
       PAY_FROM_ACC: '',
       PAY_TO_ACC: '',
       DESCRIPTION: '',
@@ -139,7 +114,6 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
       ACC_NAME2: '',
       paymentAmount: ''
     });
-    setSelectedInvoice(null);
     setActiveEditId(null);
   };
 
@@ -153,11 +127,10 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
       const payload = {
         ...formData,
         PAY_AMOUNT: parseFloat(formData.paymentAmount),
-        USER_ID: user?.userid || 1,
-        RETURN_INVOICE: returnInvoice
+        USER_ID: user?.userid || 1
       };
 
-      const response = await fetch(API_ENDPOINTS.RECEIVABLE_SAVE, {
+      const response = await fetch(API_ENDPOINTS.GENERAL_VOUCHER_SAVE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -167,7 +140,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
       if (resData.success) {
         setLastSavedId(resData.transactionId);
         // Refresh history
-        const historyRes = await fetch(API_ENDPOINTS.RECEIVABLE_HISTORY).then(r => r.json());
+        const historyRes = await fetch(API_ENDPOINTS.GENERAL_VOUCHER_HISTORY).then(r => r.json());
         setSavedTransactions(historyRes || []);
         alert(activeEditId ? 'Transaction updated successfully!' : 'Transaction saved successfully!');
         if (!activeEditId) resetForm();
@@ -187,8 +160,8 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
     setFormData({
       ID: tx.ID,
       ENTRY_DATE: tx.ENTRY_DATE.split('T')[0],
-      DOC_NO: tx.DOC_NO,
-      DOC_TRN_TYPE: 6,
+      DOC_NO: tx.DOC_NO || '',
+      DOC_TRN_TYPE: tx.DOC_TRN_TYPE || '',
       PAY_FROM_ACC: tx.PAY_FROM_ACC.toString(),
       PAY_TO_ACC: tx.PAY_TO_ACC.toString(),
       DESCRIPTION: tx.DESCRIPTION || '',
@@ -203,7 +176,6 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
       ACC_NAME1: tx['FROM ACC'] || '',
       ACC_NAME2: tx.TO_ACC || ''
     });
-    setReturnInvoice(tx.RETURN_INVOICE);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -217,7 +189,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Payment Voucher - ${tx.DOC_NO}</title>
+          <title>General Voucher - ${tx.DOC_NO}</title>
           <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; line-height: 1.6; }
             .header { text-align: center; border-bottom: 3px solid #4f46e5; margin-bottom: 30px; padding-bottom: 15px; }
@@ -236,7 +208,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
         <body>
           <div class="header">
             <h1>EazyERP Solutions</h1>
-            <p>PAYMENT VOUCHER</p>
+            <p>GENERAL VOUCHER</p>
           </div>
           <div class="voucher-info">
             <div>
@@ -244,20 +216,20 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
               <p><strong>Date:</strong> ${new Date(tx.ENTRY_DATE).toLocaleDateString()}</p>
             </div>
             <div>
-              <p><strong>Document No:</strong> ${tx.DOC_NO}</p>
+              <p><strong>Document No:</strong> ${tx.DOC_NO || 'N/A'}</p>
               <p><strong>Branch:</strong> ${tx.BRN_CODE}</p>
             </div>
           </div>
           <table class="details">
-            <tr><th>Paid From (Account)</th><td>${tx['FROM ACC']} (${tx.PAY_FROM_ACC})</td></tr>
-            <tr><th>Deposited To (Account)</th><td>${tx.TO_ACC} (${tx.PAY_TO_ACC})</td></tr>
+            <tr><th>From Account</th><td>${tx['FROM ACC']} (${tx.PAY_FROM_ACC})</td></tr>
+            <tr><th>To Account</th><td>${tx.TO_ACC} (${tx.PAY_TO_ACC})</td></tr>
             <tr><th>Description / Narration</th><td>${tx.DESCRIPTION || 'N/A'}</td></tr>
             <tr><th>Reference No</th><td>${tx.REF_NO || 'N/A'}</td></tr>
             <tr><th>Cost Center</th><td>${tx.COST_CENTER || 'Main'}</td></tr>
             <tr><th>Currency</th><td>${tx.CURRENCY === 1 ? 'SAR' : 'USD'} (Rate: ${tx.CURRENCY_RATE})</td></tr>
           </table>
           <div style="text-align: right; margin-top: 20px;">
-            <p style="margin-bottom: 5px; font-weight: bold; color: #666;">Total Amount Received:</p>
+            <p style="margin-bottom: 5px; font-weight: bold; color: #666;">Total Amount:</p>
             <div class="amount-box">SAR ${Number(tx.PAY_AMOUNT).toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
           </div>
           <div class="footer">
@@ -292,7 +264,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
             <Lock size={32} strokeWidth={2.5} />
           </div>
           <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tighter">Access Denied</h2>
-          <p className="text-zinc-500 font-medium text-sm">You do not have permission to view Customer Receivable.</p>
+          <p className="text-zinc-500 font-medium text-sm">You do not have permission to view General Voucher.</p>
           <button 
             onClick={() => setActivePage('dashboard')}
             className="mt-4 px-6 py-2 bg-zinc-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-black transition-all active:scale-95"
@@ -305,7 +277,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
   }
 
   return (
-    <div className={`flex flex-col h-full p-4 bg-zinc-50/30 ${language === 'ar' ? 'rtl font-arabic' : ''}`}>
+    <div className={`flex flex-col h-full p-4 bg-zinc-50/30 max-w-5xl mx-auto w-full ${language === 'ar' ? 'rtl font-arabic' : ''}`}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div>
@@ -313,31 +285,17 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
             <div className="p-1.5 bg-indigo-600 rounded-lg text-white">
               <Wallet size={20} strokeWidth={2.5} />
             </div>
-            {t('customerReceivable')}
+            {t('generalVoucherEntry') || 'General Voucher'}
           </h1>
           <p className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest mt-1">
-            {activeEditId ? `Editing Transaction #${activeEditId}` : 'Financial Inflow Management'}
+            {activeEditId ? `Editing Transaction #${activeEditId}` : 'Financial Transfer Management'}
           </p>
         </div>
         
         <div className="flex items-center gap-2">
-          <div className="flex bg-white rounded-lg border border-border p-0.5 shadow-sm">
-            <button 
-              onClick={() => { setReturnInvoice(false); resetForm(); }}
-              className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${!returnInvoice ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-            >
-              Normal
-            </button>
-            <button 
-              onClick={() => { setReturnInvoice(true); resetForm(); }}
-              className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${returnInvoice ? 'bg-rose-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-            >
-              Return
-            </button>
-          </div>
           <button 
             onClick={resetForm}
-            className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+            className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-border"
             title="New Transaction"
           >
             <Plus size={20} />
@@ -345,9 +303,9 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {/* Entry Form */}
-        <div className="lg:col-span-3 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
           <div className="px-4 py-3 border-b border-border bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
             <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-1.5">
               <Pencil size={13} className="text-indigo-500" />
@@ -376,19 +334,20 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('invoiceNo')} (Combo List)</label>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Voucher Type</label>
                 <div className="relative">
                   <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
                   <select
-                    name="DOC_NO"
-                    value={formData.DOC_NO}
+                    name="DOC_TRN_TYPE"
+                    value={formData.DOC_TRN_TYPE}
                     onChange={handleInputChange}
                     className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-black text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    required
                   >
-                    <option value="">-- {t('selectInvoice')} --</option>
-                    {invoices.map(inv => (
-                      <option key={inv.INVOICE_NO} value={inv.INVOICE_NO}>
-                        {inv.INVOICE_NO} - {inv.ENAME} (SAR {Number(inv.BALANCE_AMT).toFixed(2)})
+                    <option value="">-- Select Type --</option>
+                    {voucherTypes.map(vt => (
+                      <option key={vt.id} value={vt.id}>
+                        {language === 'ar' ? (vt.type_aname || vt.type_name) : vt.type_name}
                       </option>
                     ))}
                   </select>
@@ -406,8 +365,8 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
                     required
                   >
                     <option value="">-- {t('selectAccount')} --</option>
-                    {accountsInfo.map(acc => (
-                      <option key={acc.ACC_NO} value={acc.ACC_NO.toString()}>{acc.ACC_NO} - {acc.ACC_NAME}</option>
+                    {generalAccounts.map(acc => (
+                      <option key={acc.acc_no} value={acc.acc_no.toString()}>{acc.acc_no} - {language === 'ar' ? (acc.acc_aname || acc.acc_name) : acc.acc_name}</option>
                     ))}
                   </select>
                 </div>
@@ -422,10 +381,24 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
                     required
                   >
                     <option value="">-- {t('selectAccount')} --</option>
-                    {cashAccounts.map(acc => (
-                      <option key={acc.ACC_NO} value={acc.ACC_NO.toString()}>{acc.ACC_NO} - {acc.ACC_NAME}</option>
+                    {generalAccounts.map(acc => (
+                      <option key={acc.acc_no} value={acc.acc_no.toString()}>{acc.acc_no} - {language === 'ar' ? (acc.acc_aname || acc.acc_name) : acc.acc_name}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+              
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Document No</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="DOC_NO"
+                    value={formData.DOC_NO}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-black text-zinc-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    placeholder="Auto or Manual Doc No"
+                  />
                 </div>
               </div>
 
@@ -544,75 +517,6 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
             </div>
           </form>
         </div>
-
-        {/* Selected Invoice Details Sidebar */}
-        <div className="lg:col-span-1 bg-card rounded-xl border border-border shadow-sm p-4 h-fit">
-           <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-1.5 mb-3">
-             <FileText size={13} className="text-indigo-500" />
-             {t('invoiceInfo')}
-           </h3>
-           {!selectedInvoice ? (
-             <div className="text-center py-6 text-zinc-400 text-xs italic">{t('noInvoiceSelected')}</div>
-           ) : (
-             <div className="space-y-3">
-               <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100">
-                  <p className="text-[10px] font-bold text-indigo-600 uppercase">{t('customer')}</p>
-                  <p className="text-xs font-black text-zinc-800 dark:text-zinc-200">{selectedInvoice.ENAME}</p>
-               </div>
-               <div className="grid grid-cols-1 gap-2">
-                  <div className="flex justify-between border-b border-dashed border-zinc-200 pb-1">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">{t('invoiceNo')}</span>
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{selectedInvoice.INVOICE_NO}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-dashed border-zinc-200 pb-1">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">Net Amount</span>
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{Number(selectedInvoice.NET_AMOUNT || 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-dashed border-zinc-200 pb-1">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">Paid Amount</span>
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{Number((selectedInvoice.CASH_PAID || 0) + (selectedInvoice.OTHER_PAID || 0)).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-dashed border-zinc-200 pb-1">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">{t('balanceDue')}</span>
-                    <span className="text-xs font-black text-rose-600">{Number(selectedInvoice.BALANCE_AMT || 0).toFixed(2)}</span>
-                  </div>
-               </div>
-
-               {/* SPECIFIC INVOICE HISTORY */}
-               {savedTransactions.filter(tx => tx.DOC_NO === selectedInvoice.INVOICE_NO).length > 0 && (
-                 <div className="mt-4 pt-3 border-t border-zinc-100">
-                    <h4 className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                      <CheckCircle2 size={10} className="text-emerald-500" />
-                      Invoice Payment History
-                    </h4>
-                    <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
-                      {savedTransactions
-                        .filter(tx => tx.DOC_NO === selectedInvoice.INVOICE_NO)
-                        .map((tx, idx) => (
-                          <div key={idx} className="flex justify-between items-center text-[9px] p-1.5 bg-zinc-50 rounded border border-zinc-100/50">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-zinc-700">{new Date(tx.ENTRY_DATE).toLocaleDateString()}</span>
-                              <span className="text-[8px] text-zinc-400 truncate w-24">{tx['FROM ACC']}</span>
-                            </div>
-                            <span className="font-black text-emerald-600">SAR {Number(tx.PAY_AMOUNT).toFixed(2)}</span>
-                          </div>
-                        ))}
-                    </div>
-                 </div>
-               )}
-
-               {/* Overpayment Warning */}
-               {formData.paymentAmount && Number(formData.paymentAmount) > Number(selectedInvoice.BALANCE_AMT) && (
-                 <div className="mt-3 p-2 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg flex items-start gap-2 animate-pulse">
-                   <ShieldAlert size={14} className="text-rose-500 mt-0.5" />
-                   <p className="text-[10px] font-bold text-rose-600 leading-tight">
-                     WARNING: Entered amount (${formData.paymentAmount}) is greater than the remaining balance (${Number(selectedInvoice.BALANCE_AMT).toFixed(2)}).
-                   </p>
-                 </div>
-               )}
-             </div>
-           )}
-        </div>
       </div>
 
       {/* Grid Table */}
@@ -634,7 +538,6 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
                 <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">To Acc</th>
                 <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider text-right">{t('paidAmount')}</th>
                 <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Description</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Return</th>
                 <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider text-center">Action</th>
               </tr>
             </thead>
@@ -654,13 +557,6 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
                   </td>
                   <td className="px-4 py-2 text-right font-black text-emerald-600">{Number(tx.PAY_AMOUNT).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                   <td className="px-4 py-2 text-zinc-500 truncate max-w-[150px]">{tx.DESCRIPTION}</td>
-                  <td className="px-4 py-2">
-                    {tx.RETURN_INVOICE ? (
-                      <span className="px-2 py-0.5 bg-rose-100 text-rose-600 rounded text-[9px] font-black uppercase tracking-tighter">Return</span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded text-[9px] font-black uppercase tracking-tighter">Normal</span>
-                    )}
-                  </td>
                   <td className="px-4 py-2 text-center">
                     <button 
                       onClick={() => handleEdit(tx)}
@@ -673,7 +569,7 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
               ))}
               {savedTransactions.length === 0 && (
                 <tr>
-                  <td colSpan="9" className="px-4 py-10 text-center text-zinc-400 italic">No transactions found for this period</td>
+                  <td colSpan="8" className="px-4 py-10 text-center text-zinc-400 italic">No transactions found for this period</td>
                 </tr>
               )}
             </tbody>

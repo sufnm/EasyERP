@@ -1,6 +1,8 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export const API_ENDPOINTS = {
+  BASE_URL: API_BASE_URL,
+  LOGIN: `${API_BASE_URL}/api/login`,
   HEALTH: `${API_BASE_URL}/api/health`,
   ITEM_SEARCH: `${API_BASE_URL}/api/items/search`,
   ITEM_CACHE: `${API_BASE_URL}/api/items/cache`,
@@ -43,6 +45,22 @@ export const API_ENDPOINTS = {
   SCREENS: `${API_BASE_URL}/api/screens`,
   CURRENCY_LIST: `${API_BASE_URL}/api/currencies/list`,
   INVOICE_ADDRESS: (invoiceNo, trnType) => `${API_BASE_URL}/api/sales/${invoiceNo}/address${trnType ? `?trnType=${trnType}` : ''}`,
+  RECEIVABLE_HISTORY: `${API_BASE_URL}/api/receivable/history`,
+  RECEIVABLE_INVOICES: (isReturn) => `${API_BASE_URL}/api/receivable/invoices?returnInvoice=${isReturn}`,
+  RECEIVABLE_CASH_ACCOUNTS: `${API_BASE_URL}/api/receivable/cash-accounts`,
+  RECEIVABLE_COST_CENTERS: `${API_BASE_URL}/api/receivable/cost-centers`,
+  RECEIVABLE_CURRENCIES: `${API_BASE_URL}/api/receivable/currencies`,
+  RECEIVABLE_ACCOUNTS_INFO: `${API_BASE_URL}/api/receivable/accounts-info`,
+  RECEIVABLE_SAVE: `${API_BASE_URL}/api/receivable/save`,
+  // Payable
+  PAYABLE_HISTORY: `${API_BASE_URL}/api/payable/history`,
+  PAYABLE_INVOICES: (isReturn) => `${API_BASE_URL}/api/payable/invoices?returnInvoice=${isReturn}`,
+  PAYABLE_SAVE: `${API_BASE_URL}/api/payable/save`,
+  // General Voucher
+  GENERAL_VOUCHER_TYPES: `${API_BASE_URL}/api/general-voucher/types`,
+  GENERAL_VOUCHER_ACCOUNTS: `${API_BASE_URL}/api/general-voucher/accounts`,
+  GENERAL_VOUCHER_HISTORY: `${API_BASE_URL}/api/general-voucher/history`,
+  GENERAL_VOUCHER_SAVE: `${API_BASE_URL}/api/general-voucher/save`,
 };
 
 export default API_BASE_URL;

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
 import { Search, Filter, MoreVertical, Plus, ArrowUpRight, ArrowDownRight, CreditCard, Edit } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
+  const { language } = useLanguage();
   const { cachedAccounts, isReady } = useCache();
   const [searchTerm, setSearchTerm] = useState('');
   const [accounts, setAccounts] = useState([]);
@@ -23,16 +25,17 @@ export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(API_ENDPOINTS.ACCOUNT_CLASSES)
+    const headers = { 'Accept-Language': language };
+    fetch(API_ENDPOINTS.ACCOUNT_CLASSES, { headers })
       .then(res => res.json())
       .then(data => setClasses(data))
       .catch(err => console.error('❌ Classes fetch error:', err));
 
-    fetch(API_ENDPOINTS.ACCOUNT_HEADER_TYPES)
+    fetch(API_ENDPOINTS.ACCOUNT_HEADER_TYPES, { headers })
       .then(res => res.json())
       .then(data => setHeaderTypes(data))
       .catch(err => console.error('❌ Header types fetch error:', err));
-  }, []);
+  }, [language]);
 
   // Fetch accounts for the MAIN TABLE based on Type and Class
   useEffect(() => {
@@ -48,7 +51,7 @@ export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
       url = API_ENDPOINTS.ACCOUNT_BY_LEVEL(accountClass, targetLevel);
     }
 
-    fetch(url)
+    fetch(url, { headers: { 'Accept-Language': language } })
       .then(res => res.json())
       .then(data => {
         setAccounts(data.map(acc => ({
@@ -75,7 +78,7 @@ export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
         console.error('❌ Table fetch error:', err);
         setLoading(false);
       });
-  }, [accountClass, detailType]);
+  }, [accountClass, detailType, language]);
 
   // Fetch sub-classes when accountClass changes (for the Filter dropdown)
   useEffect(() => {
@@ -83,11 +86,11 @@ export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
       ? `${API_ENDPOINTS.ACCOUNT_CACHE}?level=2`
       : API_ENDPOINTS.ACCOUNT_SUBCLASSES(accountClass);
 
-    fetch(url)
+    fetch(url, { headers: { 'Accept-Language': language } })
       .then(res => res.json())
       .then(data => setSubClasses(data))
       .catch(err => console.error('❌ Sub-classes fetch error:', err));
-  }, [accountClass]);
+  }, [accountClass, language]);
 
   // Fetch Header Accounts when subClass changes
   useEffect(() => {
@@ -95,12 +98,12 @@ export default function ChartOfAccountsPage({ setActivePage, params = {} }) {
       setHeaderAccounts([]);
       setHeaderAcc('All');
     } else {
-      fetch(API_ENDPOINTS.ACCOUNT_HEADER_ACCOUNTS(subClass))
+      fetch(API_ENDPOINTS.ACCOUNT_HEADER_ACCOUNTS(subClass), { headers: { 'Accept-Language': language } })
         .then(res => res.json())
         .then(data => setHeaderAccounts(data))
         .catch(err => console.error('❌ Header accounts fetch error:', err));
     }
-  }, [subClass]);
+  }, [subClass, language]);
 
   const toggleStatus = (id) => {
     setAccounts(prev => prev.map(acc =>
