@@ -73,6 +73,7 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
       subItems: [
         { id: 'purchase', label: t('purchase') },
         { id: 'purchase-return', label: t('purchaseReturn') },
+        { id: 'purchase-history', label: 'Purchase History' },
         { id: 'item-receivable', label: t('Item Receivable') },
         { id: 'purchase-expense', label: t('Purchase Expense') }
       ]

@@ -6,7 +6,9 @@ const CacheContext = createContext();
 export function CacheProvider({ children }) {
   const [cachedItems, setCachedItems] = useState([]);
   const [cachedCustomers, setCachedCustomers] = useState([]);
+  const [cachedSuppliers, setCachedSuppliers] = useState([]);
   const [cachedSales, setCachedSales] = useState([]);
+  const [cachedPurchases, setCachedPurchases] = useState([]);
   const [cachedAccounts, setCachedAccounts] = useState([]);
   const [cachedUnits, setCachedUnits] = useState([]);
   const [addressCache, setAddressCache] = useState({}); // { accNo: info }
@@ -47,10 +49,12 @@ export function CacheProvider({ children }) {
         }
       };
 
-      const [items, customers, sales, accounts, currencyList, units] = await Promise.all([
+      const [items, customers, suppliers, sales, purchases, accounts, currencyList, units] = await Promise.all([
         fetchWithLog('Items', API_ENDPOINTS.ITEM_CACHE),
         fetchWithLog('Customers', API_ENDPOINTS.CUSTOMER_CACHE),
+        fetchWithLog('Suppliers', API_ENDPOINTS.SUPPLIER_CACHE),
         fetchWithLog('Sales', API_ENDPOINTS.SALES_HISTORY),
+        fetchWithLog('Purchases', API_ENDPOINTS.PURCHASE_HISTORY),
         fetchWithLog('Accounts', API_ENDPOINTS.ACCOUNT_CACHE),
         fetchWithLog('Currencies', API_ENDPOINTS.CURRENCY_LIST),
         fetchWithLog('Units', API_ENDPOINTS.UNIT_MASTER)
@@ -58,7 +62,9 @@ export function CacheProvider({ children }) {
 
       setCachedItems(items);
       setCachedCustomers(customers);
+      setCachedSuppliers(suppliers);
       setCachedSales(sales);
+      setCachedPurchases(purchases);
       setCachedAccounts(accounts);
       setCurrencies(currencyList);
       setCachedUnits(units);
@@ -91,7 +97,8 @@ export function CacheProvider({ children }) {
     return cachedItems
       .filter(item => 
         (item.BARCODE && String(item.BARCODE).toLowerCase().includes(q)) || 
-        (item.DESCRIPTION && String(item.DESCRIPTION).toLowerCase().includes(q))
+        (item.DESCRIPTION && String(item.DESCRIPTION).toLowerCase().includes(q)) ||
+        (item.ITEM_CODE && String(item.ITEM_CODE).toLowerCase().includes(q))
       )
       .slice(0, 15);
   };
@@ -102,6 +109,16 @@ export function CacheProvider({ children }) {
       .filter(c => 
         (c.ACC_NO && String(c.ACC_NO).toLowerCase().includes(q)) || 
         (c.ACC_NAME && c.ACC_NAME.toLowerCase().includes(q))
+      )
+      .slice(0, 15);
+  };
+
+  const searchSuppliers = (query) => {
+    const q = (query || '').toLowerCase();
+    return cachedSuppliers
+      .filter(s => 
+        (s.ACC_NO && String(s.ACC_NO).toLowerCase().includes(q)) || 
+        (s.ACC_NAME && s.ACC_NAME.toLowerCase().includes(q))
       )
       .slice(0, 15);
   };
@@ -123,6 +140,8 @@ export function CacheProvider({ children }) {
       error, 
       searchItems, 
       searchCustomers,
+      searchSuppliers,
+      cachedPurchases,
       getAddressFromCache,
       updateAddressCache,
       taxIncluded,

@@ -181,7 +181,7 @@ app.get('/api/health', (req, res) => {
 });
 
 
-// Endpoint to search items in dbo.BARCODE
+// Endpoint to search items with comprehensive data for Sales & Purchase
 app.get('/api/items/search', async (req, res) => {
   const { q } = req.query;
   if (!q) return res.status(400).json({ error: 'Search query is required' });
@@ -192,14 +192,18 @@ app.get('/api/items/search', async (req, res) => {
       .input('query', sql.VarChar, `%${q}%`)
       .query(`
         SELECT TOP 20 
-          B.BARCODE, 
-          B.SALE_PRICE, 
-          B.DESCRIPTION, 
+          H.ITEM_CODE, 
+          H.DESCRIPTION, 
+          B.BARCODE,
           B.UNIT,
-          ISNULL(H.VAT_PERCENT, 0) as VAT_PERCENT 
-        FROM dbo.BARCODE B
-        LEFT JOIN dbo.HD_ITEMMASTER H ON B.ITEM_CODE = H.ITEM_CODE
-        WHERE B.BARCODE LIKE @query OR B.DESCRIPTION LIKE @query
+          ISNULL(H.VAT_PERCENT, 0) as VAT_PERCENT,
+          ISNULL(S.AVG_PUR_PRICE, 0) as AVG_PUR_PRICE,
+          ISNULL(S.SALE_PRICE, B.SALE_PRICE) as SALE_PRICE,
+          ISNULL(S.RETAIL_PRICE, 0) as RETAIL_PRICE
+        FROM dbo.HD_ITEMMASTER H
+        LEFT JOIN dbo.BARCODE B ON H.ITEM_CODE = B.ITEM_CODE
+        LEFT JOIN dbo.STOCK_MASTER S ON H.ITEM_CODE = S.ITEM_CODE
+        WHERE H.ITEM_CODE LIKE @query OR H.DESCRIPTION LIKE @query OR B.BARCODE LIKE @query
       `);
 
     console.log(`🔍 Item Search: Query "${q}" returned ${result.recordset.length} results`);
@@ -207,6 +211,32 @@ app.get('/api/items/search', async (req, res) => {
   } catch (error) {
     console.error("Item search failed:", error);
     res.status(500).json({ error: 'Database search error', details: error.message });
+  }
+});
+
+// Cache endpoint for items
+app.get('/api/items/cache', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        H.ITEM_CODE, 
+        H.DESCRIPTION, 
+        B.BARCODE,
+        B.UNIT,
+        ISNULL(H.VAT_PERCENT, 0) as VAT_PERCENT,
+        ISNULL(S.AVG_PUR_PRICE, 0) as AVG_PUR_PRICE,
+        ISNULL(S.SALE_PRICE, B.SALE_PRICE) as SALE_PRICE,
+        ISNULL(S.RETAIL_PRICE, 0) as RETAIL_PRICE
+      FROM dbo.HD_ITEMMASTER H
+      LEFT JOIN dbo.BARCODE B ON H.ITEM_CODE = B.ITEM_CODE
+      LEFT JOIN dbo.STOCK_MASTER S ON H.ITEM_CODE = S.ITEM_CODE
+    `);
+    console.log(`📦 Item Cache: Loaded ${result.recordset.length} items.`);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch items cache:", error);
+    res.status(500).json({ error: 'Failed to fetch items for cache' });
   }
 });
 
@@ -776,6 +806,308 @@ app.get('/api/options/purchase-policy', async (req, res) => {
     res.status(500).json({ error: 'Database error' });
   }
 });
+
+// Get Next Purchase Invoice Number
+app.get('/api/purchases/next', async (req, res) => {
+  res.json({ nextInvoice: 'AUTO' });
+});
+
+// Save Purchase
+app.post('/api/purchases/save', async (req, res) => {
+  const {
+    REC_NO: providedRecNo,
+    ACCODE, ENAME, G_TOTAL, DISC_AMT,
+    NET_AMOUNT, VAT_AMOUNT, VAT_NUMBER, ROWS, PAYMENT_METHOD,
+    TAX_INCLUDED = true,
+    CASH_PAID = 0,
+    OTHER_PAID = 0,
+    USERNAME,
+    WR_CODE = 1,
+    CURRENCY,
+    CURRENCY_RATE,
+    TRN_TYPE,
+    REF_INV_NO,
+    ADDRESS
+  } = req.body;
+
+  const trnType = (req.body.TRN_TYPE !== undefined && req.body.TRN_TYPE !== null)
+    ? req.body.TRN_TYPE
+    : (PAYMENT_METHOD === 'Cash' ? 1 : 2);
+
+  console.log('🔍 DEBUG: Resolved Purchase trnType for DB:', trnType);
+  const isUpdate = !!providedRecNo;
+
+  try {
+    console.log(`💾 ${isUpdate ? 'Updating' : 'Starting'} purchase save for ${ENAME || 'Walk-in Supplier'}...`);
+    const pool = await getPool();
+
+    let cashAcc = null;
+    if (USERNAME) {
+      const userRes = await pool.request()
+        .input('uname', sql.VarChar, USERNAME)
+        .query('SELECT SALE_CASH_AC FROM dbo.UserInfo WHERE UserName = @uname');
+      cashAcc = userRes.recordset[0]?.SALE_CASH_AC;
+    }
+
+    if (!cashAcc) {
+      const optRes = await pool.request()
+        .query('SELECT DEF_CASH_AC FROM dbo.AC_OPTIONS WHERE ID = 1');
+      cashAcc = optRes.recordset[0]?.DEF_CASH_AC;
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      let REC_NO, INVOICE_NO;
+
+      if (isUpdate) {
+        REC_NO = providedRecNo;
+        const headerRequest = new sql.Request(transaction);
+        const headerResult = await headerRequest
+          .input('recNo', sql.Numeric(18, 0), REC_NO)
+          .input('accode', sql.VarChar, String(ACCODE || ''))
+          .input('ename', sql.VarChar, String(ENAME || ''))
+          .input('gTotal', sql.Decimal(18, 2), G_TOTAL || 0)
+          .input('discAmt', sql.Decimal(18, 2), DISC_AMT || 0)
+          .input('netAmount', sql.Decimal(18, 2), NET_AMOUNT || 0)
+          .input('vatAmount', sql.Decimal(18, 2), VAT_AMOUNT || 0)
+          .input('cashPaid', sql.Decimal(18, 2), CASH_PAID || 0)
+          .input('otherPaid', sql.Decimal(18, 2), OTHER_PAID || 0)
+          .input('cashAcc', sql.VarChar, String(cashAcc || ''))
+          .input('wrCode', sql.SmallInt, Number(WR_CODE))
+          .input('currency', sql.Int, CURRENCY || 1)
+          .input('trnType', sql.Int, trnType)
+          .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
+          .input('vatNumber', sql.VarChar, String(VAT_NUMBER || ''))
+          .query(`
+            UPDATE dbo.DATA_ENTRY_WEB SET
+              ACCODE = @accode, ENAME = @ename, G_TOTAL = @gTotal, DISC_AMT = @discAmt,
+              NET_AMOUNT = @netAmount, VAT_AMOUNT = @vatAmount, CASH_PAID = @cashPaid,
+              OTHER_PAID = @otherPaid, CASH_ACC = @cashAcc, WR_CODE = @wrCode,
+              CURRENCY = @currency, TRN_TYPE = @trnType, REF_NO = @refNo,
+              VAT_NUMBER = @vatNumber
+            WHERE REC_NO = @recNo;
+
+            SELECT INVOICE_NO, REC_NO FROM dbo.DATA_ENTRY_WEB WHERE REC_NO = @recNo;
+          `);
+
+        if (!headerResult.recordset || headerResult.recordset.length === 0) {
+          throw new Error('Could not find the record to update.');
+        }
+        INVOICE_NO = headerResult.recordset[0].INVOICE_NO;
+
+        const deleteRequest = new sql.Request(transaction);
+        await deleteRequest
+          .input('recNo', sql.Numeric(18, 0), REC_NO)
+          .query('DELETE FROM dbo.GRID_ITEM WHERE REC_NO = @recNo');
+
+      } else {
+        const headerRequest = new sql.Request(transaction);
+        const headerResult = await headerRequest
+          .input('accode', sql.VarChar, String(ACCODE || ''))
+          .input('ename', sql.VarChar, String(ENAME || ''))
+          .input('gTotal', sql.Decimal(18, 2), G_TOTAL || 0)
+          .input('discAmt', sql.Decimal(18, 2), DISC_AMT || 0)
+          .input('netAmount', sql.Decimal(18, 2), NET_AMOUNT || 0)
+          .input('vatAmount', sql.Decimal(18, 2), VAT_AMOUNT || 0)
+          .input('cashPaid', sql.Decimal(18, 2), CASH_PAID || 0)
+          .input('otherPaid', sql.Decimal(18, 2), OTHER_PAID || 0)
+          .input('cashAcc', sql.VarChar, String(cashAcc || ''))
+          .input('brnCode', sql.Int, 1)
+          .input('trnType', sql.Int, trnType)
+          .input('orgDup', sql.Int, 1)
+          .input('wrCode', sql.SmallInt, Number(WR_CODE))
+          .input('currency', sql.Int, CURRENCY || 1)
+          .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
+          .input('vatNumber', sql.VarChar, String(VAT_NUMBER || ''))
+          .query(`
+              INSERT INTO dbo.DATA_ENTRY_WEB (
+                ACCODE, ENAME, G_TOTAL, DISC_AMT, NET_AMOUNT, VAT_AMOUNT,
+                CASH_PAID, OTHER_PAID, CASH_ACC,
+                BRN_CODE, TRN_TYPE, ORG_DUP, WR_CODE, CURDATE,
+                CURRENCY, REF_NO, VAT_NUMBER
+              )
+              VALUES (
+                @accode, @ename, @gTotal, @discAmt, @netAmount, @vatAmount,
+                @cashPaid, @otherPaid, @cashAcc,
+                @brnCode, @trnType, @orgDup, @wrCode, GETDATE(),
+                @currency, @refNo, @vatNumber
+              );
+
+              DECLARE @NewRecNo INT = SCOPE_IDENTITY();
+              SELECT INVOICE_NO, REC_NO 
+              FROM dbo.DATA_ENTRY_WEB 
+              WHERE REC_NO = @NewRecNo;
+            `);
+
+        if (!headerResult.recordset || headerResult.recordset.length === 0) {
+          throw new Error('Database failed to return generated values after header insertion.');
+        }
+
+        REC_NO = headerResult.recordset[0].REC_NO;
+        INVOICE_NO = headerResult.recordset[0].INVOICE_NO;
+      }
+
+      if (ADDRESS && (ADDRESS.street || ADDRESS.city || ADDRESS.building)) {
+        const addrRequest = new sql.Request(transaction);
+        await addrRequest
+          .input('accNo', sql.VarChar, String(ACCODE || ''))
+          .input('trnType', sql.Int, trnType)
+          .input('invoiceNo', sql.VarChar, String(INVOICE_NO))
+          .input('accName', sql.VarChar, String(ENAME || ''))
+          .input('street', sql.NVarChar, String(ADDRESS.street || ''))
+          .input('building', sql.VarChar, String(ADDRESS.building || ''))
+          .input('subdivision', sql.NVarChar, String(ADDRESS.district || ''))
+          .input('city', sql.NVarChar, String(ADDRESS.city || ''))
+          .input('postal', sql.VarChar, String(ADDRESS.pincode || ''))
+          .query(`
+            IF EXISTS (SELECT 1 FROM dbo.CASH_ACC_INFO WHERE INVOICE_NO = @invoiceNo)
+            BEGIN
+              UPDATE dbo.CASH_ACC_INFO SET
+                ACC_NO = @accNo, TRN_TYPE = @trnType, ACC_NAME = @accName,
+                street_name = @street, building_no = @building,
+                city_subdivision_name = @subdivision, city_name = @city,
+                postal_zone = @postal, regsitered_name = @accName
+              WHERE INVOICE_NO = @invoiceNo
+            END
+            ELSE
+            BEGIN
+              INSERT INTO dbo.CASH_ACC_INFO (
+                ACC_NO, TRN_TYPE, INVOICE_NO, ACC_NAME,
+                street_name, building_no, city_subdivision_name, city_name, postal_zone, regsitered_name
+              ) VALUES (
+                @accNo, @trnType, @invoiceNo, @accName,
+                @street, @building, @subdivision, @city, @postal, @accName
+              )
+            END
+          `);
+      }
+
+      if (ROWS && Array.isArray(ROWS)) {
+        let rowNum = 1;
+        for (const row of ROWS) {
+          if (!row.itemCode) continue;
+
+          const detailRequest = new sql.Request(transaction);
+          const unitPrice = Number(row.price) || 0;
+          const qty = Number(row.qty) || 0;
+          const vatPercent = Number(row.vatPercent) || 0;
+
+          let grossTotal, vatAmount;
+          if (TAX_INCLUDED) {
+            grossTotal = qty * unitPrice;
+            vatAmount = grossTotal - (grossTotal / (1 + (vatPercent / 100)));
+          } else {
+            const netSubtotal = qty * unitPrice;
+            vatAmount = netSubtotal * (vatPercent / 100);
+            grossTotal = netSubtotal + vatAmount;
+          }
+
+          await detailRequest
+            .input('recNo', sql.Numeric(18, 0), REC_NO)
+            .input('rowNum', sql.Int, rowNum++)
+            .input('barcode', sql.VarChar, String(row.itemCode || ''))
+            .input('qty', sql.Decimal(18, 2), qty)
+            .input('price', sql.Decimal(18, 2), unitPrice)
+            .input('unit', sql.VarChar, String(row.unit || 'Pcs'))
+            .input('description', sql.VarChar, String(row.description || ''))
+            .input('total', sql.Decimal(18, 2), grossTotal)
+            .input('vatPercent', sql.Decimal(18, 2), vatPercent)
+            .input('vatAmount', sql.Decimal(18, 2), vatAmount)
+            .input('trnType', sql.Int, trnType)
+            .input('invoiceNo', sql.VarChar, String(INVOICE_NO))
+            .input('wrCode', sql.SmallInt, Number(WR_CODE))
+            .query(`
+                INSERT INTO dbo.GRID_ITEM (
+                  REC_NO, ROWNUM, BARCODE, QTY, price, UNIT, DESCRIPTION,
+                  TOTAL, vat_percent, VAT_AMOUNT, TRN_TYPE, INVOICE_NO, WR_CODE
+                )
+                VALUES (
+                  @recNo, @rowNum, @barcode, @qty, @price, @unit, @description,
+                  @total, @vatPercent, @vatAmount, @trnType, @invoiceNo, @wrCode
+                )
+              `);
+        }
+      }
+
+      await transaction.commit();
+      res.json({ success: true, message: `Purchase ${isUpdate ? 'updated' : 'saved'} successfully`, REC_NO, INVOICE_NO });
+    } catch (err) {
+      if (transaction) await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Database transaction failed', message: error.message });
+  }
+});
+
+app.get('/api/purchases/history', async (req, res) => {
+  const { q, trnType } = req.query;
+  try {
+    const pool = await getPool();
+    let trnFilter = ' AND D.TRN_TYPE IN (1, 2, 8, 9) ';
+    if (trnType) {
+      const types = trnType.split(',').map(t => parseInt(t)).filter(t => !isNaN(t));
+      if (types.length > 0) trnFilter = ` AND D.TRN_TYPE IN (${types.join(',')}) `;
+    }
+
+    let query = `
+      SELECT TOP 100
+        D.REC_NO, D.INVOICE_NO, D.ACCODE, D.ENAME, D.G_TOTAL, D.NET_AMOUNT, 
+        D.VAT_AMOUNT, D.DISC_AMT, D.TRN_TYPE, D.CURDATE, D.CASH_PAID, 
+        D.OTHER_PAID, D.VAT_NUMBER, D.REF_NO, C.Currency_code AS CURRENCY_CODE
+      FROM dbo.DATA_ENTRY_WEB D
+      LEFT JOIN dbo.CURRENCY_MASTER C ON D.CURRENCY = C.Currency_No
+      WHERE 1=1 ${trnFilter}
+    `;
+
+    const request = pool.request();
+    if (q) {
+      query += ` AND (D.INVOICE_NO LIKE @q OR D.ENAME LIKE @q OR D.ACCODE LIKE @q) `;
+      request.input('q', sql.VarChar, `%${q}%`);
+    }
+    query += ` ORDER BY D.CURDATE DESC `;
+
+    const result = await request.query(query);
+    res.json(result.recordset);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch purchase history' });
+  }
+});
+
+app.get('/api/purchases/:recNo/items', async (req, res) => {
+  const { recNo } = req.params;
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('recNo', sql.Numeric(18, 0), recNo)
+      .query(`
+        SELECT BARCODE, DESCRIPTION, UNIT, QTY, price as UNIT_PRICE, 
+               vat_percent as VAT_PERCENT, VAT_AMOUNT, TOTAL as ITM_TOTAL
+        FROM dbo.GRID_ITEM 
+        WHERE REC_NO = @recNo 
+        ORDER BY ROWNUM
+      `);
+    res.json(result.recordset);
+  } catch (error) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.get('/api/suppliers/:accNo/info', async (req, res) => {
+  const { accNo } = req.params;
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('accNo', sql.VarChar, accNo)
+      .query(`SELECT * FROM dbo.ACCOUNTS_INFO WHERE ACC_NO = @accNo`);
+    res.json(result.recordset.length > 0 ? result.recordset[0] : null);
+  } catch (error) {
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 
 // 4. Fetch single customer/supplier by ID (Numeric match)
 app.get('/api/customers/:id', async (req, res) => {

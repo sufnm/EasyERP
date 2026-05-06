@@ -41,6 +41,10 @@ export const translations = {
     chartOfAccounts: "Chart of Accounts",
     settings: "Settings",
     logout: "Logout",
+    purchase: "Purchase",
+    purchaseReturn: "Purchase Return",
+    salesNReturn: "Sales & Return",
+    purchaseNReturn: "Purchase & Return",
     
     // Invoices Info
     invoiceInfo: "Invoice Info",
@@ -98,6 +102,10 @@ export const translations = {
     chartOfAccounts: "شجرة الحسابات",
     settings: "الإعدادات",
     logout: "تسجيل الخروج",
+    purchase: "المشتريات",
+    purchaseReturn: "مرتجع مشتريات",
+    salesNReturn: "المبيعات والمرتجعات",
+    purchaseNReturn: "المشتريات والمرتجعات",
     
     // Invoices Info
     invoiceInfo: "معلومات الفاتورة",

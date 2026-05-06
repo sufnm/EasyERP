@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { Wallet, Search, CheckCircle2, FileText, Calendar, Building, CreditCard, Save, Globe, ShieldAlert, ShieldCheck, ShieldOff, Lock, Pencil, MapPin, Printer, Plus } from 'lucide-react';
+import { Wallet, Search, CheckCircle2, FileText, Calendar, Building, CreditCard, Save, Globe, ShieldAlert, ShieldCheck, ShieldOff, Lock, Pencil, MapPin, Printer, Plus, TrendingUp } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import SearchableDropdown from '../components/SearchableDropdown';
 
 export default function CustomerReceivablePage({ setActivePage, user }) {
   const { t, language } = useLanguage();
@@ -275,10 +276,10 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-50/30">
+      <div className="flex h-full min-h-[400px] items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
-          <p className="text-sm font-black text-indigo-600 animate-pulse uppercase tracking-widest">{t('loading')}</p>
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-500 dark:border-indigo-400 border-t-transparent shadow-sm"></div>
+          <p className="text-xs font-black text-indigo-600 dark:text-indigo-400 animate-pulse uppercase tracking-widest">{t('loading')}</p>
         </div>
       </div>
     );
@@ -286,16 +287,16 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
 
   if (privileges && !privileges.canView) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-50/30">
-        <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-2xl shadow-xl border border-rose-100 max-w-md text-center">
-          <div className="h-16 w-16 bg-rose-100 rounded-full flex items-center justify-center text-rose-600 mb-2">
-            <Lock size={32} strokeWidth={2.5} />
+      <div className="flex h-full min-h-[400px] items-center justify-center">
+        <div className="flex flex-col items-center gap-4 p-8 bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800 max-w-md text-center transition-colors duration-300">
+          <div className="h-16 w-16 bg-rose-100 dark:bg-rose-950/30 rounded-full flex items-center justify-center text-rose-600 dark:text-rose-400 mb-2">
+            <Lock size={32} strokeWidth={2.2} />
           </div>
-          <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tighter">Access Denied</h2>
-          <p className="text-zinc-500 font-medium text-sm">You do not have permission to view Customer Receivable.</p>
+          <h2 className="text-xl font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">Access Denied</h2>
+          <p className="text-zinc-500 dark:text-zinc-400 font-semibold text-xs mt-1 leading-relaxed">You do not have permission to view Customer Receivable. Please contact your system administrator.</p>
           <button 
             onClick={() => setActivePage('dashboard')}
-            className="mt-4 px-6 py-2 bg-zinc-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-black transition-all active:scale-95"
+            className="mt-5 px-6 py-2.5 bg-zinc-900 dark:bg-zinc-800 text-white dark:text-zinc-200 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-black dark:hover:bg-zinc-700 transition-all active:scale-95 shadow-md"
           >
             Go Back to Dashboard
           </button>
@@ -305,225 +306,258 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
   }
 
   return (
-    <div className={`flex flex-col h-full p-4 bg-zinc-50/30 ${language === 'ar' ? 'rtl font-arabic' : ''}`}>
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter uppercase flex items-center gap-2">
-            <div className="p-1.5 bg-indigo-600 rounded-lg text-white">
-              <Wallet size={20} strokeWidth={2.5} />
+    <div className={`flex flex-col h-full p-6 animate-in fade-in duration-500 relative ${language === 'ar' ? 'rtl font-arabic' : ''}`}>
+      <div className="max-w-7xl mx-auto w-full space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-500 dark:bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-500/20">
+              <Wallet size={24} strokeWidth={2.2} />
             </div>
-            {t('customerReceivable')}
-          </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest mt-1">
-            {activeEditId ? `Editing Transaction #${activeEditId}` : 'Financial Inflow Management'}
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <div className="flex bg-white rounded-lg border border-border p-0.5 shadow-sm">
+            <div>
+              <h1 className="text-3xl font-black text-zinc-900 dark:text-zinc-100 tracking-tight uppercase">
+                {t('customerReceivable')}
+              </h1>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest mt-1">
+                {activeEditId ? `Editing Transaction #${activeEditId}` : 'Financial Inflow Management'}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl shadow-inner gap-1">
+              <button 
+                onClick={() => { setReturnInvoice(false); resetForm(); }}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  !returnInvoice 
+                    ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' 
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                Normal
+              </button>
+              <button 
+                onClick={() => { setReturnInvoice(true); resetForm(); }}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  returnInvoice 
+                    ? 'bg-rose-500 text-white shadow-sm' 
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                Return
+              </button>
+            </div>
+            
             <button 
-              onClick={() => { setReturnInvoice(false); resetForm(); }}
-              className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${!returnInvoice ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
+              onClick={resetForm}
+              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 active:scale-95"
+              title="New Transaction"
             >
-              Normal
-            </button>
-            <button 
-              onClick={() => { setReturnInvoice(true); resetForm(); }}
-              className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${returnInvoice ? 'bg-rose-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-            >
-              Return
+              <Plus size={16} strokeWidth={2.5} />
+              New Entry
             </button>
           </div>
-          <button 
-            onClick={resetForm}
-            className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-            title="New Transaction"
-          >
-            <Plus size={20} />
-          </button>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Entry Form */}
-        <div className="lg:col-span-3 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-border bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
-            <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-1.5">
-              <Pencil size={13} className="text-indigo-500" />
-              {t('transactionEntry')}
-            </h3>
-            {activeEditId && (
-              <span className="text-[10px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full uppercase">Edit Mode</span>
-            )}
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Entry Form */}
+          <div className="lg:col-span-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden flex flex-col transition-colors duration-300">
+            <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/40 flex items-center justify-between">
+              <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-2">
+                <Pencil size={14} className="text-indigo-500 dark:text-indigo-400" />
+                {t('transactionEntry')}
+              </h3>
+              {activeEditId && (
+                <span className="text-[9px] font-black bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider border border-indigo-200/50 dark:border-indigo-800/50 animate-pulse">Edit Mode</span>
+              )}
+            </div>
 
-          <form onSubmit={handleSave} className="p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('paidDate')}</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
-                  <input
-                    type="date"
-                    name="ENTRY_DATE"
-                    value={formData.ENTRY_DATE}
-                    onChange={handleInputChange}
-                    className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                    required
-                  />
+            <form onSubmit={handleSave} className="p-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3.5">
+                
+                {/* Paid Date */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest block">{t('paidDate')}</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" size={16} />
+                    <input
+                      type="date"
+                      name="ENTRY_DATE"
+                      value={formData.ENTRY_DATE}
+                      onChange={handleInputChange}
+                      className="w-full pl-11 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-100 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('invoiceNo')} (Combo List)</label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
-                  <select
-                    name="DOC_NO"
-                    value={formData.DOC_NO}
-                    onChange={handleInputChange}
-                    className="w-full pl-9 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-black text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                  >
-                    <option value="">-- {t('selectInvoice')} --</option>
-                    {invoices.map(inv => (
-                      <option key={inv.INVOICE_NO} value={inv.INVOICE_NO}>
-                        {inv.INVOICE_NO} - {inv.ENAME} (SAR {Number(inv.BALANCE_AMT).toFixed(2)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                {/* Invoice No */}
+                <SearchableDropdown
+                  label={`${t('invoiceNo')} (Searchable)`}
+                  name="DOC_NO"
+                  value={formData.DOC_NO}
+                  onChange={handleInputChange}
+                  options={invoices.map(inv => ({
+                    id: inv.INVOICE_NO,
+                    label: inv.INVOICE_NO,
+                    subLabel: `${inv.ENAME} (SAR ${Number(inv.BALANCE_AMT).toFixed(2)})`
+                  }))}
+                  placeholder={`-- ${t('selectInvoice')} --`}
+                  icon={FileText}
+                  themeColor="indigo"
+                />
 
-              <div className="col-span-2 grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('payFrom')}</label>
-                  <select
+                {/* Pay From and Pay To Accounts */}
+                <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3.5">
+                  
+                  {/* Pay From Acc */}
+                  <SearchableDropdown
+                    label={t('payFrom')}
                     name="PAY_FROM_ACC"
                     value={formData.PAY_FROM_ACC}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-medium outline-none appearance-none"
+                    options={accountsInfo.map(acc => ({
+                      id: acc.ACC_NO.toString(),
+                      label: acc.ACC_NAME,
+                      subLabel: acc.ACC_NO.toString()
+                    }))}
+                    placeholder={`-- ${t('selectAccount')} --`}
+                    icon={Building}
+                    themeColor="indigo"
                     required
-                  >
-                    <option value="">-- {t('selectAccount')} --</option>
-                    {accountsInfo.map(acc => (
-                      <option key={acc.ACC_NO} value={acc.ACC_NO.toString()}>{acc.ACC_NO} - {acc.ACC_NAME}</option>
-                    ))}
-                  </select>
-                </div>
+                  />
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('payTo')}</label>
-                  <select
+                  {/* Pay To Acc */}
+                  <SearchableDropdown
+                    label={t('payTo')}
                     name="PAY_TO_ACC"
                     value={formData.PAY_TO_ACC}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-medium outline-none appearance-none"
-                    required
-                  >
-                    <option value="">-- {t('selectAccount')} --</option>
-                    {cashAccounts.map(acc => (
-                      <option key={acc.ACC_NO} value={acc.ACC_NO.toString()}>{acc.ACC_NO} - {acc.ACC_NAME}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('paidAmount')}</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">SAR</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    name="paymentAmount"
-                    value={formData.paymentAmount}
-                    onChange={handleInputChange}
-                    className="w-full pl-10 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-black text-zinc-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                    placeholder="0.00"
+                    options={cashAccounts.map(acc => ({
+                      id: acc.ACC_NO.toString(),
+                      label: acc.ACC_NAME,
+                      subLabel: acc.ACC_NO.toString()
+                    }))}
+                    placeholder={`-- ${t('selectAccount')} --`}
+                    icon={Wallet}
+                    themeColor="indigo"
                     required
                   />
+
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Ref No / Check No</label>
-                <input
-                  type="text"
-                  name="REF_NO"
-                  value={formData.REF_NO}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-medium outline-none"
-                  placeholder="Internal reference..."
-                />
-              </div>
+                {/* Paid Amount */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest block">{t('paidAmount')}</label>
+                  <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 bg-zinc-100 dark:bg-zinc-800 text-[10px] font-black text-zinc-500 dark:text-zinc-400 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-700">SAR</div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="paymentAmount"
+                      value={formData.paymentAmount}
+                      onChange={handleInputChange}
+                      className="w-full pl-16 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-black text-zinc-900 dark:text-zinc-100 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner"
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                </div>
 
-              <div className="col-span-2 grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('costCenter')}</label>
-                  <select
+                {/* Ref No */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest block">Ref No / Check No</label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" size={16} />
+                    <input
+                      type="text"
+                      name="REF_NO"
+                      value={formData.REF_NO}
+                      onChange={handleInputChange}
+                      className="w-full pl-11 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-100 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner"
+                      placeholder="Internal reference..."
+                    />
+                  </div>
+                </div>
+
+                {/* Financial detail fields row */}
+                <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-3.5">
+                  
+                  {/* Cost Center */}
+                  <SearchableDropdown
+                    label={t('costCenter')}
                     name="COST_CENTER"
                     value={formData.COST_CENTER}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-medium outline-none"
-                  >
-                    <option value="">{t('main')}</option>
-                    {costCenters.map(cc => (
-                      <option key={cc.CC_CODE} value={cc.CC_CODE}>{cc.CC_NAME}</option>
-                    ))}
-                  </select>
-                </div>
+                    options={costCenters.map(cc => ({
+                      id: cc.CC_CODE,
+                      label: cc.CC_NAME,
+                      subLabel: cc.CC_CODE
+                    }))}
+                    placeholder={t('main')}
+                    icon={MapPin}
+                    themeColor="indigo"
+                  />
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('currency')}</label>
-                  <select
+                  {/* Currency */}
+                  <SearchableDropdown
+                    label={t('currency')}
                     name="CURRENCY"
                     value={formData.CURRENCY}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-medium outline-none"
-                  >
-                    {currencies.map(curr => (
-                      <option key={curr.Currency_No} value={curr.Currency_No.toString()}>{curr.Currency_code}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('exchangeRate')}</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    name="CURRENCY_RATE"
-                    value={formData.CURRENCY_RATE}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-medium outline-none"
+                    options={currencies.map(curr => ({
+                      id: curr.Currency_No.toString(),
+                      label: curr.Currency_code,
+                      subLabel: `Rate: ${curr.Currency_Rate}`
+                    }))}
+                    placeholder={t('currency')}
+                    icon={Globe}
+                    themeColor="indigo"
                   />
+
+                  {/* Exchange Rate */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest block">{t('exchangeRate')}</label>
+                    <div className="relative">
+                      <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" size={16} />
+                      <input
+                        type="number"
+                        step="0.0001"
+                        name="CURRENCY_RATE"
+                        value={formData.CURRENCY_RATE}
+                        onChange={handleInputChange}
+                        className="w-full pl-11 pr-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-100 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner"
+                      />
+                    </div>
+                  </div>
+
                 </div>
+
+                {/* Description */}
+                <div className="col-span-1 md:col-span-2 space-y-1">
+                  <label className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest block">{t('description')}</label>
+                  <textarea
+                    name="DESCRIPTION"
+                    value={formData.DESCRIPTION}
+                    onChange={handleInputChange}
+                    rows="2"
+                    className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-100 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner resize-none"
+                    placeholder="Notes about this transaction..."
+                  ></textarea>
+                </div>
+
               </div>
 
-              <div className="col-span-2 space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('description')}</label>
-                <textarea
-                  name="DESCRIPTION"
-                  value={formData.DESCRIPTION}
-                  onChange={handleInputChange}
-                  rows="2"
-                  className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none"
-                  placeholder="Notes about this transaction..."
-                ></textarea>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800/80">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-1.5 rounded-lg font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50"
+                  className="w-full sm:flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-600/15 hover:shadow-indigo-600/25 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
                 >
                   {isSubmitting ? (
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                   ) : (
-                    <Save size={14} />
+                    <Save size={16} strokeWidth={2.2} />
                   )}
                   {activeEditId ? t('update') : t('save')}
                 </button>
@@ -532,152 +566,180 @@ export default function CustomerReceivablePage({ setActivePage, user }) {
                   type="button"
                   onClick={handlePrint}
                   disabled={!activeEditId && !lastSavedId}
-                  className={`flex items-center gap-2 px-6 py-1.5 rounded-lg font-bold text-xs shadow-lg transition-all active:scale-95 ${
+                  className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-md transition-all ${
                     (!activeEditId && !lastSavedId)
-                      ? 'bg-zinc-100 text-zinc-400 cursor-not-allowed shadow-none'
-                      : 'bg-zinc-900 hover:bg-black text-white shadow-zinc-900/20'
+                      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed shadow-none'
+                      : 'bg-zinc-900 hover:bg-black dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white shadow-zinc-900/10 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]'
                   }`}
                 >
-                  <Printer size={14} />
+                  <Printer size={16} strokeWidth={2.2} />
                   {t('print')}
                 </button>
-            </div>
-          </form>
-        </div>
+              </div>
+            </form>
+          </div>
 
-        {/* Selected Invoice Details Sidebar */}
-        <div className="lg:col-span-1 bg-card rounded-xl border border-border shadow-sm p-4 h-fit">
-           <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-1.5 mb-3">
-             <FileText size={13} className="text-indigo-500" />
-             {t('invoiceInfo')}
-           </h3>
-           {!selectedInvoice ? (
-             <div className="text-center py-6 text-zinc-400 text-xs italic">{t('noInvoiceSelected')}</div>
-           ) : (
-             <div className="space-y-3">
-               <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100">
-                  <p className="text-[10px] font-bold text-indigo-600 uppercase">{t('customer')}</p>
-                  <p className="text-xs font-black text-zinc-800 dark:text-zinc-200">{selectedInvoice.ENAME}</p>
+          {/* Selected Invoice Details Sidebar */}
+          <div className="lg:col-span-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 h-fit flex flex-col transition-colors duration-300">
+             <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-2 mb-4">
+               <FileText size={14} className="text-indigo-500 dark:text-indigo-400" />
+               {t('invoiceInfo')}
+             </h3>
+             
+             {!selectedInvoice ? (
+               <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                 <div className="p-4 bg-zinc-50 dark:bg-zinc-950 rounded-full text-zinc-400 dark:text-zinc-600 mb-3 border border-dashed border-zinc-200 dark:border-zinc-800">
+                   <FileText size={24} className="opacity-50" />
+                 </div>
+                 <p className="text-xs font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{t('noInvoiceSelected')}</p>
+                 <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1.5 max-w-[180px] leading-relaxed font-medium">Choose an invoice from the dropdown to see financial details and transaction history.</p>
                </div>
-               <div className="grid grid-cols-1 gap-2">
-                  <div className="flex justify-between border-b border-dashed border-zinc-200 pb-1">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">{t('invoiceNo')}</span>
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{selectedInvoice.INVOICE_NO}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-dashed border-zinc-200 pb-1">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">Net Amount</span>
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{Number(selectedInvoice.NET_AMOUNT || 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-dashed border-zinc-200 pb-1">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">Paid Amount</span>
-                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{Number((selectedInvoice.CASH_PAID || 0) + (selectedInvoice.OTHER_PAID || 0)).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-dashed border-zinc-200 pb-1">
-                    <span className="text-[10px] text-zinc-500 font-bold uppercase">{t('balanceDue')}</span>
-                    <span className="text-xs font-black text-rose-600">{Number(selectedInvoice.BALANCE_AMT || 0).toFixed(2)}</span>
-                  </div>
-               </div>
+             ) : (
+               <div className="space-y-4">
+                 
+                 {/* Customer */}
+                 <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-xl border border-indigo-100/50 dark:border-indigo-900/30">
+                    <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest block mb-0.5">{t('customer')}</span>
+                    <span className="text-xs font-black text-zinc-800 dark:text-zinc-100 block truncate">{selectedInvoice.ENAME}</span>
+                 </div>
 
-               {/* SPECIFIC INVOICE HISTORY */}
-               {savedTransactions.filter(tx => tx.DOC_NO === selectedInvoice.INVOICE_NO).length > 0 && (
-                 <div className="mt-4 pt-3 border-t border-zinc-100">
-                    <h4 className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                      <CheckCircle2 size={10} className="text-emerald-500" />
-                      Invoice Payment History
-                    </h4>
-                    <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
-                      {savedTransactions
-                        .filter(tx => tx.DOC_NO === selectedInvoice.INVOICE_NO)
-                        .map((tx, idx) => (
-                          <div key={idx} className="flex justify-between items-center text-[9px] p-1.5 bg-zinc-50 rounded border border-zinc-100/50">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-zinc-700">{new Date(tx.ENTRY_DATE).toLocaleDateString()}</span>
-                              <span className="text-[8px] text-zinc-400 truncate w-24">{tx['FROM ACC']}</span>
-                            </div>
-                            <span className="font-black text-emerald-600">SAR {Number(tx.PAY_AMOUNT).toFixed(2)}</span>
-                          </div>
-                        ))}
+                 {/* Grid details */}
+                 <div className="space-y-2.5">
+                    <div className="flex justify-between items-center border-b border-dashed border-zinc-100 dark:border-zinc-800 pb-2">
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">{t('invoiceNo')}</span>
+                      <span className="text-xs font-extrabold text-zinc-800 dark:text-zinc-200">#{selectedInvoice.INVOICE_NO}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-dashed border-zinc-100 dark:border-zinc-800 pb-2">
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Net Amount</span>
+                      <span className="text-xs font-black text-zinc-800 dark:text-zinc-200">SAR {Number(selectedInvoice.NET_AMOUNT || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-dashed border-zinc-100 dark:border-zinc-800 pb-2">
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Paid Amount</span>
+                      <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">SAR {Number((selectedInvoice.CASH_PAID || 0) + (selectedInvoice.OTHER_PAID || 0)).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-dashed border-zinc-100 dark:border-zinc-800 pb-2">
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">{t('balanceDue')}</span>
+                      <span className="text-sm font-black text-rose-600 dark:text-rose-400">SAR {Number(selectedInvoice.BALANCE_AMT || 0).toFixed(2)}</span>
                     </div>
                  </div>
-               )}
 
-               {/* Overpayment Warning */}
-               {formData.paymentAmount && Number(formData.paymentAmount) > Number(selectedInvoice.BALANCE_AMT) && (
-                 <div className="mt-3 p-2 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg flex items-start gap-2 animate-pulse">
-                   <ShieldAlert size={14} className="text-rose-500 mt-0.5" />
-                   <p className="text-[10px] font-bold text-rose-600 leading-tight">
-                     WARNING: Entered amount (${formData.paymentAmount}) is greater than the remaining balance (${Number(selectedInvoice.BALANCE_AMT).toFixed(2)}).
-                   </p>
-                 </div>
-               )}
-             </div>
-           )}
-        </div>
-      </div>
+                 {/* SPECIFIC INVOICE HISTORY */}
+                 {savedTransactions.filter(tx => tx.DOC_NO === selectedInvoice.INVOICE_NO).length > 0 && (
+                   <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                      <h4 className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+                        <CheckCircle2 size={11} className="text-emerald-500" />
+                        Invoice Payments
+                      </h4>
+                      <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                        {savedTransactions
+                          .filter(tx => tx.DOC_NO === selectedInvoice.INVOICE_NO)
+                          .map((tx, idx) => (
+                            <div key={idx} className="flex justify-between items-center text-[10px] p-2 bg-zinc-50 dark:bg-zinc-950 rounded-xl border border-zinc-100/50 dark:border-zinc-800/50">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-zinc-700 dark:text-zinc-300">
+                                  {new Date(tx.ENTRY_DATE).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                                <span className="text-[8px] text-zinc-400 dark:text-zinc-500 truncate w-24 font-bold uppercase">{tx['FROM ACC']}</span>
+                              </div>
+                              <span className="font-black text-emerald-600 dark:text-emerald-400">SAR {Number(tx.PAY_AMOUNT).toFixed(2)}</span>
+                            </div>
+                          ))}
+                      </div>
+                   </div>
+                 )}
 
-      {/* Grid Table */}
-      <div className="mt-4 bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-border bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
-          <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-1.5">
-            <CheckCircle2 size={13} className="text-emerald-500" />
-            {t('recentTransactions')}
-          </h3>
+                 {/* Overpayment Warning */}
+                 {formData.paymentAmount && Number(formData.paymentAmount) > Number(selectedInvoice.BALANCE_AMT) && (
+                   <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 rounded-xl flex items-start gap-2 animate-pulse">
+                     <ShieldAlert size={14} className="text-rose-500 mt-0.5 shrink-0" />
+                     <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 leading-tight">
+                       WARNING: The entered amount (SAR {formData.paymentAmount}) exceeds the remaining balance (SAR {Number(selectedInvoice.BALANCE_AMT).toFixed(2)}).
+                     </p>
+                   </div>
+                 )}
+               </div>
+             )}
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className={`w-full ${language === 'ar' ? 'text-right' : 'text-left'} border-collapse`}>
-            <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-900/30 border-b border-border">
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">ID</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">{t('paidDate')}</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Doc No</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">From Acc</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">To Acc</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider text-right">{t('paidAmount')}</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Description</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Return</th>
-                <th className="px-4 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="text-[11px]">
-              {savedTransactions.map(tx => (
-                <tr key={tx.ID} className="border-b border-border hover:bg-zinc-50/50 transition-colors">
-                  <td className="px-4 py-2 font-bold text-indigo-600">{tx.ID}</td>
-                  <td className="px-4 py-2 text-zinc-600">{new Date(tx.ENTRY_DATE).toLocaleDateString()}</td>
-                  <td className="px-4 py-2 font-black text-zinc-800">{tx.DOC_NO}</td>
-                  <td className="px-4 py-2 text-zinc-600">
-                    <div className="font-bold">{tx['FROM ACC']}</div>
-                    <div className="text-[9px] text-zinc-400">{tx.PAY_FROM_ACC}</div>
-                  </td>
-                  <td className="px-4 py-2 text-zinc-600">
-                    <div className="font-bold">{tx.TO_ACC}</div>
-                    <div className="text-[9px] text-zinc-400">{tx.PAY_TO_ACC}</div>
-                  </td>
-                  <td className="px-4 py-2 text-right font-black text-emerald-600">{Number(tx.PAY_AMOUNT).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                  <td className="px-4 py-2 text-zinc-500 truncate max-w-[150px]">{tx.DESCRIPTION}</td>
-                  <td className="px-4 py-2">
-                    {tx.RETURN_INVOICE ? (
-                      <span className="px-2 py-0.5 bg-rose-100 text-rose-600 rounded text-[9px] font-black uppercase tracking-tighter">Return</span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded text-[9px] font-black uppercase tracking-tighter">Normal</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-center">
-                    <button 
-                      onClick={() => handleEdit(tx)}
-                      className="p-1.5 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  </td>
+
+        {/* Grid Table */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden transition-colors duration-300">
+          <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-900/40 flex items-center justify-between">
+            <h3 className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-2">
+              <CheckCircle2 size={14} className="text-emerald-500" />
+              {t('recentTransactions')}
+            </h3>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className={`w-full ${language === 'ar' ? 'text-right' : 'text-left'} border-collapse`}>
+              <thead>
+                <tr className="bg-zinc-50/50 dark:bg-zinc-900/30 border-b border-zinc-100 dark:border-zinc-800">
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">ID</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{t('paidDate')}</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Doc No</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">From Acc</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">To Acc</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest text-right">{t('paidAmount')}</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Description</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest text-center">Type</th>
+                  <th className="px-6 py-3.5 text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest text-center">Action</th>
                 </tr>
-              ))}
-              {savedTransactions.length === 0 && (
-                <tr>
-                  <td colSpan="9" className="px-4 py-10 text-center text-zinc-400 italic">No transactions found for this period</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50 text-xs">
+                {savedTransactions.map(tx => (
+                  <tr key={tx.ID} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors">
+                    <td className="px-6 py-4 font-black text-indigo-600 dark:text-indigo-400">#{tx.ID}</td>
+                    <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400 font-semibold">
+                      {new Date(tx.ENTRY_DATE).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td className="px-6 py-4 font-black text-zinc-800 dark:text-zinc-100">#{tx.DOC_NO}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-extrabold text-zinc-700 dark:text-zinc-200">{tx['FROM ACC']}</div>
+                      <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-tighter mt-0.5">{tx.PAY_FROM_ACC}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="font-extrabold text-zinc-700 dark:text-zinc-200">{tx.TO_ACC}</div>
+                      <div className="text-[9px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-tighter mt-0.5">{tx.PAY_TO_ACC}</div>
+                    </td>
+                    <td className="px-6 py-4 text-right font-black text-emerald-600 dark:text-emerald-400">
+                      SAR {Number(tx.PAY_AMOUNT).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                    </td>
+                    <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400 truncate max-w-[150px] font-medium" title={tx.DESCRIPTION}>
+                      {tx.DESCRIPTION || <span className="text-zinc-300 dark:text-zinc-700 italic font-normal">No description</span>}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {tx.RETURN_INVOICE ? (
+                        <span className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 rounded-lg text-[9px] font-black uppercase tracking-wider border border-rose-100/50 dark:border-rose-900/30">
+                          Return
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-wider border border-emerald-100/50 dark:border-emerald-900/30">
+                          Normal
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button 
+                        onClick={() => handleEdit(tx)}
+                        className="p-2 text-zinc-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition-all active:scale-95"
+                        title="Edit Transaction"
+                      >
+                        <Pencil size={14} strokeWidth={2.2} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {savedTransactions.length === 0 && (
+                  <tr>
+                    <td colSpan="9" className="px-6 py-12 text-center text-zinc-400 dark:text-zinc-500 italic font-semibold">
+                      No transactions found for this period
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

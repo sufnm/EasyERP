@@ -17,7 +17,8 @@ export default function SummaryFooter({
   setSelectedAccount,
   customerId,
   currencyCode = 'SAR',
-  isReturn = false
+  isReturn = false,
+  isPurchase = false
 }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -219,10 +220,10 @@ export default function SummaryFooter({
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-white uppercase tracking-tight">
-                    {isReturn ? 'Complete Return' : 'Complete Sale'}
+                    {isReturn ? 'Complete Return' : (isPurchase ? 'Complete Purchase' : 'Complete Sale')}
                   </h3>
                   <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                    {isReturn ? 'Finalize return details' : 'Finalize payment details'}
+                    {isReturn ? 'Finalize return details' : (isPurchase ? 'Finalize purchase details' : 'Finalize payment details')}
                   </p>
                 </div>
               </div>

@@ -11,7 +11,8 @@ export default function SalesGrid({
   visibleColumns = {}, 
   enterToQty = false, 
   taxIncluded = true,
-  restrictedItems = null
+  restrictedItems = null,
+  isPurchase = false
 }) {
   const { searchItems, cachedUnits } = useCache();
   const [searchResults, setSearchResults] = useState([]);
@@ -100,7 +101,12 @@ export default function SalesGrid({
         }
       }
 
-      return { ...row, [field]: finalValue };
+      // Sync 'price' with 'purchasePrice' or 'salePrice' if relevant
+      let extra = {};
+      if (field === 'purchasePrice' && isPurchase) extra.price = finalValue;
+      if (field === 'salePrice' && !isPurchase) extra.price = finalValue;
+
+      return { ...row, [field]: finalValue, ...extra };
     }));
   };
 
@@ -241,6 +247,9 @@ export default function SalesGrid({
           unit: '', 
           qty: '', 
           price: '', 
+          purchasePrice: '',
+          salePrice: '',
+          retailPrice: '',
           aliasCode: '', 
           vatAmt: '', 
           vatPercent: 0, 
@@ -259,18 +268,36 @@ export default function SalesGrid({
               unit: item.isManual 
                 ? (cachedUnits.find(u => u.Unit_Name?.toUpperCase() === 'PCS')?.Unit_Name || '')
                 : (restrictedItems ? item.UNIT : getUnitName(item.UNIT)), 
-              itemCode: item.BARCODE,
+              itemCode: item.ITEM_CODE || item.BARCODE,
               description: item.DESCRIPTION || '',
               vatPercent: item.VAT_PERCENT || 0,
               qty: item.isManual ? '' : (Number(row.qty || 0) + 1),
-              price: item.isManual ? '' : item.SALE_PRICE,
+              purchasePrice: item.AVG_PUR_PRICE || 0,
+              salePrice: item.SALE_PRICE || item.price || 0,
+              retailPrice: item.RETAIL_PRICE || 0,
+              price: isPurchase ? (item.AVG_PUR_PRICE || 0) : (item.SALE_PRICE || item.price || 0),
               isManual: item.isManual || false
             }
           : row
       );
       
       if (!enterToQty && id === prevRows[prevRows.length - 1].id) {
-         nextRows.push({ id: Date.now() + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' });
+         nextRows.push({ 
+           id: Date.now() + 1, 
+           itemCode: '', 
+           description: '', 
+           unit: '', 
+           qty: '', 
+           price: '', 
+           purchasePrice: '',
+           salePrice: '',
+           retailPrice: '',
+           aliasCode: '', 
+           vatAmt: '', 
+           vatPercent: 0, 
+           total: '', 
+           stock: '' 
+         });
       }
       return nextRows;
     });
@@ -357,7 +384,10 @@ export default function SalesGrid({
               {visibleColumns.description && <th className="p-3 font-semibold min-w-[250px]">Description</th>}
               {visibleColumns.unit && <th className="p-3 font-semibold min-w-[100px]">Unit</th>}
               {visibleColumns.qty && <th className="p-3 font-semibold min-w-[80px]">QTY</th>}
-              {visibleColumns.price && <th className="p-3 font-semibold min-w-[100px]">Price</th>}
+              {visibleColumns.purchasePrice && <th className="p-3 font-semibold min-w-[100px]">Purchase Price</th>}
+              {visibleColumns.salePrice && <th className="p-3 font-semibold min-w-[100px]">Sale Price</th>}
+              {visibleColumns.retailPrice && <th className="p-3 font-semibold min-w-[100px]">Retail Price</th>}
+              {visibleColumns.price && !isPurchase && <th className="p-3 font-semibold min-w-[100px]">Price</th>}
               {visibleColumns.aliasCode && <th className="p-3 font-semibold min-w-[120px]">Alias Code</th>}
               {visibleColumns.vatAmt && <th className="p-3 font-semibold min-w-[100px]">VAT Amt</th>}
               {visibleColumns.total && <th className="p-3 font-semibold min-w-[100px]">Total</th>}
@@ -420,10 +450,10 @@ export default function SalesGrid({
                           >
                             <div className="flex flex-col">
                               <span className="font-bold text-card-foreground text-sm group-hover:text-primary">{item.DESCRIPTION || 'No Description'}</span>
-                              <span className="text-xs text-zinc-400 dark:text-zinc-500">Barcode: {item.BARCODE} | Code: {item.ITEM_CODE}</span>
+                              <span className="text-xs text-zinc-400 dark:text-zinc-500">Code: {item.ITEM_CODE || 'N/A'} | Barcode: {item.BARCODE || 'N/A'}</span>
                             </div>
                             <div className="text-right shrink-0">
-                               <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400 block">SAR {Number(item.SALE_PRICE).toFixed(2)}</span>
+                               <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400 block">SAR {Number(isPurchase ? (item.AVG_PUR_PRICE || 0) : (item.SALE_PRICE || item.price || 0)).toFixed(2)}</span>
                                <span className="text-[10px] text-zinc-400 dark:text-zinc-500">VAT: {item.VAT_PERCENT}%</span>
                             </div>
                           </div>
@@ -523,7 +553,66 @@ export default function SalesGrid({
                   }} 
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
                 /></td>}
-                {visibleColumns.price && <td className="p-1">
+                {visibleColumns.purchasePrice && <td className="p-1">
+                  <input 
+                    id={`purchasePrice-${row.id}`}
+                    type="number" 
+                    value={row.purchasePrice} 
+                    onChange={(e) => updateRow(row.id, 'purchasePrice', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        document.getElementById(`salePrice-${row.id}`)?.focus();
+                      }
+                    }}
+                    className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
+                  />
+                </td>}
+                {visibleColumns.salePrice && <td className="p-1">
+                  <input 
+                    id={`salePrice-${row.id}`}
+                    type="number" 
+                    value={row.salePrice} 
+                    onChange={(e) => updateRow(row.id, 'salePrice', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        document.getElementById(`retailPrice-${row.id}`)?.focus();
+                      }
+                    }}
+                    className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
+                  />
+                </td>}
+                {visibleColumns.retailPrice && <td className="p-1">
+                  <input 
+                    id={`retailPrice-${row.id}`}
+                    type="number" 
+                    value={row.retailPrice} 
+                    onChange={(e) => updateRow(row.id, 'retailPrice', e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const newId = Date.now();
+                        setRows(prev => {
+                          const isLast = prev[prev.length - 1].id === row.id;
+                          if (isLast) {
+                            const nextRows = [...prev, { 
+                              id: newId, itemCode: '', description: '', unit: '', qty: '', 
+                              purchasePrice: '', salePrice: '', retailPrice: '', 
+                              aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' 
+                            }];
+                            setTimeout(() => document.getElementById(`itemCode-${newId}`)?.focus(), 50);
+                            return nextRows;
+                          } else {
+                            const currentIndex = prev.findIndex(r => r.id === row.id);
+                            const nextRow = prev[currentIndex + 1];
+                            if (nextRow) setTimeout(() => document.getElementById(`itemCode-${nextRow.id}`)?.focus(), 10);
+                            return prev;
+                          }
+                        });
+                      }
+                    }}
+                    className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
+                  />
+                </td>}
+                {visibleColumns.price && !isPurchase && <td className="p-1">
                   <input 
                     id={`price-${row.id}`}
                     type="number" 
@@ -576,10 +665,10 @@ export default function SalesGrid({
                 /></td>}
                 {visibleColumns.total && <td className="p-1"><input 
                   type="number" 
-                  value={row.qty && row.price ? (
+                  value={(row.qty !== '' && (isPurchase ? row.purchasePrice !== '' : row.price !== '')) ? (
                     taxIncluded 
-                      ? (Number(row.qty) * Number(row.price)).toFixed(2)
-                      : (Number(row.qty) * Number(row.price) * (1 + Number(row.vatPercent)/100)).toFixed(2)
+                      ? (Number(row.qty) * Number(isPurchase ? row.purchasePrice : row.price)).toFixed(2)
+                      : (Number(row.qty) * Number(isPurchase ? row.purchasePrice : row.price) * (1 + Number(row.vatPercent)/100)).toFixed(2)
                   ) : ''} 
                   className="w-full bg-zinc-100 dark:bg-zinc-900 font-semibold p-2 outline-none rounded text-right text-zinc-900 dark:text-zinc-100 border border-transparent dark:border-zinc-800" 
                   readOnly 
@@ -595,7 +684,7 @@ export default function SalesGrid({
           </tbody>
         </table>
       </div>
-      <div className="p-3 border-t border-border bg-white dark:bg-zinc-900 flex items-center justify-between">
+      <div className="p-1.5 border-t border-border bg-white dark:bg-zinc-900 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {!isAllItemsImported && (
             <button onClick={addRow} className="flex items-center gap-1 text-sm font-semibold text-primary hover:text-indigo-500 px-3 py-1.5 rounded hover:bg-primary/10 transition-colors">

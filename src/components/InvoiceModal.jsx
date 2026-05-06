@@ -11,7 +11,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
   vatPercent: true,
   vatAmt: true,
   total: true
-} }) {
+}, isPurchase = false }) {
   const [saleItems, setSaleItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [customerAddress, setCustomerAddress] = useState(null);
@@ -28,8 +28,12 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
           if (adhocAddress) {
             setCustomerAddress(adhocAddress);
           } else if (sale.ACCODE && sale.ACCODE !== '6000') {
-            // Fallback to customer master address
-            fetchCustomerAddress(sale.ACCODE);
+            // Fallback to customer/supplier master address
+            if (isPurchase) {
+              fetchSupplierAddress(sale.ACCODE);
+            } else {
+              fetchCustomerAddress(sale.ACCODE);
+            }
           } else {
             setCustomerAddress(null);
           }
@@ -41,15 +45,36 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
   const fetchSaleItems = async () => {
     setLoadingItems(true);
     try {
-      const res = await fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO));
+      const endpoint = isPurchase ? API_ENDPOINTS.PURCHASE_ITEMS(sale.REC_NO) : API_ENDPOINTS.SALE_ITEMS(sale.REC_NO);
+      const res = await fetch(endpoint);
       if (res.ok) {
         const data = await res.json();
         setSaleItems(data);
       }
     } catch (err) {
-      console.error("Failed to fetch sale items:", err);
+      console.error(`Failed to fetch ${isPurchase ? 'purchase' : 'sale'} items:`, err);
     } finally {
       setLoadingItems(false);
+    }
+  };
+
+  const fetchSupplierAddress = async (accNo) => {
+    try {
+      const res = await fetch(API_ENDPOINTS.SUPPLIER_INFO(accNo));
+      if (res.ok) {
+        const data = await res.json();
+        if (data) {
+          setCustomerAddress({
+            building: data.building_no,
+            street: data.street_name,
+            district: data.district,
+            city: data.city_name,
+            pincode: data.postal_zone
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch supplier address:", err);
     }
   };
 

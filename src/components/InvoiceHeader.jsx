@@ -12,7 +12,8 @@ export default function InvoiceHeader({
   onInvoiceSelect,
   selectedInvoice = null,
   onReferenceChange,
-  referenceNo = ''
+  referenceNo = '',
+  hideInvoiceNo = false
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -62,20 +63,22 @@ export default function InvoiceHeader({
 
   return (
     <div className="bg-card p-4 rounded-xl border border-border shadow-sm transition-all duration-300">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className={`grid grid-cols-2 ${hideInvoiceNo ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-3`}>
         {!isReturn ? (
           <>
-            <div>
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 px-1">Inv. No</label>
-              <input 
-                type="text" 
-                value={invoiceNo}
-                readOnly
-                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 outline-none" 
-              />
-            </div>
+            {!hideInvoiceNo && (
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 px-1">Inv. No</label>
+                <input 
+                  type="text" 
+                  value={invoiceNo}
+                  readOnly
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-sm font-bold text-zinc-700 dark:text-zinc-300 outline-none" 
+                />
+              </div>
+            )}
             
-            <div>
+            <div className={hideInvoiceNo ? "col-span-1" : ""}>
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 px-1">Ref #</label>
               <input 
                 type="text" 
