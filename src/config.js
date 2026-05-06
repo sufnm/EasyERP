@@ -61,6 +61,15 @@ export const API_ENDPOINTS = {
   GENERAL_VOUCHER_ACCOUNTS: `${API_BASE_URL}/api/general-voucher/accounts`,
   GENERAL_VOUCHER_HISTORY: `${API_BASE_URL}/api/general-voucher/history`,
   GENERAL_VOUCHER_SAVE: `${API_BASE_URL}/api/general-voucher/save`,
+  // Expense Entry
+  EXPENSE_ENTRY_TYPES: `${API_BASE_URL}/api/expense-entry/types`,
+  EXPENSE_ENTRY_ACCOUNTS: `${API_BASE_URL}/api/expense-entry/accounts`,
+  EXPENSE_ENTRY_HISTORY: `${API_BASE_URL}/api/expense-entry/history`,
+  EXPENSE_ENTRY_SAVE: `${API_BASE_URL}/api/expense-entry/save`,
+  // Salary Entry
+  SALARY_ENTRY_TYPES: `${API_BASE_URL}/api/salary-entry/types`,
+  SALARY_ENTRY_HISTORY: `${API_BASE_URL}/api/salary-entry/history`,
+  SALARY_ENTRY_SAVE: `${API_BASE_URL}/api/salary-entry/save`,
 };
 
 export default API_BASE_URL;

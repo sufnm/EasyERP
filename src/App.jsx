@@ -23,6 +23,8 @@ import SupplierPayablePage from './pages/SupplierPayablePage';
 import TranslationManagerPage from './pages/TranslationManagerPage';
 import SalesReturnPage from './pages/SalesReturnPage';
 import GeneralVoucherPage from './pages/GeneralVoucherPage';
+import ExpenseEntryPage from './pages/ExpenseEntryPage';
+import EmployeeSalaryEntryPage from './pages/EmployeeSalaryEntryPage';
 import { CacheProvider } from './context/CacheContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Menu } from 'lucide-react';
@@ -81,6 +83,8 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
           {activePage === 'customer-receivable' && <CustomerReceivablePage setActivePage={navigateTo} user={user} />}
           {activePage === 'supplier-payable' && <SupplierPayablePage setActivePage={navigateTo} user={user} />}
           {activePage === 'general-voucher' && <GeneralVoucherPage setActivePage={navigateTo} user={user} />}
+          {activePage === 'expense-entry' && <ExpenseEntryPage setActivePage={navigateTo} user={user} />}
+          {activePage === 'employee-salary' && <EmployeeSalaryEntryPage setActivePage={navigateTo} user={user} />}
           {activePage === 'translation-manager' && <TranslationManagerPage />}
           {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">

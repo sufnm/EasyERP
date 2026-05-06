@@ -397,10 +397,10 @@ app.post('/api/receivable/save', async (req, res) => {
     request.input('ID', sql.Numeric(18, 0), data.ID || null);
     request.input('ENTRY_DATE', sql.DateTime, new Date(data.ENTRY_DATE));
     request.input('DOC_NO', sql.VarChar(50), String(data.DOC_NO));
-    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 6); 
-    request.input('TRN_TYPE', sql.Int, 100); 
-    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC); 
-    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC); 
+    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 6);
+    request.input('TRN_TYPE', sql.Int, 100);
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC);
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC);
     request.input('TRN_NO', sql.Numeric(18, 0), null);
     request.input('TRN_NO2', sql.Numeric(18, 0), null);
     request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
@@ -485,10 +485,10 @@ app.post('/api/payable/save', async (req, res) => {
     request.input('ID', sql.Numeric(18, 0), data.ID || null);
     request.input('ENTRY_DATE', sql.DateTime, new Date(data.ENTRY_DATE));
     request.input('DOC_NO', sql.VarChar(50), String(data.DOC_NO));
-    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 7); 
-    request.input('TRN_TYPE', sql.Int, 200); 
-    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC); 
-    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC); 
+    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 7);
+    request.input('TRN_TYPE', sql.Int, 200);
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC);
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC);
     request.input('TRN_NO', sql.Numeric(18, 0), null);
     request.input('TRN_NO2', sql.Numeric(18, 0), null);
     request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
@@ -583,10 +583,10 @@ app.post('/api/general-voucher/save', async (req, res) => {
     request.input('ID', sql.Numeric(18, 0), data.ID || null);
     request.input('ENTRY_DATE', sql.DateTime, new Date(data.ENTRY_DATE));
     request.input('DOC_NO', sql.VarChar(50), String(data.DOC_NO));
-    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 1); 
-    request.input('TRN_TYPE', sql.Int, 101); 
-    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC); 
-    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC); 
+    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 1);
+    request.input('TRN_TYPE', sql.Int, 101);
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC);
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC);
     request.input('TRN_NO', sql.Numeric(18, 0), null);
     request.input('TRN_NO2', sql.Numeric(18, 0), null);
     request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
@@ -2165,6 +2165,218 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+// --- EXPENSE ENTRY ENDPOINTS ---
+
+app.get('/api/expense-entry/types', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT id, type_name, type_aname FROM dbo.expense_type WHERE exp_category = 1
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch expense types:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/expense-entry/accounts', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        (SELECT exp_ac_type FROM dbo.ac_options WHERE id=1) AS exp_ac_type,
+        (SELECT Payable_ac_type FROM dbo.ac_options WHERE id=1) AS payable_ac_type,
+        (SELECT cash_ac_type FROM dbo.ac_options WHERE id=1) AS cash_ac_type,
+        (SELECT Vat_ac_type FROM dbo.ac_options WHERE id=1) AS vat_ac_type
+    `);
+
+    const options = result.recordset[0];
+
+    const accountsResult = await pool.request().query(`
+      SELECT acc_no, acc_name, acc_aname, level3_no 
+      FROM dbo.accounts 
+      WHERE acc_level = 4 AND level3_no IN (
+        ${options.exp_ac_type || 0}, 
+        ${options.payable_ac_type || 0}, 
+        ${options.cash_ac_type || 0}, 
+        ${options.vat_ac_type || 0}
+      )
+    `);
+
+    const accounts = accountsResult.recordset;
+
+    res.json({
+      expenseAccounts: accounts.filter(a => a.level3_no == options.exp_ac_type),
+      payableAccounts: accounts.filter(a => a.level3_no == options.payable_ac_type),
+      cashAccounts: accounts.filter(a => a.level3_no == options.cash_ac_type),
+      vatAccounts: accounts.filter(a => a.level3_no == options.vat_ac_type)
+    });
+  } catch (error) {
+    console.error("Failed to fetch expense accounts:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/expense-entry/history', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        ID, 
+        ENTRY_DATE, 
+        DOC_NO, 
+        ACC_NAME1 AS [TO ACC], 
+        ACC_NAME2 AS FROM_ACC, 
+        PAY_AMOUNT, 
+        DESCRIPTION, 
+        RETURN_INVOICE,
+        Currency_no AS CURRENCY,
+        Currency_rate AS CURRENCY_RATE,
+        COST_CENTER,
+        BRN_CODE,
+        REF_NO,
+        PAY_FROM_ACC,
+        PAY_TO_ACC,
+        DOC_TRN_TYPE
+      FROM dbo.TRN_ENTRY 
+      WHERE TRN_TYPE = 204 
+      ORDER BY ID DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch expense history:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.post('/api/expense-entry/save', async (req, res) => {
+  const data = req.body;
+  console.log('🔍 DEBUG: Expense Entry Save Payload:', JSON.stringify(data, null, 2));
+  try {
+    const pool = await getPool();
+    const request = pool.request();
+
+    request.input('ID', sql.Numeric(18, 0), data.ID || null);
+    request.input('ENTRY_DATE', sql.DateTime, new Date(data.ENTRY_DATE));
+    request.input('DOC_NO', sql.VarChar(50), String(data.DOC_NO));
+    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 1);
+    request.input('TRN_TYPE', sql.Int, 204);
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC);
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC);
+    request.input('TRN_NO', sql.Numeric(18, 0), null);
+    request.input('TRN_NO2', sql.Numeric(18, 0), null);
+    request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
+    request.input('PAY_AMOUNT', sql.Real, data.PAY_AMOUNT);
+    request.input('CURRENCY_NO', sql.Int, data.CURRENCY || 1);
+    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || 1);
+    request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
+    request.input('USER_ID', sql.Int, data.USER_ID || 1);
+    request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
+    request.input('cost_center', sql.Int, data.DOC_TRN_TYPE || null);
+    request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
+    request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
+    request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
+    request.input('VAT_AMOUNT', sql.Real, parseFloat(data.VAT_AMOUNT) || 0);
+    request.input('VAT_ACCOUNT', sql.Numeric(18, 0), data.VAT_ACCOUNT ? parseFloat(data.VAT_ACCOUNT) : null);
+    request.input('PAYFROM_AC', sql.Numeric(18, 0), data.PAYFROM_AC ? parseFloat(data.PAYFROM_AC) : null);
+    request.input('PAY_FROMNAME', sql.NVarChar(200), data.PAY_FROMNAME || null);
+    request.input('VAT_ACNAME', sql.NVarChar(200), data.VAT_ACNAME || null);
+
+    console.log('📡 Executing SP_TRN_ENTRY_EXPSAVE for Expense Entry...');
+    const result = await request.execute('dbo.SP_TRN_ENTRY_EXPSAVE');
+    const newId = result.recordset[0]?.NEW_ID || result.recordset[0]?.UPDATED_ID || result.recordset[0]?.ID;
+    res.json({ success: true, transactionId: newId });
+  } catch (error) {
+    console.error("Failed to save expense entry:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+// --- EMPLOYEE SALARY ENTRY ENDPOINTS ---
+
+app.get('/api/salary-entry/types', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT id, type_name, type_aname FROM dbo.expense_type WHERE exp_category = 2
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch salary entry types:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.get('/api/salary-entry/history', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        ID, 
+        ENTRY_DATE, 
+        DOC_NO, 
+        ACC_NAME1 AS [TO ACC], 
+        ACC_NAME2 AS FROM_ACC, 
+        PAY_AMOUNT, 
+        DESCRIPTION, 
+        RETURN_INVOICE,
+        Currency_no AS CURRENCY,
+        Currency_rate AS CURRENCY_RATE,
+        COST_CENTER,
+        BRN_CODE,
+        REF_NO,
+        PAY_FROM_ACC,
+        PAY_TO_ACC,
+        DOC_TRN_TYPE
+      FROM dbo.TRN_ENTRY 
+      WHERE TRN_TYPE = 208 
+      ORDER BY ID DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Failed to fetch salary entry history:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+app.post('/api/salary-entry/save', async (req, res) => {
+  const data = req.body;
+  try {
+    const pool = await getPool();
+    const request = pool.request();
+
+    request.input('ID', sql.Numeric(18, 0), data.ID || null);
+    request.input('ENTRY_DATE', sql.DateTime, new Date(data.ENTRY_DATE));
+    request.input('DOC_NO', sql.VarChar(50), String(data.DOC_NO));
+    request.input('DOC_TRN_TYPE', sql.Int, data.DOC_TRN_TYPE || 1);
+    request.input('TRN_TYPE', sql.Int, 208);
+    request.input('PAY_FROM_ACC', sql.Numeric(18, 0), data.PAY_FROM_ACC);
+    request.input('PAY_TO_ACC', sql.Numeric(18, 0), data.PAY_TO_ACC);
+    request.input('TRN_NO', sql.Numeric(18, 0), null);
+    request.input('TRN_NO2', sql.Numeric(18, 0), null);
+    request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
+    request.input('PAY_AMOUNT', sql.Real, data.PAY_AMOUNT);
+    request.input('CURRENCY_NO', sql.Int, data.CURRENCY || 1);
+    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || 1);
+    request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
+    request.input('USER_ID', sql.Int, data.USER_ID || 1);
+    request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
+    request.input('cost_center', sql.Int, data.DOC_TRN_TYPE || null);
+    request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
+    request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
+    request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
+
+    console.log('📡 Executing SP_TRN_ENTRY_SAVE for Salary Entry...');
+    const result = await request.execute('dbo.SP_TRN_ENTRY_SAVE');
+    const newId = result.recordset[0]?.NEW_ID || result.recordset[0]?.UPDATED_ID || result.recordset[0]?.ID;
+    res.json({ success: true, transactionId: newId });
+  } catch (error) {
+    console.error("Failed to save salary entry:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
 
 // --- TRANSLATION API ---
 app.get('/api/translations', async (req, res) => {

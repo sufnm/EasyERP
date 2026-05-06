@@ -30,6 +30,25 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
 
   const navItems = [
     { id: 'home', label: t('home'), icon: Home },
+    {
+      id: 'stock-master',
+      label: t('Stock Master'),
+      icon: ShoppingBag,
+      subItems: [
+        { id: 'item-creation', label: t('Item Creation/Edit') },
+        { id: 'divider_sm_1' },
+        { id: 'opening-stock', label: t('Opening stock/Price Update') },
+        { id: 'item-search', label: t('Item Search') },
+        { id: 'update-stock', label: t('Update Stock') },
+        { id: 'divider_sm_2' },
+        { id: 'project-master', label: t('Project Master') },
+        { id: 'stock-transfer', label: t('Stock Transfer') },
+        { id: 'stock-adjust', label: t('Stock Adjust') },
+        { id: 'divider_sm_3' },
+        { id: 'item-group', label: t('itemGroup') },
+        { id: 'unit-master', label: t('unitMaster') }
+      ]
+    },
     { 
       id: 'sales-n-return', 
       label: t('salesNReturn'), 
@@ -37,7 +56,14 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
       subItems: [
         { id: 'sales', label: t('sales') },
         { id: 'sales-return', label: t('salesReturn') },
-        { id: 'sales-history', label: t('salesHistory') }
+        { id: 'sales-history', label: t('salesHistory') },
+        { id: 'quotation-entry', label: t('Quotation Entry') },
+        { id: 'delivery-note', label: t('Delivery Note') },
+        { id: 'item-issue', label: t('Item Issue') },
+        { id: 'divider_sales_1' },
+        { id: 'zatca-submission-sales', label: t('Zatca Submission') },
+        { id: 'divider_sales_2' },
+        { id: 'day-close', label: t('Day Close') }
       ]
     },
     { 
@@ -46,7 +72,27 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
       icon: ShoppingBag,
       subItems: [
         { id: 'purchase', label: t('purchase') },
-        { id: 'purchase-return', label: t('purchaseReturn') }
+        { id: 'purchase-return', label: t('purchaseReturn') },
+        { id: 'item-receivable', label: t('Item Receivable') },
+        { id: 'purchase-expense', label: t('Purchase Expense') }
+      ]
+    },
+    {
+      id: 'stock-invoice-report',
+      label: t('Stock & Invoice Report'),
+      icon: BarChart3,
+      subItems: [
+        { id: 'stock-report', label: t('Stock Report') },
+        { id: 'stock-report-warehouse', label: t('Stock Report By Warehouse') },
+        { id: 'divider_sir_1' },
+        { id: 'invoice-report', label: t('Invoice Report') },
+        { id: 'divider_sir_2' },
+        { id: 'stock-movement', label: t('Stock Movement detail') },
+        { id: 'vat-report', label: t('VAT Report') },
+        { id: 'daily-sales-purchase', label: t('Daily Sales N Purchase') },
+        { id: 'divider_sir_3' },
+        { id: 'customer-report', label: t('Customer Report') },
+        { id: 'supplier-report', label: t('Supplier Report') }
       ]
     },
     { 
@@ -59,7 +105,34 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
         { id: 'supplier-accounts', label: t('supplierAccount') },
         { id: 'purchase-accounts', label: t('purchaseAccount') },
         { id: 'accounts', label: t('bankNCashAccounts') },
-        { id: 'expense-accounts', label: t('expenseAccounts') }
+        { id: 'expense-accounts', label: t('expenseAccounts') },
+        { id: 'currency-master', label: t('Currency Master') },
+        { id: 'cost-center', label: t('Cost Center') },
+        { id: 'acc-department', label: t('Acc department') },
+        { id: 'divider_acc_1' },
+        { id: 'financial-session', label: t('Financial Session') },
+        { id: 'transaction-search', label: t('Transaction Search') }
+      ]
+    },
+    {
+      id: 'accounts-report',
+      label: t('Accounts Report'),
+      icon: Book,
+      subItems: [
+        { id: 'accounts-summary', label: t('Accounts Summary') },
+        { id: 'accounts-detail', label: t('Accounts Detail') },
+        { id: 'cash-bank-report', label: t('Cash N Bank Report') }
+      ]
+    },
+    {
+      id: 'finance-report',
+      label: t('Finance Report'),
+      icon: BarChart3,
+      subItems: [
+        { id: 'income-expense', label: t('Income and Expense') },
+        { id: 'trial-balance', label: t('Trial Balance') },
+        { id: 'profit-loss', label: t('Profit and Loss') },
+        { id: 'balance-sheet', label: t('Balance Sheet') }
       ]
     },
     {
@@ -74,15 +147,6 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
         { id: 'employee-salary', label: t('employeesSalaryEntry') }
       ]
     },
-    { 
-      id: 'lookup-master', 
-      label: t('lookupMaster'), 
-      icon: Settings,
-      subItems: [
-        { id: 'item-group', label: t('itemGroup') },
-        { id: 'unit-master', label: t('unitMaster') }
-      ]
-    },
     {
       id: 'admin-setup',
       label: t('adminSetup'),
@@ -91,7 +155,11 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
         { id: 'transaction-types', label: t('transactionTypes') },
         { id: 'user-privileges', label: t('userPrivileges') },
         { id: 'user-info', label: t('userInfo') },
-        { id: 'translation-manager', label: t('translationManager') }
+        { id: 'translation-manager', label: t('translationManager') },
+        { id: 'company-info', label: t('Company Info') },
+        { id: 'common-setting', label: t('Common Setting') },
+        { id: 'entry-settings', label: t('Entry Settings') },
+        { id: 'zatca-config', label: t('Zatca Config') }
       ]
     },
     { id: 'settings', label: t('settings'), icon: Settings },
@@ -180,16 +248,20 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
                   {openMenus.includes(item.id) && !isCollapsed && (
                     <div className="ml-4 pl-4 border-l border-sidebar-border mt-1 space-y-1 animate-in slide-in-from-top-1 duration-200">
                       {item.subItems.map((sub) => (
-                        <button
-                          key={sub.id}
-                          onClick={() => handlePageSelect(sub.id)}
-                          className={`
-                            w-full text-left px-3 py-1.5 rounded-lg text-xs font-bold transition-all
-                            ${activePage === sub.id ? 'bg-sidebar-active text-white shadow-lg shadow-indigo-500/20' : 'text-sidebar-text/70 hover:text-white hover:bg-sidebar-hover/50'}
-                          `}
-                        >
-                          {sub.label}
-                        </button>
+                        sub.id.startsWith('divider') ? (
+                          <div key={sub.id} className="h-px bg-sidebar-border my-1.5 opacity-50 mx-2" />
+                        ) : (
+                          <button
+                            key={sub.id}
+                            onClick={() => handlePageSelect(sub.id)}
+                            className={`
+                              w-full text-left px-3 py-1.5 rounded-lg text-xs font-bold transition-all
+                              ${activePage === sub.id ? 'bg-sidebar-active text-white shadow-lg shadow-indigo-500/20' : 'text-sidebar-text/70 hover:text-white hover:bg-sidebar-hover/50'}
+                            `}
+                          >
+                            {sub.label}
+                          </button>
+                        )
                       ))}
                     </div>
                   )}
