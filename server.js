@@ -2426,7 +2426,337 @@ app.get('/api/branches', async (req, res) => {
   }
 });
 
+// --- SCREENS ENDPOINT ---
+app.get('/api/screens', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT DISTINCT Menu_Name FROM dbo.MENU_MASTER WHERE Menu_Name IS NOT NULL AND Menu_Name <> '' ORDER BY Menu_Name
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch screens:", err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
 
+// --- ACCOUNTS ALL ENDPOINT ---
+app.get('/api/accounts/all', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ACC_NO, ACC_NAME, ACC_ANAME FROM dbo.ACCOUNTS WHERE ACC_LEVEL = 4 ORDER BY ACC_NO
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch all accounts:", err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// --- WAREHOUSES ENDPOINT ---
+app.get('/api/warehouses/list', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT WR_CODE, WR_NAME FROM dbo.WAREHOUSE ORDER BY WR_NAME
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch warehouses:", err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// --- TRANSACTION TYPES ENDPOINTS ---
+
+app.get('/api/transaction-types', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT TRN_CODE, TRN_NAME, TRN_NO, BRN_CODE, TRN_ANAME,
+             ACC_NO, ABRV, DRCR, DRCR1, PAYBY,
+             INV_PREFEX, AUTO_POST, ABRV_CODE, VAT_ACC,
+             EXP_ACC, PIH, SCREEN_NAME
+      FROM dbo.trn_type
+      ORDER BY TRN_CODE
+    `);
+    console.log(`📋 Transaction Types: Loaded ${result.recordset.length} types`);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch transaction types:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.post('/api/transaction-types', async (req, res) => {
+  const data = req.body;
+  try {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('TRN_CODE', sql.Int, data.TRN_CODE);
+    request.input('TRN_NAME', sql.VarChar(100), data.TRN_NAME || '');
+    request.input('TRN_NO', sql.Int, data.TRN_NO || null);
+    request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
+    request.input('TRN_ANAME', sql.NVarChar(100), data.TRN_ANAME || '');
+    request.input('ACC_NO', sql.VarChar(50), data.ACC_NO || '');
+    request.input('ABRV', sql.VarChar(20), data.ABRV || '');
+    request.input('DRCR', sql.VarChar(5), data.DRCR || 'D');
+    request.input('DRCR1', sql.VarChar(5), data.DRCR1 || 'D');
+    request.input('PAYBY', sql.VarChar(50), data.PAYBY || '');
+    request.input('INV_PREFEX', sql.VarChar(20), data.INV_PREFEX || '');
+    request.input('AUTO_POST', sql.Int, data.AUTO_POST != null ? data.AUTO_POST : 1);
+    request.input('ABRV_CODE', sql.VarChar(20), data.ABRV_CODE || '');
+    request.input('VAT_ACC', sql.VarChar(50), data.VAT_ACC || '');
+    request.input('EXP_ACC', sql.VarChar(50), data.EXP_ACC || '');
+    request.input('PIH', sql.Int, data.PIH || 0);
+    request.input('SCREEN_NAME', sql.VarChar(100), data.SCREEN_NAME || '');
+
+    await request.query(`
+      IF EXISTS (SELECT 1 FROM dbo.trn_type WHERE TRN_CODE = @TRN_CODE)
+        UPDATE dbo.trn_type SET
+          TRN_NAME = @TRN_NAME, TRN_NO = @TRN_NO, BRN_CODE = @BRN_CODE, TRN_ANAME = @TRN_ANAME,
+          ACC_NO = @ACC_NO, ABRV = @ABRV, DRCR = @DRCR, DRCR1 = @DRCR1, PAYBY = @PAYBY,
+          INV_PREFEX = @INV_PREFEX, AUTO_POST = @AUTO_POST, ABRV_CODE = @ABRV_CODE,
+          VAT_ACC = @VAT_ACC, EXP_ACC = @EXP_ACC, PIH = @PIH, SCREEN_NAME = @SCREEN_NAME
+        WHERE TRN_CODE = @TRN_CODE
+      ELSE
+        INSERT INTO dbo.trn_type (TRN_CODE, TRN_NAME, TRN_NO, BRN_CODE, TRN_ANAME, ACC_NO, ABRV, DRCR, DRCR1, PAYBY, INV_PREFEX, AUTO_POST, ABRV_CODE, VAT_ACC, EXP_ACC, PIH, SCREEN_NAME)
+        VALUES (@TRN_CODE, @TRN_NAME, @TRN_NO, @BRN_CODE, @TRN_ANAME, @ACC_NO, @ABRV, @DRCR, @DRCR1, @PAYBY, @INV_PREFEX, @AUTO_POST, @ABRV_CODE, @VAT_ACC, @EXP_ACC, @PIH, @SCREEN_NAME)
+    `);
+    console.log(`✅ Transaction type ${data.TRN_CODE} saved successfully`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to save transaction type:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// --- USER PRIVILEGES ENDPOINTS ---
+
+app.get('/api/user-privileges', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name
+      FROM dbo.UserPriv
+      ORDER BY GROUP_NAME, Menu_Name
+    `);
+    console.log(`🔐 User Privileges: Loaded ${result.recordset.length} records`);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch user privileges:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.post('/api/user-privileges', async (req, res) => {
+  const data = req.body;
+  try {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('GROUP_NAME', sql.VarChar(50), data.GROUP_NAME);
+    request.input('form_id', sql.VarChar(50), data.form_id || '');
+    request.input('ins', sql.Bit, data.ins || 0);
+    request.input('upd', sql.Bit, data.upd || 0);
+    request.input('qry', sql.Bit, data.qry || 0);
+    request.input('del', sql.Bit, data.del || 0);
+    request.input('dsp', sql.Bit, data.dsp || 0);
+    request.input('Menu_Name', sql.VarChar(100), data.Menu_Name || '');
+
+    await request.query(`
+      IF EXISTS (SELECT 1 FROM dbo.UserPriv WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name)
+        UPDATE dbo.UserPriv SET
+          form_id = @form_id, ins = @ins, upd = @upd, qry = @qry, del = @del, dsp = @dsp
+        WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name
+      ELSE
+        INSERT INTO dbo.UserPriv (GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name)
+        VALUES (@GROUP_NAME, @form_id, @ins, @upd, @qry, @del, @dsp, @Menu_Name)
+    `);
+    console.log(`✅ User privilege for group "${data.GROUP_NAME}" / menu "${data.Menu_Name}" saved`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to save user privilege:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// --- USER PRIVILEGES GRID ENDPOINTS ---
+
+app.get('/api/user-privileges/groups', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT DISTINCT Group_Name FROM dbo.UserInfo 
+      WHERE Group_Name IS NOT NULL AND Group_Name <> '' 
+      ORDER BY Group_Name
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch user groups:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.get('/api/user-privileges/menu-heads', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT DISTINCT Head FROM dbo.MENU_MASTER 
+      WHERE Head IS NOT NULL AND Head <> '' AND Head <> '...' 
+      ORDER BY Head
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch menu heads:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.get('/api/user-privileges/grid', async (req, res) => {
+  const { group, menuHead } = req.query;
+  try {
+    const pool = await getPool();
+    const request = pool.request();
+    
+    let whereClause = "WHERE M.Menu_Name IS NOT NULL AND M.Menu_Name <> '' AND M.Menu_type = 2";
+    if (menuHead && menuHead !== 'All') {
+      request.input('menuHead', sql.VarChar, menuHead);
+      whereClause += ' AND M.Head = @menuHead';
+    }
+    if (group) {
+      request.input('groupName', sql.VarChar, group);
+    }
+
+    const result = await request.query(`
+      SELECT 
+        M.Head AS MENUHEAD,
+        M.Menu_Name,
+        M.ID AS form_id,
+        ISNULL(P.ins, 0) AS ins,
+        ISNULL(P.upd, 0) AS upd,
+        ISNULL(P.del, 0) AS del,
+        ISNULL(P.dsp, 0) AS dsp,
+        ISNULL(P.qry, 0) AS qry
+      FROM dbo.MENU_MASTER M
+      LEFT JOIN dbo.UserPriv P ON M.Menu_Name = P.Menu_Name ${group ? "AND P.GROUP_NAME = @groupName" : "AND 1=0"}
+      ${whereClause}
+      ORDER BY M.Head, M.Menu_Name
+    `);
+    console.log('🔐 Privilege grid: Loaded ' + result.recordset.length + ' items for group=' + (group || 'none') + ', head=' + (menuHead || 'all'));
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch privilege grid:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.post('/api/user-privileges/bulk-save', async (req, res) => {
+  const { group, privileges } = req.body;
+  if (!group || !privileges || !Array.isArray(privileges)) {
+    return res.status(400).json({ error: 'group and privileges array required' });
+  }
+  try {
+    const pool = await getPool();
+    
+    for (const priv of privileges) {
+      const request = pool.request();
+      request.input('GROUP_NAME', sql.VarChar(50), group);
+      request.input('Menu_Name', sql.VarChar(100), priv.Menu_Name);
+      request.input('form_id', sql.Int, priv.form_id || 0);
+      request.input('ins', sql.Bit, priv.ins ? 1 : 0);
+      request.input('upd', sql.Bit, priv.upd ? 1 : 0);
+      request.input('qry', sql.Bit, priv.qry ? 1 : 0);
+      request.input('del', sql.Bit, priv.del ? 1 : 0);
+      request.input('dsp', sql.Bit, priv.dsp ? 1 : 0);
+
+      await request.query(`
+        IF EXISTS (SELECT 1 FROM dbo.UserPriv WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name)
+          UPDATE dbo.UserPriv SET form_id = @form_id, ins = @ins, upd = @upd, qry = @qry, del = @del, dsp = @dsp
+          WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name
+        ELSE
+          INSERT INTO dbo.UserPriv (GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name)
+          VALUES (@GROUP_NAME, @form_id, @ins, @upd, @qry, @del, @dsp, @Menu_Name)
+      `);
+    }
+    
+    console.log('✅ Bulk saved ' + privileges.length + ' privileges for group "' + group + '"');
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to bulk save privileges:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// --- USER INFO ENDPOINTS ---
+
+app.get('/api/user-info', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT UserId, UserName, MOBILE_NO, Password, Superuser,
+             Group_Name, WR_CODE, BRN_CODE, MENU_DOCK, SH_TOPMENU,
+             SH_SIDEMENU, POWER_USER, DEF_LANG, DEF_INVOICE,
+             DEF_FORM, DEF_SCREEN, Employee_ACNO, SALE_CASH_AC,
+             SALE_BANK_AC, Payments
+      FROM dbo.UserInfo
+      ORDER BY UserName
+    `);
+    console.log(`👤 User Info: Loaded ${result.recordset.length} users`);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch user info:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.post('/api/user-info', async (req, res) => {
+  const data = req.body;
+  try {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('UserId', sql.VarChar(50), data.UserId);
+    request.input('UserName', sql.VarChar(100), data.UserName || '');
+    request.input('MOBILE_NO', sql.VarChar(50), data.MOBILE_NO || '');
+    request.input('Password', sql.VarChar(100), data.Password || '');
+    request.input('Superuser', sql.Bit, data.Superuser || 0);
+    request.input('Group_Name', sql.VarChar(50), data.Group_Name || '');
+    request.input('WR_CODE', sql.VarChar(20), data.WR_CODE || '');
+    request.input('BRN_CODE', sql.VarChar(20), data.BRN_CODE || '');
+    request.input('MENU_DOCK', sql.Bit, data.MENU_DOCK || 0);
+    request.input('SH_TOPMENU', sql.Bit, data.SH_TOPMENU != null ? data.SH_TOPMENU : 1);
+    request.input('SH_SIDEMENU', sql.Bit, data.SH_SIDEMENU != null ? data.SH_SIDEMENU : 1);
+    request.input('POWER_USER', sql.Bit, data.POWER_USER || 0);
+    request.input('DEF_LANG', sql.VarChar(10), data.DEF_LANG || 'EN');
+    request.input('DEF_INVOICE', sql.VarChar(50), data.DEF_INVOICE || '');
+    request.input('DEF_FORM', sql.VarChar(50), data.DEF_FORM || '');
+    request.input('DEF_SCREEN', sql.VarChar(50), data.DEF_SCREEN || '');
+    request.input('Employee_ACNO', sql.VarChar(50), data.Employee_ACNO || '');
+    request.input('SALE_CASH_AC', sql.VarChar(50), data.SALE_CASH_AC || '');
+    request.input('SALE_BANK_AC', sql.VarChar(50), data.SALE_BANK_AC || '');
+    request.input('Payments', sql.VarChar(100), data.Payments || '');
+
+    await request.query(`
+      IF EXISTS (SELECT 1 FROM dbo.UserInfo WHERE UserId = @UserId)
+        UPDATE dbo.UserInfo SET
+          UserName = @UserName, MOBILE_NO = @MOBILE_NO, Password = @Password, Superuser = @Superuser,
+          Group_Name = @Group_Name, WR_CODE = @WR_CODE, BRN_CODE = @BRN_CODE, MENU_DOCK = @MENU_DOCK,
+          SH_TOPMENU = @SH_TOPMENU, SH_SIDEMENU = @SH_SIDEMENU, POWER_USER = @POWER_USER,
+          DEF_LANG = @DEF_LANG, DEF_INVOICE = @DEF_INVOICE, DEF_FORM = @DEF_FORM,
+          DEF_SCREEN = @DEF_SCREEN, Employee_ACNO = @Employee_ACNO, SALE_CASH_AC = @SALE_CASH_AC,
+          SALE_BANK_AC = @SALE_BANK_AC, Payments = @Payments
+        WHERE UserId = @UserId
+      ELSE
+        INSERT INTO dbo.UserInfo (UserId, UserName, MOBILE_NO, Password, Superuser, Group_Name, WR_CODE, BRN_CODE, MENU_DOCK, SH_TOPMENU, SH_SIDEMENU, POWER_USER, DEF_LANG, DEF_INVOICE, DEF_FORM, DEF_SCREEN, Employee_ACNO, SALE_CASH_AC, SALE_BANK_AC, Payments)
+        VALUES (@UserId, @UserName, @MOBILE_NO, @Password, @Superuser, @Group_Name, @WR_CODE, @BRN_CODE, @MENU_DOCK, @SH_TOPMENU, @SH_SIDEMENU, @POWER_USER, @DEF_LANG, @DEF_INVOICE, @DEF_FORM, @DEF_SCREEN, @Employee_ACNO, @SALE_CASH_AC, @SALE_BANK_AC, @Payments)
+    `);
+    console.log(`✅ User info for "${data.UserName}" (ID: ${data.UserId}) saved`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to save user info:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
 
 
 app.listen(PORT, async () => {
