@@ -8,6 +8,7 @@ export default function UserInfoPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [branches, setBranches] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [groups, setGroups] = useState([]);
   
   const defaultFormData = {
     UserId: '', UserName: '', MOBILE_NO: '', Password: '', Superuser: 0,
@@ -34,12 +35,14 @@ export default function UserInfoPage() {
 
   const fetchDependencies = async () => {
     try {
-      const [brRes, wrRes] = await Promise.all([
+      const [brRes, wrRes, grpRes] = await Promise.all([
         fetch(API_ENDPOINTS.BRANCHES),
-        fetch(API_ENDPOINTS.WAREHOUSE_LIST)
+        fetch(API_ENDPOINTS.WAREHOUSE_LIST),
+        fetch(API_ENDPOINTS.USER_PRIVILEGES_GROUPS)
       ]);
       if (brRes.ok) setBranches(await brRes.json());
       if (wrRes.ok) setWarehouses(await wrRes.json());
+      if (grpRes.ok) setGroups(await grpRes.json());
     } catch (err) {
       console.error("Fetch Dependencies Error:", err);
     }
@@ -72,8 +75,8 @@ export default function UserInfoPage() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!formData.UserId || !formData.UserName) {
-      alert("User ID and Name are required!");
+    if (!formData.UserName) {
+      alert("User Name is required!");
       return;
     }
 
@@ -148,7 +151,7 @@ export default function UserInfoPage() {
                         <td className="p-4 font-bold text-zinc-900 dark:text-zinc-200">{user.UserName}</td>
                         <td className="p-4">
                            <span className="bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded text-[10px] font-bold text-zinc-600">
-                             {user.Group_Name}
+                             {user.Group_Name || user.GROUP_NAME || user.group_name || 'N/A'}
                            </span>
                         </td>
                         <td className="p-4 font-mono text-zinc-600">{user.MOBILE_NO}</td>
@@ -197,12 +200,29 @@ export default function UserInfoPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] uppercase font-black text-zinc-500">User ID *</label>
-                      <input name="UserId" value={formData.UserId} onChange={handleChange} className="input-class bg-zinc-100 dark:bg-zinc-900 border border-border rounded-lg px-3 py-2 text-sm font-bold" required />
+                      <label className="text-[10px] uppercase font-black text-zinc-500">User ID</label>
+                      <input 
+                        name="UserId" 
+                        value={editingUser ? formData.UserId : 'AUTO'} 
+                        disabled 
+                        className="input-class bg-zinc-100 dark:bg-zinc-900 border border-border rounded-lg px-3 py-2 text-sm font-bold opacity-75 cursor-not-allowed" 
+                      />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] uppercase font-black text-zinc-500">Group Name</label>
-                      <input name="Group_Name" value={formData.Group_Name} onChange={handleChange} className="input-class bg-white dark:bg-zinc-800 border border-border rounded-lg px-3 py-2 text-sm" />
+                      <select 
+                        name="Group_Name" 
+                        value={formData.Group_Name} 
+                        onChange={handleChange} 
+                        className="bg-white dark:bg-zinc-800 border border-border rounded-lg px-3 py-2 text-sm"
+                      >
+                        <option value="">Select Group</option>
+                        {groups.map(grp => (
+                          <option key={grp.Group_Name} value={grp.Group_Name}>
+                            {grp.Group_Name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

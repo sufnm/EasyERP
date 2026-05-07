@@ -19,6 +19,7 @@ export default function SalesGrid({
   const [unitSearchResults, setUnitSearchResults] = useState([]);
   const [activeSearchId, setActiveSearchId] = useState(null);
   const [activeUnitSearchId, setActiveUnitSearchId] = useState(null);
+  const [searchSelectedIndex, setSearchSelectedIndex] = useState(-1);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = React.useRef(null);
 
@@ -55,6 +56,7 @@ export default function SalesGrid({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setSearchResults([]);
         setActiveSearchId(null);
+        setSearchSelectedIndex(-1);
         setUnitSearchResults([]);
         setActiveUnitSearchId(null);
       }
@@ -110,17 +112,92 @@ export default function SalesGrid({
     }));
   };
 
+  const handleGridKeyDown = (e, rowId, field) => {
+    const isArrow = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
+    if (!isArrow) return;
+
+    const fields = [];
+    if (visibleColumns.itemCode) fields.push('itemCode');
+    if (visibleColumns.description) fields.push('description');
+    if (visibleColumns.unit) fields.push('unit');
+    if (visibleColumns.qty) fields.push('qty');
+    if (visibleColumns.price) fields.push('price');
+    if (visibleColumns.aliasCode) fields.push('aliasCode');
+    if (visibleColumns.stock) fields.push('stock');
+
+    const fieldIdx = fields.indexOf(field);
+    const rowIdx = rows.findIndex(r => r.id === rowId);
+
+    if (e.key === 'ArrowUp') {
+      if (field === 'itemCode' && activeSearchId === rowId && searchResults.length > 0) {
+        return;
+      }
+      e.preventDefault();
+      const prevRow = rows[rowIdx - 1];
+      if (prevRow) {
+        const el = document.getElementById(`${field}-${prevRow.id}`);
+        if (el) {
+          el.focus();
+          el.select?.();
+        }
+      }
+    } else if (e.key === 'ArrowDown') {
+      if (field === 'itemCode' && activeSearchId === rowId && searchResults.length > 0) {
+        return;
+      }
+      e.preventDefault();
+      const nextRow = rows[rowIdx + 1];
+      if (nextRow) {
+        const el = document.getElementById(`${field}-${nextRow.id}`);
+        if (el) {
+          el.focus();
+          el.select?.();
+        }
+      }
+    } else if (e.key === 'ArrowLeft') {
+      const target = e.target;
+      const isStart = target.selectionStart === 0 && target.selectionEnd === 0;
+      if (target.selectionStart === null || isStart) {
+        const prevField = fields[fieldIdx - 1];
+        if (prevField) {
+          e.preventDefault();
+          const el = document.getElementById(`${prevField}-${rowId}`);
+          if (el) {
+            el.focus();
+            el.select?.();
+          }
+        }
+      }
+    } else if (e.key === 'ArrowRight') {
+      const target = e.target;
+      const isEnd = target.selectionStart === target.value.length;
+      if (target.selectionStart === null || isEnd) {
+        const nextField = fields[fieldIdx + 1];
+        if (nextField) {
+          e.preventDefault();
+          const el = document.getElementById(`${nextField}-${rowId}`);
+          if (el) {
+            el.focus();
+            el.select?.();
+          }
+        }
+      }
+    }
+  };
+
   const handleItemSearch = async (id, codeQuery, isSelection = false) => {
     // Allow empty query if in restricted mode to show all invoice items
     if (!codeQuery && !restrictedItems) {
       setSearchResults([]);
       setActiveSearchId(null);
+      setSearchSelectedIndex(-1);
       return;
     }
     
     if (codeQuery === '999') {
       setSearchResults([]);
       setActiveSearchId(null);
+      setSearchSelectedIndex(-1);
       selectItem(id, {
         BARCODE: '999',
         DESCRIPTION: '',
@@ -170,6 +247,7 @@ export default function SalesGrid({
     
     setSearchResults(data || []);
     setActiveSearchId(id);
+    setSearchSelectedIndex(data && data.length > 0 ? 0 : -1);
     
     // Calculate position for fixed portal
     const input = document.getElementById(`itemCode-${id}`);
@@ -304,6 +382,7 @@ export default function SalesGrid({
 
     setSearchResults([]);
     setActiveSearchId(null);
+    setSearchSelectedIndex(-1);
 
     setTimeout(() => {
       if (wasDuplicate) {
@@ -365,6 +444,15 @@ export default function SalesGrid({
     setRows(newRows);
   };
 
+  React.useEffect(() => {
+    if (searchSelectedIndex >= 0) {
+      const el = document.getElementById(`search-item-${searchSelectedIndex}`);
+      if (el) {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [searchSelectedIndex]);
+
   const addRow = () => {
     setRows([...rows, { id: Date.now(), itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }]);
   };
@@ -414,16 +502,37 @@ export default function SalesGrid({
                       }
                     }}
                     onKeyDown={(e) => { 
-                      if (e.key === 'Enter') {
-                        if (!row.itemCode) {
-                          updateRow(row.id, 'itemCode', 'N/A');
-                        }
-                        if (searchResults.length > 0) {
-                          selectItem(row.id, searchResults[0]);
+                      if (e.key === 'ArrowDown') {
+                        if (activeSearchId === row.id && searchResults.length > 0) {
+                          e.preventDefault();
+                          setSearchSelectedIndex(prev => Math.min(prev + 1, searchResults.length - 1));
                         } else {
-                          handleItemSearch(row.id, row.itemCode || 'N/A', true); 
+                          handleGridKeyDown(e, row.id, 'itemCode');
                         }
-                      } 
+                      } else if (e.key === 'ArrowUp') {
+                        if (activeSearchId === row.id && searchResults.length > 0) {
+                          e.preventDefault();
+                          setSearchSelectedIndex(prev => Math.max(prev - 1, 0));
+                        } else {
+                          handleGridKeyDown(e, row.id, 'itemCode');
+                        }
+                      } else if (e.key === 'Enter') {
+                        if (activeSearchId === row.id && searchResults.length > 0 && searchSelectedIndex >= 0 && searchSelectedIndex < searchResults.length) {
+                          e.preventDefault();
+                          selectItem(row.id, searchResults[searchSelectedIndex]);
+                        } else {
+                          if (!row.itemCode) {
+                            updateRow(row.id, 'itemCode', 'N/A');
+                          }
+                          if (searchResults.length > 0) {
+                            selectItem(row.id, searchResults[0]);
+                          } else {
+                            handleItemSearch(row.id, row.itemCode || 'N/A', true); 
+                          }
+                        }
+                      } else {
+                        handleGridKeyDown(e, row.id, 'itemCode');
+                      }
                     }}
                     className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded dark:text-zinc-200" 
                     placeholder="Scan or type..." 
@@ -445,8 +554,11 @@ export default function SalesGrid({
                         {searchResults.map((item, idx) => (
                           <div 
                             key={idx} 
+                            id={`search-item-${idx}`}
                             onClick={() => selectItem(row.id, item)}
-                            className="p-3 hover:bg-primary/10 cursor-pointer border-b border-border last:border-0 flex justify-between items-center group transition-colors"
+                            className={`p-3 cursor-pointer border-b border-border last:border-0 flex justify-between items-center group transition-colors ${
+                              idx === searchSelectedIndex ? 'bg-primary/20 dark:bg-primary/30 text-primary' : 'hover:bg-primary/10'
+                            }`}
                           >
                             <div className="flex flex-col">
                               <span className="font-bold text-card-foreground text-sm group-hover:text-primary">{item.DESCRIPTION || 'No Description'}</span>
@@ -472,6 +584,8 @@ export default function SalesGrid({
                     if (e.key === 'Enter') {
                       if (!row.description) updateRow(row.id, 'description', 'N/A');
                       document.getElementById(`unit-${row.id}`)?.focus();
+                    } else {
+                      handleGridKeyDown(e, row.id, 'description');
                     }
                   }}
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded dark:text-zinc-100" 
@@ -492,6 +606,8 @@ export default function SalesGrid({
                         setActiveUnitSearchId(null);
                       }
                       document.getElementById(`qty-${row.id}`)?.focus();
+                    } else {
+                      handleGridKeyDown(e, row.id, 'unit');
                     }
                   }}
                   className={`w-full p-2 outline-none rounded dark:text-zinc-200 ${row.isManual ? 'bg-card border border-border focus:ring-1 focus:ring-primary' : 'bg-transparent focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary'}`}
@@ -549,6 +665,8 @@ export default function SalesGrid({
                           return prev;
                         }
                       });
+                    } else {
+                      handleGridKeyDown(e, row.id, 'qty');
                     }
                   }} 
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
@@ -621,6 +739,8 @@ export default function SalesGrid({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         document.getElementById(`aliasCode-${row.id}`)?.focus();
+                      } else {
+                        handleGridKeyDown(e, row.id, 'price');
                       }
                     }}
                     className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
@@ -648,6 +768,8 @@ export default function SalesGrid({
                           return prev;
                         }
                       });
+                    } else {
+                      handleGridKeyDown(e, row.id, 'aliasCode');
                     }
                   }}
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded dark:text-zinc-200" 
@@ -673,7 +795,14 @@ export default function SalesGrid({
                   className="w-full bg-zinc-100 dark:bg-zinc-900 font-semibold p-2 outline-none rounded text-right text-zinc-900 dark:text-zinc-100 border border-transparent dark:border-zinc-800" 
                   readOnly 
                 /></td>}
-                {visibleColumns.stock && <td className="p-1"><input type="text" value={row.stock} onChange={(e) => updateRow(row.id, 'stock', e.target.value)} className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-center dark:text-zinc-200" /></td>}
+                {visibleColumns.stock && <td className="p-1"><input 
+                  id={`stock-${row.id}`}
+                  type="text" 
+                  value={row.stock} 
+                  onChange={(e) => updateRow(row.id, 'stock', e.target.value)} 
+                  onKeyDown={(e) => handleGridKeyDown(e, row.id, 'stock')}
+                  className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-center dark:text-zinc-200" 
+                /></td>}
                 <td className="p-1 text-center">
                   <button onClick={() => removeRow(row.id)} className="text-zinc-300 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Trash2 size={16} />

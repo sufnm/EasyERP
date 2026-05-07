@@ -40,20 +40,20 @@ async function run() {
   const screenName = t.recordset[0].screen_name;
   console.log('✅ screen_name:', screenName);
 
-  console.log('\n=== STEP 3: UserPriv row for group + screen ===');
+  console.log('\n=== STEP 3: UserPriv_Web row for group + screen ===');
   const p = await pool.request()
     .input('mn', sql.VarChar, screenName)
     .input('gn', sql.VarChar, groupName)
-    .query('SELECT GROUP_NAME, form_id, ins AS [INSERT], upd AS [UPDATE], del AS [DELETE], dsp AS [VIEW], Menu_Name FROM dbo.UserPriv WHERE Menu_Name = @mn AND group_name = @gn');
+    .query('SELECT GROUP_NAME, form_id, ins AS [INSERT], upd AS [UPDATE], del AS [DELETE], dsp AS [VIEW], Menu_Name FROM dbo.UserPriv_Web WHERE Menu_Name = @mn AND group_name = @gn');
   console.table(p.recordset);
 
   if (p.recordset.length === 0) {
     console.log('⚠️  NO PRIVILEGE ROW found for group_name="' + groupName + '" + Menu_Name="' + screenName + '"');
 
-    console.log('\n=== ALL UserPriv rows for group "' + groupName + '" ===');
+    console.log('\n=== ALL UserPriv_Web rows for group "' + groupName + '" ===');
     const all = await pool.request()
       .input('gn', sql.VarChar, groupName)
-      .query('SELECT GROUP_NAME, Menu_Name, ins AS [INSERT], upd AS [UPDATE], del AS [DELETE], dsp AS [VIEW] FROM dbo.UserPriv WHERE group_name = @gn ORDER BY Menu_Name');
+      .query('SELECT GROUP_NAME, Menu_Name, ins AS [INSERT], upd AS [UPDATE], del AS [DELETE], dsp AS [VIEW] FROM dbo.UserPriv_Web WHERE group_name = @gn ORDER BY Menu_Name');
     console.table(all.recordset);
   } else {
     const r = p.recordset[0];

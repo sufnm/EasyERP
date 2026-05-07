@@ -116,6 +116,18 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
       ]
     },
     {
+      id: 'transactions',
+      label: t('transactions'),
+      icon: Wallet,
+      subItems: [
+        { id: 'customer-receivable', label: t('customerReceivable') },
+        { id: 'supplier-payable', label: t('supplierPayable') },
+        { id: 'general-voucher', label: t('generalVoucherEntry') },
+        { id: 'expense-entry', label: t('expenseEntry') },
+        { id: 'employee-salary', label: t('Emp. Salary Pay') }
+      ]
+    },
+    {
       id: 'accounts-report',
       label: t('Accounts Report'),
       icon: Book,
@@ -134,18 +146,6 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
         { id: 'trial-balance', label: t('Trial Balance') },
         { id: 'profit-loss', label: t('Profit and Loss') },
         { id: 'balance-sheet', label: t('Balance Sheet') }
-      ]
-    },
-    {
-      id: 'transactions',
-      label: t('transactions'),
-      icon: Wallet,
-      subItems: [
-        { id: 'customer-receivable', label: t('customerReceivable') },
-        { id: 'supplier-payable', label: t('supplierPayable') },
-        { id: 'general-voucher', label: t('generalVoucherEntry') },
-        { id: 'expense-entry', label: t('expenseEntry') },
-        { id: 'employee-salary', label: t('employeesSalaryEntry') }
       ]
     },
     {

@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
   USER_PRIVILEGES_MENU_HEADS: `${API_BASE_URL}/api/user-privileges/menu-heads`,
   USER_PRIVILEGES_GRID: `${API_BASE_URL}/api/user-privileges/grid`,
   USER_PRIVILEGES_BULK_SAVE: `${API_BASE_URL}/api/user-privileges/bulk-save`,
+  USER_PRIVILEGES_SYNC: `${API_BASE_URL}/api/user-privileges/sync`,
   USER_INFO: `${API_BASE_URL}/api/user-info`,
   ACCOUNT_CREATE: `${API_BASE_URL}/api/accounts/create`,
   INVOICE_NEXT: `${API_BASE_URL}/api/invoice/next`,
@@ -79,6 +80,16 @@ export const API_ENDPOINTS = {
   SALARY_ENTRY_TYPES: `${API_BASE_URL}/api/salary-entry/types`,
   SALARY_ENTRY_HISTORY: `${API_BASE_URL}/api/salary-entry/history`,
   SALARY_ENTRY_SAVE: `${API_BASE_URL}/api/salary-entry/save`,
+  // Item Creation
+  ITEMS_DEPENDENCIES: `${API_BASE_URL}/api/items/new-item-dependencies`,
+  ITEMS_LIST: `${API_BASE_URL}/api/items/list`,
+  ITEMS_DETAIL: (itemCode) => `${API_BASE_URL}/api/items/${itemCode}/detail`,
+  ITEMS_SAVE: `${API_BASE_URL}/api/items/save`,
+  
+  // Opening Stock & Price Update
+  OPENING_STOCK_SEARCH: `${API_BASE_URL}/api/opening-stock/search`,
+  OPENING_STOCK_ITEM: (itemCode) => `${API_BASE_URL}/api/opening-stock/item/${itemCode}`,
+  OPENING_STOCK_SAVE: `${API_BASE_URL}/api/opening-stock/save`,
 };
 
 export default API_BASE_URL;

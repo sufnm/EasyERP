@@ -143,7 +143,7 @@ app.get('/api/privileges/:trnCode', async (req, res) => {
           P.[del]  AS [DELETE],
           P.[dsp]  AS [VIEW],
           P.[Menu_Name]
-        FROM [dbo].[UserPriv] P
+        FROM [dbo].[UserPriv_Web] P
         WHERE P.Menu_Name = (
             SELECT TOP 1 screen_name FROM dbo.trn_type WHERE trn_code = @trnCode
           )
@@ -440,7 +440,7 @@ app.post('/api/receivable/save', async (req, res) => {
     request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
     request.input('USER_ID', sql.Int, data.USER_ID || 1);
     request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
-    request.input('cost_center', sql.VarChar(50), data.COST_CENTER || '');
+    request.input('cost_center', sql.Int, data.COST_CENTER && !isNaN(Number(data.COST_CENTER)) ? Number(data.COST_CENTER) : null);
     request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
     request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
     request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
@@ -528,7 +528,7 @@ app.post('/api/payable/save', async (req, res) => {
     request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
     request.input('USER_ID', sql.Int, data.USER_ID || 1);
     request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
-    request.input('cost_center', sql.VarChar(50), data.COST_CENTER || '');
+    request.input('cost_center', sql.Int, data.COST_CENTER && !isNaN(Number(data.COST_CENTER)) ? Number(data.COST_CENTER) : null);
     request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
     request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
     request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
@@ -626,7 +626,7 @@ app.post('/api/general-voucher/save', async (req, res) => {
     request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
     request.input('USER_ID', sql.Int, data.USER_ID || 1);
     request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
-    request.input('cost_center', sql.VarChar(50), data.COST_CENTER || '');
+    request.input('cost_center', sql.Int, data.COST_CENTER && !isNaN(Number(data.COST_CENTER)) ? Number(data.COST_CENTER) : null);
     request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
     request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
     request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
@@ -1292,7 +1292,7 @@ app.get('/api/screens', async (req, res) => {
     const pool = await getPool();
     const result = await pool.request().query(`
       SELECT DISTINCT Menu_Name 
-      FROM dbo.UserPriv
+      FROM dbo.UserPriv_Web
       WHERE Menu_Name IS NOT NULL AND Menu_Name <> ''
       ORDER BY Menu_Name ASC
     `);
@@ -1943,7 +1943,7 @@ app.get('/api/user-privileges', async (req, res) => {
     const result = await pool.request().query(`
       SELECT 
         GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name
-      FROM dbo.UserPriv
+      FROM dbo.UserPriv_Web
       ORDER BY GROUP_NAME, Menu_Name ASC
     `);
     res.json(result.recordset);
@@ -1962,7 +1962,7 @@ app.post('/api/user-privileges', async (req, res) => {
     const checkEx = await pool.request()
       .input('group', sql.NVarChar, data.GROUP_NAME)
       .input('menu', sql.NVarChar, data.Menu_Name)
-      .query(`SELECT GROUP_NAME FROM dbo.UserPriv WHERE GROUP_NAME = @group AND Menu_Name = @menu`);
+      .query(`SELECT GROUP_NAME FROM dbo.UserPriv_Web WHERE GROUP_NAME = @group AND Menu_Name = @menu`);
 
     const reqPool = pool.request()
       .input('GROUP_NAME', sql.NVarChar, data.GROUP_NAME)
@@ -1976,13 +1976,13 @@ app.post('/api/user-privileges', async (req, res) => {
 
     if (checkEx.recordset.length > 0) {
       await reqPool.query(`
-        UPDATE dbo.UserPriv SET 
+        UPDATE dbo.UserPriv_Web SET 
           form_id = @form_id, ins = @ins, upd = @upd, qry = @qry, del = @del, dsp = @dsp
         WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name
       `);
     } else {
       await reqPool.query(`
-        INSERT INTO dbo.UserPriv (
+        INSERT INTO dbo.UserPriv_Web (
           GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name
         ) VALUES (
           @GROUP_NAME, @form_id, @ins, @upd, @qry, @del, @dsp, @Menu_Name
@@ -1995,94 +1995,6 @@ app.post('/api/user-privileges', async (req, res) => {
     res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
-
-// User Info Endpoints
-app.get('/api/user-info', async (req, res) => {
-  try {
-    const pool = await getPool();
-    const result = await pool.request().query(`
-      SELECT 
-        UserId, UserName, MOBILE_NO, Password, Superuser, 
-        Group_Name, WR_CODE, BRN_CODE, MENU_DOCK, SH_TOPMENU, 
-        SH_SIDEMENU, POWER_USER, DEF_LANG, DEF_INVOICE, DEF_FORM, 
-        DEF_SCREEN, LOGGED_ID, CUR_LOGGED_TIME, Employee_ACNO, 
-        SALE_CASH_AC, SALE_BANK_AC, Payments
-      FROM dbo.UserInfo
-      ORDER BY UserId ASC
-    `);
-    res.json(result.recordset);
-  } catch (err) {
-    console.error("User Info Get Error:", err.message);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
-
-app.post('/api/user-info', async (req, res) => {
-  const data = req.body;
-  if (!data.UserId || !data.UserName) return res.status(400).json({ error: 'UserId and UserName required' });
-
-  try {
-    const pool = await getPool();
-    const checkEx = await pool.request()
-      .input('uid', sql.VarChar, data.UserId)
-      .query(`SELECT UserId FROM dbo.UserInfo WHERE UserId = @uid`);
-
-    const reqPool = pool.request()
-      .input('UserId', sql.VarChar, data.UserId)
-      .input('UserName', sql.NVarChar, data.UserName)
-      .input('MOBILE_NO', sql.VarChar, data.MOBILE_NO || '')
-      .input('Password', sql.VarChar, data.Password || '')
-      .input('Superuser', sql.Int, data.Superuser || 0)
-      .input('Group_Name', sql.NVarChar, data.Group_Name || '')
-      .input('WR_CODE', sql.VarChar, data.WR_CODE || '')
-      .input('BRN_CODE', sql.VarChar, data.BRN_CODE || '')
-      .input('MENU_DOCK', sql.Int, data.MENU_DOCK || 0)
-      .input('SH_TOPMENU', sql.Int, data.SH_TOPMENU || 1)
-      .input('SH_SIDEMENU', sql.Int, data.SH_SIDEMENU || 1)
-      .input('POWER_USER', sql.Int, data.POWER_USER || 0)
-      .input('DEF_LANG', sql.VarChar, data.DEF_LANG || 'EN')
-      .input('DEF_INVOICE', sql.VarChar, data.DEF_INVOICE || '')
-      .input('DEF_FORM', sql.VarChar, data.DEF_FORM || '')
-      .input('DEF_SCREEN', sql.VarChar, data.DEF_SCREEN || '')
-      .input('Employee_ACNO', sql.Numeric(18, 0), data.Employee_ACNO ? Number(data.Employee_ACNO) : null)
-      .input('SALE_CASH_AC', sql.Numeric(18, 0), data.SALE_CASH_AC ? Number(data.SALE_CASH_AC) : null)
-      .input('SALE_BANK_AC', sql.Numeric(18, 0), data.SALE_BANK_AC ? Number(data.SALE_BANK_AC) : null)
-      .input('Payments', sql.VarChar, data.Payments || '');
-
-    if (checkEx.recordset.length > 0) {
-      await reqPool.query(`
-        UPDATE dbo.UserInfo SET 
-          UserName = @UserName, MOBILE_NO = @MOBILE_NO, Password = @Password, 
-          Superuser = @Superuser, Group_Name = @Group_Name, WR_CODE = @WR_CODE, 
-          BRN_CODE = @BRN_CODE, MENU_DOCK = @MENU_DOCK, SH_TOPMENU = @SH_TOPMENU, 
-          SH_SIDEMENU = @SH_SIDEMENU, POWER_USER = @POWER_USER, DEF_LANG = @DEF_LANG, 
-          DEF_INVOICE = @DEF_INVOICE, DEF_FORM = @DEF_FORM, DEF_SCREEN = @DEF_SCREEN, 
-          Employee_ACNO = @Employee_ACNO, SALE_CASH_AC = @SALE_CASH_AC, 
-          SALE_BANK_AC = @SALE_BANK_AC, Payments = @Payments
-        WHERE UserId = @UserId
-      `);
-    } else {
-      await reqPool.query(`
-        INSERT INTO dbo.UserInfo (
-          UserId, UserName, MOBILE_NO, Password, Superuser, 
-          Group_Name, WR_CODE, BRN_CODE, MENU_DOCK, SH_TOPMENU, 
-          SH_SIDEMENU, POWER_USER, DEF_LANG, DEF_INVOICE, DEF_FORM, 
-          DEF_SCREEN, Employee_ACNO, SALE_CASH_AC, SALE_BANK_AC, Payments
-        ) VALUES (
-          @UserId, @UserName, @MOBILE_NO, @Password, @Superuser, 
-          @Group_Name, @WR_CODE, @BRN_CODE, @MENU_DOCK, @SH_TOPMENU, 
-          @SH_SIDEMENU, @POWER_USER, @DEF_LANG, @DEF_INVOICE, @DEF_FORM, 
-          @DEF_SCREEN, @Employee_ACNO, @SALE_CASH_AC, @SALE_BANK_AC, @Payments
-        )
-      `);
-    }
-    res.json({ success: true });
-  } catch (err) {
-    console.error("User Info Post Error:", err.message);
-    res.status(500).json({ error: 'Database error', details: err.message });
-  }
-});
-
 
 // Get Next Invoice Number
 app.get('/api/invoice/next', async (req, res) => {
@@ -2606,7 +2518,7 @@ app.post('/api/expense-entry/save', async (req, res) => {
     request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
     request.input('USER_ID', sql.Int, data.USER_ID || 1);
     request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
-    request.input('cost_center', sql.Int, data.DOC_TRN_TYPE || null);
+    request.input('cost_center', sql.Int, data.COST_CENTER && !isNaN(Number(data.COST_CENTER)) ? Number(data.COST_CENTER) : null);
     request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
     request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
     request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
@@ -2695,7 +2607,7 @@ app.post('/api/salary-entry/save', async (req, res) => {
     request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
     request.input('USER_ID', sql.Int, data.USER_ID || 1);
     request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
-    request.input('cost_center', sql.Int, data.DOC_TRN_TYPE || null);
+    request.input('cost_center', sql.Int, data.COST_CENTER && !isNaN(Number(data.COST_CENTER)) ? Number(data.COST_CENTER) : null);
     request.input('BRN_CODE', sql.Int, data.BRN_CODE || 1);
     request.input('ACC_NAME1', sql.NVarChar(200), data.ACC_NAME1 || 'N/A');
     request.input('ACC_NAME2', sql.NVarChar(200), data.ACC_NAME2 || 'N/A');
@@ -2763,7 +2675,7 @@ app.get('/api/screens', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT DISTINCT Menu_Name FROM dbo.MENU_MASTER WHERE Menu_Name IS NOT NULL AND Menu_Name <> '' ORDER BY Menu_Name
+      SELECT DISTINCT Menu_Name FROM dbo.Menu_Master_Web WHERE Menu_Name IS NOT NULL AND Menu_Name <> '' ORDER BY Menu_Name
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -2871,7 +2783,7 @@ app.get('/api/user-privileges', async (req, res) => {
     const pool = await getPool();
     const result = await pool.request().query(`
       SELECT GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name
-      FROM dbo.UserPriv
+      FROM dbo.UserPriv_Web
       ORDER BY GROUP_NAME, Menu_Name
     `);
     console.log(`🔐 User Privileges: Loaded ${result.recordset.length} records`);
@@ -2897,12 +2809,12 @@ app.post('/api/user-privileges', async (req, res) => {
     request.input('Menu_Name', sql.VarChar(100), data.Menu_Name || '');
 
     await request.query(`
-      IF EXISTS (SELECT 1 FROM dbo.UserPriv WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name)
-        UPDATE dbo.UserPriv SET
+      IF EXISTS (SELECT 1 FROM dbo.UserPriv_Web WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name)
+        UPDATE dbo.UserPriv_Web SET
           form_id = @form_id, ins = @ins, upd = @upd, qry = @qry, del = @del, dsp = @dsp
         WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name
       ELSE
-        INSERT INTO dbo.UserPriv (GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name)
+        INSERT INTO dbo.UserPriv_Web (GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name)
         VALUES (@GROUP_NAME, @form_id, @ins, @upd, @qry, @del, @dsp, @Menu_Name)
     `);
     console.log(`✅ User privilege for group "${data.GROUP_NAME}" / menu "${data.Menu_Name}" saved`);
@@ -2919,8 +2831,11 @@ app.get('/api/user-privileges/groups', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT DISTINCT Group_Name FROM dbo.UserInfo 
-      WHERE Group_Name IS NOT NULL AND Group_Name <> '' 
+      SELECT DISTINCT Group_Name FROM (
+        SELECT DISTINCT GROUP_NAME AS Group_Name FROM dbo.UserPriv_Web WHERE GROUP_NAME IS NOT NULL AND GROUP_NAME <> ''
+        UNION
+        SELECT DISTINCT Group_Name FROM dbo.UserInfo WHERE Group_Name IS NOT NULL AND Group_Name <> ''
+      ) CombinedGroups
       ORDER BY Group_Name
     `);
     res.json(result.recordset);
@@ -2934,7 +2849,7 @@ app.get('/api/user-privileges/menu-heads', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT DISTINCT Head FROM dbo.MENU_MASTER 
+      SELECT DISTINCT Head FROM dbo.Menu_Master_Web 
       WHERE Head IS NOT NULL AND Head <> '' AND Head <> '...' 
       ORDER BY Head
     `);
@@ -2970,8 +2885,8 @@ app.get('/api/user-privileges/grid', async (req, res) => {
         ISNULL(P.del, 0) AS del,
         ISNULL(P.dsp, 0) AS dsp,
         ISNULL(P.qry, 0) AS qry
-      FROM dbo.MENU_MASTER M
-      LEFT JOIN dbo.UserPriv P ON M.Menu_Name = P.Menu_Name ${group ? "AND P.GROUP_NAME = @groupName" : "AND 1=0"}
+      FROM dbo.Menu_Master_Web M
+      LEFT JOIN dbo.UserPriv_Web P ON M.Menu_Name = P.Menu_Name ${group ? "AND P.GROUP_NAME = @groupName" : "AND 1=0"}
       ${whereClause}
       ORDER BY M.Head, M.Menu_Name
     `);
@@ -3003,11 +2918,11 @@ app.post('/api/user-privileges/bulk-save', async (req, res) => {
       request.input('dsp', sql.Bit, priv.dsp ? 1 : 0);
 
       await request.query(`
-        IF EXISTS (SELECT 1 FROM dbo.UserPriv WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name)
-          UPDATE dbo.UserPriv SET form_id = @form_id, ins = @ins, upd = @upd, qry = @qry, del = @del, dsp = @dsp
+        IF EXISTS (SELECT 1 FROM dbo.UserPriv_Web WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name)
+          UPDATE dbo.UserPriv_Web SET form_id = @form_id, ins = @ins, upd = @upd, qry = @qry, del = @del, dsp = @dsp
           WHERE GROUP_NAME = @GROUP_NAME AND Menu_Name = @Menu_Name
         ELSE
-          INSERT INTO dbo.UserPriv (GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name)
+          INSERT INTO dbo.UserPriv_Web (GROUP_NAME, form_id, ins, upd, qry, del, dsp, Menu_Name)
           VALUES (@GROUP_NAME, @form_id, @ins, @upd, @qry, @del, @dsp, @Menu_Name)
       `);
     }
@@ -3016,6 +2931,46 @@ app.post('/api/user-privileges/bulk-save', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("Failed to bulk save privileges:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.post('/api/user-privileges/sync', async (req, res) => {
+  const { menus } = req.body;
+  if (!menus || !Array.isArray(menus)) {
+    return res.status(400).json({ error: 'menus array required' });
+  }
+  try {
+    const pool = await getPool();
+    let insertedCount = 0;
+    
+    for (const menu of menus) {
+      if (!menu.Menu_Code) continue;
+      
+      const check = await pool.request()
+        .input('code', sql.NVarChar(100), menu.Menu_Code)
+        .query('SELECT 1 FROM dbo.Menu_Master_Web WHERE Menu_Code = @code');
+        
+      if (check.recordset.length === 0) {
+        await pool.request()
+          .input('head', sql.NVarChar(100), menu.Head || '')
+          .input('code', sql.NVarChar(100), menu.Menu_Code)
+          .input('type', sql.Int, menu.Menu_type || 2)
+          .input('name', sql.NVarChar(100), menu.Menu_Name || '')
+          .input('form', sql.NVarChar(50), menu.Form_name || '')
+          .input('flag', sql.NVarChar(1), menu.FLAG || 'A')
+          .input('det', sql.Int, menu.Head_Det || 1)
+          .query(`
+            INSERT INTO dbo.Menu_Master_Web (Head, Menu_Code, Menu_type, Menu_Name, Form_name, FLAG, Head_Det)
+            VALUES (@head, @code, @type, @name, @form, @flag, @det)
+          `);
+        insertedCount++;
+      }
+    }
+    console.log(`🔐 Menu Sync: Added ${insertedCount} missing menus to Menu_Master_Web`);
+    res.json({ success: true, insertedCount });
+  } catch (err) {
+    console.error("Failed to sync privileges:", err);
     res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
@@ -3044,32 +2999,47 @@ app.get('/api/user-info', async (req, res) => {
 
 app.post('/api/user-info', async (req, res) => {
   const data = req.body;
+  if (!data.UserName) {
+    return res.status(400).json({ error: 'UserName required' });
+  }
+
   try {
     const pool = await getPool();
     const request = pool.request();
-    request.input('UserId', sql.VarChar(50), data.UserId);
-    request.input('UserName', sql.VarChar(100), data.UserName || '');
-    request.input('MOBILE_NO', sql.VarChar(50), data.MOBILE_NO || '');
-    request.input('Password', sql.VarChar(100), data.Password || '');
-    request.input('Superuser', sql.Bit, data.Superuser || 0);
-    request.input('Group_Name', sql.VarChar(50), data.Group_Name || '');
-    request.input('WR_CODE', sql.VarChar(20), data.WR_CODE || '');
-    request.input('BRN_CODE', sql.VarChar(20), data.BRN_CODE || '');
-    request.input('MENU_DOCK', sql.Bit, data.MENU_DOCK || 0);
-    request.input('SH_TOPMENU', sql.Bit, data.SH_TOPMENU != null ? data.SH_TOPMENU : 1);
-    request.input('SH_SIDEMENU', sql.Bit, data.SH_SIDEMENU != null ? data.SH_SIDEMENU : 1);
-    request.input('POWER_USER', sql.Bit, data.POWER_USER || 0);
-    request.input('DEF_LANG', sql.VarChar(10), data.DEF_LANG || 'EN');
-    request.input('DEF_INVOICE', sql.VarChar(50), data.DEF_INVOICE || '');
-    request.input('DEF_FORM', sql.VarChar(50), data.DEF_FORM || '');
-    request.input('DEF_SCREEN', sql.VarChar(50), data.DEF_SCREEN || '');
-    request.input('Employee_ACNO', sql.VarChar(50), data.Employee_ACNO || '');
-    request.input('SALE_CASH_AC', sql.VarChar(50), data.SALE_CASH_AC || '');
-    request.input('SALE_BANK_AC', sql.VarChar(50), data.SALE_BANK_AC || '');
-    request.input('Payments', sql.VarChar(100), data.Payments || '');
+    
+    // Bind all inputs with correct DB data types
+    request.input('UserName', sql.VarChar(50), String(data.UserName));
+    request.input('MOBILE_NO', sql.NVarChar(50), String(data.MOBILE_NO || ''));
+    request.input('Password', sql.VarChar(50), String(data.Password || ''));
+    request.input('Superuser', sql.Bit, data.Superuser ? 1 : 0);
+    request.input('Group_Name', sql.NVarChar(20), String(data.Group_Name || ''));
+    request.input('WR_CODE', sql.Int, data.WR_CODE && !isNaN(Number(data.WR_CODE)) ? Number(data.WR_CODE) : null);
+    request.input('BRN_CODE', sql.Int, data.BRN_CODE && !isNaN(Number(data.BRN_CODE)) ? Number(data.BRN_CODE) : null);
+    request.input('MENU_DOCK', sql.VarChar(20), String(data.MENU_DOCK || '0'));
+    request.input('SH_TOPMENU', sql.Bit, data.SH_TOPMENU != null ? (data.SH_TOPMENU ? 1 : 0) : 1);
+    request.input('SH_SIDEMENU', sql.Bit, data.SH_SIDEMENU != null ? (data.SH_SIDEMENU ? 1 : 0) : 1);
+    request.input('POWER_USER', sql.Bit, data.POWER_USER ? 1 : 0);
+    request.input('DEF_LANG', sql.NVarChar(50), String(data.DEF_LANG || 'EN'));
+    request.input('DEF_INVOICE', sql.NVarChar(50), String(data.DEF_INVOICE || ''));
+    request.input('DEF_FORM', sql.NVarChar(50), String(data.DEF_FORM || ''));
+    request.input('DEF_SCREEN', sql.NVarChar(50), String(data.DEF_SCREEN || ''));
+    request.input('Employee_ACNO', sql.Numeric(18, 0), data.Employee_ACNO && !isNaN(Number(data.Employee_ACNO)) ? Number(data.Employee_ACNO) : null);
+    request.input('SALE_CASH_AC', sql.Numeric(18, 0), data.SALE_CASH_AC && !isNaN(Number(data.SALE_CASH_AC)) ? Number(data.SALE_CASH_AC) : null);
+    request.input('SALE_BANK_AC', sql.Numeric(18, 0), data.SALE_BANK_AC && !isNaN(Number(data.SALE_BANK_AC)) ? Number(data.SALE_BANK_AC) : null);
+    request.input('Payments', sql.Bit, data.Payments ? 1 : 0);
 
-    await request.query(`
-      IF EXISTS (SELECT 1 FROM dbo.UserInfo WHERE UserId = @UserId)
+    const userIdVal = data.UserId ? parseInt(data.UserId, 10) : null;
+    let exists = false;
+    if (userIdVal && !isNaN(userIdVal)) {
+      const checkRes = await pool.request()
+        .input('UserId', sql.Int, userIdVal)
+        .query('SELECT 1 FROM dbo.UserInfo WHERE UserId = @UserId');
+      exists = checkRes.recordset.length > 0;
+    }
+
+    if (exists) {
+      request.input('UserId', sql.Int, userIdVal);
+      await request.query(`
         UPDATE dbo.UserInfo SET
           UserName = @UserName, MOBILE_NO = @MOBILE_NO, Password = @Password, Superuser = @Superuser,
           Group_Name = @Group_Name, WR_CODE = @WR_CODE, BRN_CODE = @BRN_CODE, MENU_DOCK = @MENU_DOCK,
@@ -3078,11 +3048,22 @@ app.post('/api/user-info', async (req, res) => {
           DEF_SCREEN = @DEF_SCREEN, Employee_ACNO = @Employee_ACNO, SALE_CASH_AC = @SALE_CASH_AC,
           SALE_BANK_AC = @SALE_BANK_AC, Payments = @Payments
         WHERE UserId = @UserId
-      ELSE
-        INSERT INTO dbo.UserInfo (UserId, UserName, MOBILE_NO, Password, Superuser, Group_Name, WR_CODE, BRN_CODE, MENU_DOCK, SH_TOPMENU, SH_SIDEMENU, POWER_USER, DEF_LANG, DEF_INVOICE, DEF_FORM, DEF_SCREEN, Employee_ACNO, SALE_CASH_AC, SALE_BANK_AC, Payments)
-        VALUES (@UserId, @UserName, @MOBILE_NO, @Password, @Superuser, @Group_Name, @WR_CODE, @BRN_CODE, @MENU_DOCK, @SH_TOPMENU, @SH_SIDEMENU, @POWER_USER, @DEF_LANG, @DEF_INVOICE, @DEF_FORM, @DEF_SCREEN, @Employee_ACNO, @SALE_CASH_AC, @SALE_BANK_AC, @Payments)
-    `);
-    console.log(`✅ User info for "${data.UserName}" (ID: ${data.UserId}) saved`);
+      `);
+      console.log(`✅ User info updated for "${data.UserName}" (ID: ${userIdVal})`);
+    } else {
+      await request.query(`
+        INSERT INTO dbo.UserInfo (
+          UserName, MOBILE_NO, Password, Superuser, Group_Name, WR_CODE, BRN_CODE, 
+          MENU_DOCK, SH_TOPMENU, SH_SIDEMENU, POWER_USER, DEF_LANG, DEF_INVOICE, 
+          DEF_FORM, DEF_SCREEN, Employee_ACNO, SALE_CASH_AC, SALE_BANK_AC, Payments
+        ) VALUES (
+          @UserName, @MOBILE_NO, @Password, @Superuser, @Group_Name, @WR_CODE, @BRN_CODE, 
+          @MENU_DOCK, @SH_TOPMENU, @SH_SIDEMENU, @POWER_USER, @DEF_LANG, @DEF_INVOICE, 
+          @DEF_FORM, @DEF_SCREEN, @Employee_ACNO, @SALE_CASH_AC, @SALE_BANK_AC, @Payments
+        )
+      `);
+      console.log(`✅ User info inserted for "${data.UserName}" (Identity auto-generated)`);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error("Failed to save user info:", err);
@@ -3090,6 +3071,582 @@ app.post('/api/user-info', async (req, res) => {
   }
 });
 
+
+// --- ITEM CREATION ENDPOINTS ---
+
+app.get('/api/items/new-item-dependencies', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const [categories, units, itemTypes, warehouses] = await Promise.all([
+      pool.request().query("SELECT ITM_CAT_CODE, ITM_CAT_NAME, ITM_CAT_ANAME, VAT_PERCENT FROM dbo.ITEM_CAT ORDER BY ITM_CAT_NAME"),
+      pool.request().query("SELECT Unit_id, Unit_Name, Unit_AName, QTY FROM dbo.UnitMaster WHERE UNIT_TYPE='I' ORDER BY Unit_id"),
+      pool.request().query("SELECT ITM_TYPE_CODE, ITM_TYPE_NAME, ITM_TYPE_ANAME FROM dbo.ITEM_TYPE ORDER BY ITM_TYPE_NAME"),
+      pool.request().query("SELECT WR_CODE, WR_NAME AS WAREHOUSE_NAME, WR_ANAME AS WAREHOUSE_ANAME FROM dbo.WRHOUSE_MASTER ORDER BY WR_NAME")
+    ]);
+    res.json({
+      categories: categories.recordset,
+      units: units.recordset,
+      itemTypes: itemTypes.recordset,
+      warehouses: warehouses.recordset
+    });
+  } catch (err) {
+    console.error("Failed to fetch item dependencies:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.get('/api/items/list', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ITEM_CODE, DESCRIPTION AS ITEM_NAME, AR_DESC AS ITEM_ANAME, BARCODE, VAT_PERCENT
+      FROM dbo.HD_ITEMMASTER
+      ORDER BY DESCRIPTION
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("Failed to fetch items list:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.get('/api/items/:itemCode/detail', async (req, res) => {
+  const { itemCode } = req.params;
+  try {
+    const pool = await getPool();
+    
+    // Query General Item Master
+    const mainRes = await pool.request()
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        SELECT ITEM_CODE, DESCRIPTION AS ITEM_NAME, AR_DESC AS ITEM_ANAME, 
+               ITM_CAT_CODE, UNIT AS Unit_ID, FRACTION AS QTY_IN_UNIT, 
+               PART_NO, BRAND, ALIAS_NAME, VAT_PERCENT, BARCODE, 
+               PRICE_INCLUDE_VAT, TAX_CATAGORY, non_stock_itm, ITEM_type, Remarks
+        FROM dbo.HD_ITEMMASTER
+        WHERE ITEM_CODE = @itemCode
+      `);
+    if (mainRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    const mainItem = mainRes.recordset[0];
+
+    // Query Barcodes
+    const barcodesRes = await pool.request()
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        SELECT BARCODE, UNIT AS Unit_Id, FRACTION AS QTY_IN_UNIT, 
+               SALE_PRICE AS WHOLESALE_PRICE, RETAIL_PRICE, ITEM_CODE, MAIN_ID, 
+               DESCRIPTION AS ITEM_NAME, DESCRIPTION_AR AS ITEM_ANAME
+        FROM dbo.BARCODE
+        WHERE ITEM_CODE = @itemCode
+      `);
+
+    // Query Warehouse Stocks (with dynamic read-only live stock)
+    const warehouseRes = await pool.request()
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        SELECT wsm.ITEM_CODE, wsm.OP_STOCK, wsm.LOCATION, wsm.WR_CODE,
+               wm.WR_NAME AS WAREHOUSE_NAME, wm.WR_ANAME AS WAREHOUSE_ANAME,
+               COALESCE((SELECT STOCK FROM dbo.STOCK_ITEM WHERE ITEM_CODE = @itemCode AND WR_CODE = wsm.WR_CODE), 0) AS STOCK
+        FROM dbo.WR_STOCK_MASTER wsm
+        INNER JOIN dbo.WRHOUSE_MASTER wm ON wsm.WR_CODE = wm.WR_CODE
+        WHERE wsm.ITEM_CODE = @itemCode
+      `);
+
+    // Query Stock Master
+    const stockMasterRes = await pool.request()
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        SELECT ITEM_CODE, STOCK, LAST_PUR_PRICE, PROFIT, R_MIN_PROFIT, 
+               W_MIN_PROFIT, OP_STOCK, W_MIN_PC, AVG_PUR_PRICE, 
+               AVG_EXPENSE_AMT, SALES_PROFIT_PCNT
+        FROM dbo.STOCK_MASTER
+        WHERE ITEM_CODE = @itemCode
+      `);
+    const stockMaster = stockMasterRes.recordset[0] || null;
+
+    // Query Image
+    const imageRes = await pool.request()
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        SELECT TOP 1 barcode, photo
+        FROM dbo.Item_Image
+        WHERE Itemcode = @itemCode
+      `);
+    let photoBase64 = null;
+    if (imageRes.recordset.length > 0 && imageRes.recordset[0].photo) {
+      photoBase64 = imageRes.recordset[0].photo.toString('base64');
+    }
+
+    res.json({
+      item: mainItem,
+      barcodes: barcodesRes.recordset,
+      warehouses: warehouseRes.recordset,
+      stockMaster,
+      photo: photoBase64
+    });
+  } catch (err) {
+    console.error("Failed to fetch item details:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.post('/api/items/save', async (req, res) => {
+  const { item, barcodes = [], warehouses = [], stockMaster = {}, photo } = req.body;
+  if (!item || !item.ITEM_CODE || !item.ITEM_NAME) {
+    return res.status(400).json({ error: 'Item Code and Name are required' });
+  }
+
+  const pool = await getPool();
+  const transaction = new sql.Transaction(pool);
+
+  try {
+    await transaction.begin();
+
+    // 1. SAVE HD_ITEMMASTER
+    const itemCode = String(item.ITEM_CODE);
+    const itemReq = new sql.Request(transaction);
+    itemReq.input('ITEM_CODE', sql.VarChar(50), itemCode);
+    itemReq.input('DESCRIPTION', sql.NVarChar(100), String(item.ITEM_NAME));
+    itemReq.input('AR_DESC', sql.NVarChar(75), item.ITEM_ANAME || '');
+    itemReq.input('ITM_CAT_CODE', sql.Int, item.ITM_CAT_CODE ? parseInt(item.ITM_CAT_CODE, 10) : null);
+    itemReq.input('UNIT', sql.VarChar(50), item.Unit_ID || '');
+    itemReq.input('FRACTION', sql.Real, item.QTY_IN_UNIT ? parseFloat(item.QTY_IN_UNIT) : 1);
+    itemReq.input('PART_NO', sql.VarChar(50), item.PART_NO || '');
+    itemReq.input('BRAND', sql.VarChar(50), item.BRAND || '');
+    itemReq.input('ALIAS_NAME', sql.NVarChar(50), item.ALIAS_NAME || '');
+    itemReq.input('VAT_PERCENT', sql.Real, item.VAT_PERCENT ? parseFloat(item.VAT_PERCENT) : 0);
+    itemReq.input('BARCODE', sql.VarChar(50), item.BARCODE || '');
+    itemReq.input('PRICE_INCLUDE_VAT', sql.Bit, item.PRICE_INCLUDE_VAT ? 1 : 0);
+    itemReq.input('TAX_CATAGORY', sql.Int, item.TAX_CATAGORY ? parseInt(item.TAX_CATAGORY, 10) : null);
+    itemReq.input('non_stock_itm', sql.Int, item.non_stock_itm ? 1 : 0);
+    itemReq.input('ITEM_type', sql.Int, item.ITEM_type ? parseInt(item.ITEM_type, 10) : null);
+    itemReq.input('Remarks', sql.NVarChar(500), item.Remarks || '');
+
+    // Check if exists in HD_ITEMMASTER
+    const checkItem = await new sql.Request(transaction)
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query('SELECT 1 FROM dbo.HD_ITEMMASTER WHERE ITEM_CODE = @itemCode');
+    
+    if (checkItem.recordset.length > 0) {
+      await itemReq.query(`
+        UPDATE dbo.HD_ITEMMASTER SET
+          DESCRIPTION = @DESCRIPTION, AR_DESC = @AR_DESC, ITM_CAT_CODE = @ITM_CAT_CODE,
+          UNIT = @UNIT, FRACTION = @FRACTION, PART_NO = @PART_NO, BRAND = @BRAND,
+          ALIAS_NAME = @ALIAS_NAME, VAT_PERCENT = @VAT_PERCENT, BARCODE = @BARCODE,
+          PRICE_INCLUDE_VAT = @PRICE_INCLUDE_VAT, TAX_CATAGORY = @TAX_CATAGORY,
+          non_stock_itm = @non_stock_itm, ITEM_type = @ITEM_type, Remarks = @Remarks
+        WHERE ITEM_CODE = @ITEM_CODE
+      `);
+    } else {
+      await itemReq.query(`
+        INSERT INTO dbo.HD_ITEMMASTER (
+          ITEM_CODE, DESCRIPTION, AR_DESC, ITM_CAT_CODE, UNIT, FRACTION, PART_NO,
+          BRAND, ALIAS_NAME, VAT_PERCENT, BARCODE, PRICE_INCLUDE_VAT, TAX_CATAGORY,
+          non_stock_itm, ITEM_type, Remarks
+        ) VALUES (
+          @ITEM_CODE, @DESCRIPTION, @AR_DESC, @ITM_CAT_CODE, @UNIT, @FRACTION, @PART_NO,
+          @BRAND, @ALIAS_NAME, @VAT_PERCENT, @BARCODE, @PRICE_INCLUDE_VAT, @TAX_CATAGORY,
+          @non_stock_itm, @ITEM_type, @Remarks
+        )
+      `);
+    }
+
+    // 2. SAVE BARCODES (Delete and Re-insert list)
+    await new sql.Request(transaction)
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query('DELETE FROM dbo.BARCODE WHERE ITEM_CODE = @itemCode');
+
+    for (const bc of barcodes) {
+      if (!bc.BARCODE) continue;
+      const bcReq = new sql.Request(transaction);
+      bcReq.input('BARCODE', sql.VarChar(50), String(bc.BARCODE));
+      bcReq.input('UNIT', sql.VarChar(50), bc.Unit_Id || '');
+      bcReq.input('FRACTION', sql.Real, bc.QTY_IN_UNIT ? parseFloat(bc.QTY_IN_UNIT) : 1);
+      bcReq.input('SALE_PRICE', sql.Real, bc.WHOLESALE_PRICE ? parseFloat(bc.WHOLESALE_PRICE) : 0);
+      bcReq.input('RETAIL_PRICE', sql.Real, bc.RETAIL_PRICE ? parseFloat(bc.RETAIL_PRICE) : 0);
+      bcReq.input('ITEM_CODE', sql.VarChar(50), itemCode);
+      bcReq.input('BRN_CODE', sql.SmallInt, 1);
+      bcReq.input('MAIN_ID', sql.Bit, bc.MAIN_ID ? 1 : 0);
+      bcReq.input('DESCRIPTION', sql.NVarChar(150), bc.ITEM_NAME || item.ITEM_NAME);
+      bcReq.input('DESCRIPTION_AR', sql.NVarChar(150), bc.ITEM_ANAME || item.ITEM_ANAME || '');
+      await bcReq.query(`
+        INSERT INTO dbo.BARCODE (
+          BARCODE, UNIT, FRACTION, SALE_PRICE, RETAIL_PRICE, ITEM_CODE, BRN_CODE, MAIN_ID, DESCRIPTION, DESCRIPTION_AR
+        ) VALUES (
+          @BARCODE, @UNIT, @FRACTION, @SALE_PRICE, @RETAIL_PRICE, @ITEM_CODE, @BRN_CODE, @MAIN_ID, @DESCRIPTION, @DESCRIPTION_AR
+        )
+      `);
+    }
+
+    // 3. SAVE WAREHOUSE STOCK (Delete and Re-insert)
+    await new sql.Request(transaction)
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query('DELETE FROM dbo.WR_STOCK_MASTER WHERE ITEM_CODE = @itemCode');
+
+    let sumOpStock = 0;
+    let sumStock = 0;
+
+    for (const wh of warehouses) {
+      const whReq = new sql.Request(transaction);
+      const opStockVal = wh.OP_STOCK ? parseFloat(wh.OP_STOCK) : 0;
+      const stockVal = wh.STOCK ? parseFloat(wh.STOCK) : 0;
+      sumOpStock += opStockVal;
+      sumStock += stockVal;
+
+      whReq.input('ITEM_CODE', sql.VarChar(50), itemCode);
+      whReq.input('STOCK', sql.Float, stockVal);
+      whReq.input('LOCATION', sql.NVarChar(50), wh.LOCATION || '');
+      whReq.input('BRN_CODE', sql.SmallInt, 1);
+      whReq.input('OP_STOCK', sql.Float, opStockVal);
+      whReq.input('WR_CODE', sql.SmallInt, parseInt(wh.WR_CODE, 10));
+
+      await whReq.query(`
+        INSERT INTO dbo.WR_STOCK_MASTER (
+          ITEM_CODE, STOCK, LOCATION, BRN_CODE, OP_STOCK, WR_CODE
+        ) VALUES (
+          @ITEM_CODE, @STOCK, @LOCATION, @BRN_CODE, @OP_STOCK, @WR_CODE
+        )
+      `);
+    }
+
+    // 4. SAVE STOCK_MASTER
+    const smReq = new sql.Request(transaction);
+    smReq.input('ITEM_CODE', sql.VarChar(50), itemCode);
+    smReq.input('STOCK', sql.Float, sumStock);
+    smReq.input('OP_STOCK', sql.Float, sumOpStock);
+    smReq.input('LAST_PUR_PRICE', sql.Float, stockMaster.LAST_PUR_PRICE ? parseFloat(stockMaster.LAST_PUR_PRICE) : 0);
+    smReq.input('AVG_PUR_PRICE', sql.Real, stockMaster.AVG_PUR_PRICE ? parseFloat(stockMaster.AVG_PUR_PRICE) : 0);
+    smReq.input('AVG_EXPENSE_AMT', sql.Numeric(18, 4), stockMaster.AVG_EXPENSE_AMT ? parseFloat(stockMaster.AVG_EXPENSE_AMT) : 0);
+    smReq.input('PROFIT', sql.Real, stockMaster.PROFIT ? parseFloat(stockMaster.PROFIT) : 0);
+    smReq.input('R_MIN_PROFIT', sql.Real, stockMaster.R_MIN_PROFIT ? parseFloat(stockMaster.R_MIN_PROFIT) : 0);
+    smReq.input('W_MIN_PROFIT', sql.Real, stockMaster.W_MIN_PROFIT ? parseFloat(stockMaster.W_MIN_PROFIT) : 0);
+    smReq.input('W_MIN_PC', sql.SmallInt, stockMaster.W_MIN_PC ? parseInt(stockMaster.W_MIN_PC, 10) : 0);
+    smReq.input('SALES_PROFIT_PCNT', sql.Real, stockMaster.SALES_PROFIT_PCNT ? parseFloat(stockMaster.SALES_PROFIT_PCNT) : 0);
+
+    const checkSM = await new sql.Request(transaction)
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query('SELECT 1 FROM dbo.STOCK_MASTER WHERE ITEM_CODE = @itemCode');
+
+    if (checkSM.recordset.length > 0) {
+      await smReq.query(`
+        UPDATE dbo.STOCK_MASTER SET
+          STOCK = @STOCK, OP_STOCK = @OP_STOCK, LAST_PUR_PRICE = @LAST_PUR_PRICE,
+          AVG_PUR_PRICE = @AVG_PUR_PRICE, AVG_EXPENSE_AMT = @AVG_EXPENSE_AMT, PROFIT = @PROFIT,
+          R_MIN_PROFIT = @R_MIN_PROFIT, W_MIN_PROFIT = @W_MIN_PROFIT, W_MIN_PC = @W_MIN_PC,
+          SALES_PROFIT_PCNT = @SALES_PROFIT_PCNT
+        WHERE ITEM_CODE = @ITEM_CODE
+      `);
+    } else {
+      await smReq.query(`
+        INSERT INTO dbo.STOCK_MASTER (
+          ITEM_CODE, STOCK, OP_STOCK, LAST_PUR_PRICE, AVG_PUR_PRICE, AVG_EXPENSE_AMT, PROFIT,
+          R_MIN_PROFIT, W_MIN_PROFIT, W_MIN_PC, SALES_PROFIT_PCNT
+        ) VALUES (
+          @ITEM_CODE, @STOCK, @OP_STOCK, @LAST_PUR_PRICE, @AVG_PUR_PRICE, @AVG_EXPENSE_AMT, @PROFIT,
+          @R_MIN_PROFIT, @W_MIN_PROFIT, @W_MIN_PC, @SALES_PROFIT_PCNT
+        )
+      `);
+    }
+
+    // 5. SAVE ITEM IMAGE
+    if (photo !== undefined) {
+      await new sql.Request(transaction)
+        .input('itemCode', sql.VarChar(50), itemCode)
+        .query('DELETE FROM dbo.Item_Image WHERE Itemcode = @itemCode');
+
+      if (photo) {
+        const imageReq = new sql.Request(transaction);
+        const buffer = Buffer.from(photo, 'base64');
+        imageReq.input('barcode', sql.VarChar(50), item.BARCODE || '');
+        imageReq.input('photo', sql.Image, buffer);
+        imageReq.input('Itemcode', sql.NVarChar(50), itemCode);
+        imageReq.input('CMP_ID', sql.Int, 1);
+        await imageReq.query(`
+          INSERT INTO dbo.Item_Image (barcode, photo, Itemcode, CMP_ID)
+          VALUES (@barcode, @photo, @Itemcode, @CMP_ID)
+        `);
+      }
+    }
+
+    await transaction.commit();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to save item details:", err);
+    try {
+      await transaction.rollback();
+    } catch (e) {
+      console.error("Rollback failed:", e.message);
+    }
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+
+// --- OPENING STOCK / PRICE UPDATE ENDPOINTS ---
+
+app.get('/api/opening-stock/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ error: 'Search query is required' });
+
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('query', sql.VarChar, `%${q}%`)
+      .query(`
+        SELECT DISTINCT TOP 20 
+          H.ITEM_CODE, 
+          H.DESCRIPTION, 
+          H.BARCODE 
+        FROM dbo.HD_ITEMMASTER H
+        LEFT JOIN dbo.BARCODE B ON H.ITEM_CODE = B.ITEM_CODE
+        WHERE H.ITEM_CODE LIKE @query 
+           OR H.DESCRIPTION LIKE @query 
+           OR H.BARCODE LIKE @query 
+           OR B.BARCODE LIKE @query
+        ORDER BY H.DESCRIPTION
+      `);
+
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("Opening stock search failed:", error);
+    res.status(500).json({ error: 'Database search error', details: error.message });
+  }
+});
+
+app.get('/api/opening-stock/item/:itemCode', async (req, res) => {
+  const { itemCode } = req.params;
+  try {
+    const pool = await getPool();
+    
+    // 1. Get Main Item Row matching the user-defined SQL
+    const mainRes = await pool.request()
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        SELECT TOP 1
+          G.GID,
+          H.ITEM_CODE, 
+          H.DESCRIPTION,
+          H.UNIT AS UNIT_CODE, 
+          U.Unit_Name, 
+          C.ITM_CAT_NAME, 
+          H.FRACTION, 
+          H.PART_NO, 
+          H.VAT_PERCENT, 
+          H.PRICE_INCLUDE_VAT, 
+          S1.STOCK, 
+          S1.AVG_PUR_PRICE AS COST_PRICE,
+          G.DOC_NO 
+        FROM dbo.HD_ITEMMASTER AS H 
+        INNER JOIN dbo.ITEM_CAT AS C ON H.ITM_CAT_CODE = C.ITM_CAT_CODE 
+        INNER JOIN dbo.UnitMaster AS U ON H.UNIT = U.Unit_id 
+        INNER JOIN dbo.STOCK_MASTER AS S1 ON H.ITEM_CODE = S1.ITEM_CODE
+        LEFT JOIN (
+          SELECT ITEM_CODE, MAX(ID) AS GID, MAX(INVOICE_NO) AS DOC_NO 
+          FROM dbo.DATA_ENTRY_GRID 
+          WHERE TRN_TYPE = 0 
+          GROUP BY ITEM_CODE
+        ) AS G ON G.ITEM_CODE = H.ITEM_CODE
+        WHERE H.ITEM_CODE = @itemCode
+      `);
+
+    if (mainRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'Item not found in master records' });
+    }
+    const itemDetail = mainRes.recordset[0];
+
+    // 2. Query Barcode Details
+    const barcodesRes = await pool.request()
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        SELECT BARCODE, UNIT, FRACTION, SALE_PRICE, RETAIL_PRICE, DESCRIPTION, DESCRIPTION_AR
+        FROM dbo.BARCODE 
+        WHERE ITEM_CODE = @itemCode
+      `);
+
+    // 3. Query Stock Info per Warehouse using left-join to make sure all warehouses are returned
+    const stockRes = await pool.request()
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        SELECT 
+          W.WR_CODE, 
+          W.WR_NAME, 
+          COALESCE(S.OP_STOCK, 0) AS OP_STOCK, 
+          COALESCE(S.STOCK, 0) AS STOCK, 
+          COALESCE(S.LOCATION, '') AS LOCATION
+        FROM dbo.WRHOUSE_MASTER AS W
+        LEFT JOIN dbo.WR_STOCK_MASTER AS S ON S.WR_CODE = W.WR_CODE AND S.ITEM_CODE = @itemCode
+        ORDER BY W.WR_NAME
+      `);
+
+    // 4. Query All Units for Dropdown selection
+    const unitsRes = await pool.request().query(`
+      SELECT Unit_id, Unit_Name, Unit_AName, QTY 
+      FROM dbo.UnitMaster 
+      WHERE UNIT_TYPE = 'I' 
+      ORDER BY Unit_id
+    `);
+
+    res.json({
+      item: itemDetail,
+      barcodes: barcodesRes.recordset,
+      warehouses: stockRes.recordset,
+      units: unitsRes.recordset
+    });
+  } catch (err) {
+    console.error("Failed to load opening stock details:", err);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+app.post('/api/opening-stock/save', async (req, res) => {
+  const { item, barcodes = [], warehouses = [], invoiceNo = '', remarks = '' } = req.body;
+  if (!item || !item.ITEM_CODE) {
+    return res.status(400).json({ error: 'Item details are required' });
+  }
+
+  const pool = await getPool();
+  const transaction = new sql.Transaction(pool);
+
+  try {
+    // Dynamic Stored Procedure creation if missing (failsafe design)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[usp_InsertUpdate_GridItem]') AND type in (N'P', N'PC'))
+      BEGIN
+        EXEC('
+          CREATE PROCEDURE dbo.usp_InsertUpdate_GridItem
+          (
+              @BARCODE      NVARCHAR(100),
+              @DESCRIPTION  NVARCHAR(255),
+              @UNIT         NVARCHAR(50),
+              @QTY          DECIMAL(18,2),
+              @PRICE        DECIMAL(18,2),
+              @VAT_PERCENT  DECIMAL(18,2),
+              @INVOICE_NO   NVARCHAR(50),
+              @TRN_TYPE     NVARCHAR(50),
+              @REMARKS      NVARCHAR(500),
+              @WR_CODE      NVARCHAR(50)
+          )
+          AS
+          BEGIN
+              IF EXISTS (SELECT 1 FROM dbo.DATA_ENTRY_GRID WHERE BARCODE = @BARCODE AND TRN_TYPE = @TRN_TYPE AND WR_CODE = @WR_CODE)
+              BEGIN
+                  UPDATE dbo.DATA_ENTRY_GRID 
+                  SET QTY = @QTY, PRICE = @PRICE, VAT_PERCENT = @VAT_PERCENT, REMARKS = @REMARKS, INVOICE_NO = @INVOICE_NO, DESCRIPTION = @DESCRIPTION, UNIT = @UNIT
+                  WHERE BARCODE = @BARCODE AND TRN_TYPE = @TRN_TYPE AND WR_CODE = @WR_CODE;
+              END
+              ELSE
+              BEGIN
+                  INSERT INTO dbo.DATA_ENTRY_GRID (BARCODE, DESCRIPTION, UNIT, QTY, PRICE, VAT_PERCENT, INVOICE_NO, TRN_TYPE, REMARKS, WR_CODE, BRN_CODE)
+                  VALUES (@BARCODE, @DESCRIPTION, @UNIT, @QTY, @PRICE, @VAT_PERCENT, @INVOICE_NO, @TRN_TYPE, @REMARKS, @WR_CODE, 1);
+              END
+          END
+        ')
+      END
+    `);
+
+    await transaction.begin();
+    const itemCode = String(item.ITEM_CODE);
+
+    // 0. UPDATE HD_ITEMMASTER DESCRIPTION AND UNIT
+    await new sql.Request(transaction)
+      .input('description', sql.NVarChar(255), String(item.DESCRIPTION || ''))
+      .input('unit', sql.NVarChar(50), String(item.UNIT_CODE || ''))
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        UPDATE dbo.HD_ITEMMASTER 
+        SET DESCRIPTION = @description, UNIT = @unit
+        WHERE ITEM_CODE = @itemCode
+      `);
+
+    // 1. UPDATE BARCODE SALE_PRICE AND RETAIL_PRICE
+    for (const bc of barcodes) {
+      await new sql.Request(transaction)
+        .input('sale_price', sql.Real, parseFloat(bc.SALE_PRICE) || 0)
+        .input('retail_price', sql.Real, parseFloat(bc.RETAIL_PRICE) || 0)
+        .input('barcode', sql.VarChar(100), String(bc.BARCODE))
+        .input('itemCode', sql.VarChar(50), itemCode)
+        .query(`
+          UPDATE dbo.BARCODE 
+          SET SALE_PRICE = @sale_price, RETAIL_PRICE = @retail_price 
+          WHERE BARCODE = @barcode AND ITEM_CODE = @itemCode
+        `);
+    }
+
+    // 2. UPDATE WR_STOCK_MASTER AND EXECUTE STORED PROCEDURE SEQUENTIALLY
+    let totalOpStock = 0;
+    for (const wh of warehouses) {
+      const opStockVal = parseFloat(wh.OP_STOCK) || 0;
+      totalOpStock += opStockVal;
+
+      const checkRes = await new sql.Request(transaction)
+        .input('itemCode', sql.VarChar(50), itemCode)
+        .input('wrCode', sql.SmallInt, parseInt(wh.WR_CODE, 10))
+        .query('SELECT 1 FROM dbo.WR_STOCK_MASTER WHERE ITEM_CODE = @itemCode AND WR_CODE = @wrCode');
+
+      if (checkRes.recordset.length > 0) {
+        await new sql.Request(transaction)
+          .input('op_stock', sql.Float, opStockVal)
+          .input('location', sql.NVarChar(50), wh.LOCATION || '')
+          .input('itemCode', sql.VarChar(50), itemCode)
+          .input('wrCode', sql.SmallInt, parseInt(wh.WR_CODE, 10))
+          .query(`
+            UPDATE dbo.WR_STOCK_MASTER 
+            SET OP_STOCK = @op_stock, LOCATION = @location 
+            WHERE ITEM_CODE = @itemCode AND WR_CODE = @wrCode
+          `);
+      } else {
+        await new sql.Request(transaction)
+          .input('itemCode', sql.VarChar(50), itemCode)
+          .input('wrCode', sql.SmallInt, parseInt(wh.WR_CODE, 10))
+          .input('op_stock', sql.Float, opStockVal)
+          .input('location', sql.NVarChar(50), wh.LOCATION || '')
+          .query(`
+            INSERT INTO dbo.WR_STOCK_MASTER (ITEM_CODE, WR_CODE, OP_STOCK, STOCK, LOCATION, BRN_CODE)
+            VALUES (@itemCode, @wrCode, @op_stock, @op_stock, @location, 1)
+          `);
+      }
+
+      // Call Stored Procedure
+      const spReq = new sql.Request(transaction);
+      spReq.input('BARCODE', sql.NVarChar(100), String(item.BARCODE || barcodes[0]?.BARCODE || ''));
+      spReq.input('DESCRIPTION', sql.NVarChar(255), String(item.DESCRIPTION || ''));
+      spReq.input('UNIT', sql.NVarChar(50), String(item.UNIT_CODE || ''));
+      spReq.input('QTY', sql.Decimal(18, 2), opStockVal);
+      spReq.input('PRICE', sql.Decimal(18, 2), parseFloat(item.COST_PRICE) || 0);
+      spReq.input('VAT_PERCENT', sql.Decimal(18, 2), parseFloat(item.VAT_PERCENT) || 0);
+      spReq.input('INVOICE_NO', sql.NVarChar(50), String(invoiceNo || item.DOC_NO || 'OS-UPD'));
+      spReq.input('TRN_TYPE', sql.NVarChar(50), '0');
+      spReq.input('REMARKS', sql.NVarChar(500), String(remarks || ''));
+      spReq.input('WR_CODE', sql.NVarChar(50), String(wh.WR_CODE));
+
+      await spReq.execute('dbo.usp_InsertUpdate_GridItem');
+    }
+
+    // 3. UPDATE STOCK_MASTER
+    await new sql.Request(transaction)
+      .input('cost_price', sql.Real, parseFloat(item.COST_PRICE) || 0)
+      .input('total_op_stock', sql.Float, totalOpStock)
+      .input('itemCode', sql.VarChar(50), itemCode)
+      .query(`
+        UPDATE dbo.STOCK_MASTER 
+        SET AVG_PUR_PRICE = @cost_price, OP_STOCK = @total_op_stock
+        WHERE ITEM_CODE = @itemCode
+      `);
+
+    await transaction.commit();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to save opening stock/price update:", err);
+    try {
+      await transaction.rollback();
+    } catch (rollErr) {
+      console.error("Rollback failed:", rollErr.message);
+    }
+    res.status(500).json({ error: 'Database transaction error', details: err.message });
+  }
+});
 
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);

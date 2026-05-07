@@ -25,8 +25,13 @@ import SalesReturnPage from './pages/SalesReturnPage';
 import GeneralVoucherPage from './pages/GeneralVoucherPage';
 import ExpenseEntryPage from './pages/ExpenseEntryPage';
 import EmployeeSalaryEntryPage from './pages/EmployeeSalaryEntryPage';
+<<<<<<< HEAD
 import PurchasePage from './pages/PurchasePage';
 import PurchaseHistoryPage from './pages/PurchaseHistoryPage';
+=======
+import ItemCreationPage from './pages/ItemCreationPage';
+import OpeningStockPage from './pages/OpeningStockPage';
+>>>>>>> 927ced4 (6 may)
 import { CacheProvider } from './context/CacheContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Menu } from 'lucide-react';
@@ -74,6 +79,8 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
           {activePage === 'supplier-accounts' && <SupplierAccountsPage setActivePage={navigateTo} />}
           {activePage === 'purchase-accounts' && <PurchaseAccountsPage setActivePage={navigateTo} />}
           {activePage === 'customer-account-form' && <CustomerAccountForm setActivePage={navigateTo} params={activePageParams} />}
+          {activePage === 'item-creation' && <ItemCreationPage />}
+          {activePage === 'opening-stock' && <OpeningStockPage />}
           {activePage === 'item-group' && <ItemGroupPage />}
           {activePage === 'unit-master' && <UnitMasterPage />}
           {activePage === 'transaction-types' && <TransactionTypesPage />}
@@ -90,7 +97,7 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
           {activePage === 'purchase' && <PurchasePage user={user} params={activePageParams} navigateTo={navigateTo} />}
           {activePage === 'purchase-history' && <PurchaseHistoryPage setActivePage={navigateTo} />}
           {activePage === 'translation-manager' && <TranslationManagerPage />}
-          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager'].includes(activePage) ? null : (
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager', 'item-creation', 'opening-stock'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
               <p className="text-zinc-400 text-lg font-medium text-center w-full">{t('comingSoon')}</p>
             </div>

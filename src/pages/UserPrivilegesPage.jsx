@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { ShieldCheck, Save, X, Check, Square, ChevronDown, Plus } from 'lucide-react';
+import { ShieldCheck, Save, X, Check, Square, ChevronDown, Plus, RefreshCw } from 'lucide-react';
 
 export default function UserPrivilegesPage() {
   const [gridData, setGridData] = useState([]);
@@ -13,6 +13,7 @@ export default function UserPrivilegesPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   // Fetch user groups and menu heads on mount
   useEffect(() => {
@@ -125,6 +126,186 @@ export default function UserPrivilegesPage() {
     setSaving(false);
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const navItems = [
+        { id: 'home', label: 'Home' },
+        {
+          id: 'stock-master',
+          label: 'Stock Master',
+          subItems: [
+            { id: 'item-creation', label: 'Item Creation/Edit' },
+            { id: 'opening-stock', label: 'Opening stock/Price Update' },
+            { id: 'item-search', label: 'Item Search' },
+            { id: 'update-stock', label: 'Update Stock' },
+            { id: 'project-master', label: 'Project Master' },
+            { id: 'stock-transfer', label: 'Stock Transfer' },
+            { id: 'stock-adjust', label: 'Stock Adjust' },
+            { id: 'item-group', label: 'Item Group' },
+            { id: 'unit-master', label: 'Unit Master' }
+          ]
+        },
+        { 
+          id: 'sales-n-return', 
+          label: 'Sales', 
+          subItems: [
+            { id: 'sales', label: 'Sales' },
+            { id: 'sales-return', label: 'Sales Return' },
+            { id: 'sales-history', label: 'Sales History' },
+            { id: 'quotation-entry', label: 'Quotation Entry' },
+            { id: 'delivery-note', label: 'Delivery Note' },
+            { id: 'item-issue', label: 'Item Issue' },
+            { id: 'zatca-submission-sales', label: 'Zatca Submission' },
+            { id: 'day-close', label: 'Day Close' }
+          ]
+        },
+        { 
+          id: 'purchase-n-return', 
+          label: 'Purchase', 
+          subItems: [
+            { id: 'purchase', label: 'Purchase' },
+            { id: 'purchase-return', label: 'Purchase Return' },
+            { id: 'item-receivable', label: 'Item Receivable' },
+            { id: 'purchase-expense', label: 'Purchase Expense' }
+          ]
+        },
+        {
+          id: 'stock-invoice-report',
+          label: 'Stock & Invoice Report',
+          subItems: [
+            { id: 'stock-report', label: 'Stock Report' },
+            { id: 'stock-report-warehouse', label: 'Stock Report By Warehouse' },
+            { id: 'invoice-report', label: 'Invoice Report' },
+            { id: 'stock-movement', label: 'Stock Movement detail' },
+            { id: 'vat-report', label: 'VAT Report' },
+            { id: 'daily-sales-purchase', label: 'Daily Sales N Purchase' },
+            { id: 'customer-report', label: 'Customer Report' },
+            { id: 'supplier-report', label: 'Supplier Report' }
+          ]
+        },
+        { 
+          id: 'accounts', 
+          label: 'Accounts', 
+          subItems: [
+            { id: 'chart-of-accounts', label: 'Chart of Accounts' },
+            { id: 'customers-account', label: 'Customer Account' },
+            { id: 'supplier-accounts', label: 'Supplier Account' },
+            { id: 'purchase-accounts', label: 'Purchase Account' },
+            { id: 'accounts', label: 'Bank & Cash Accounts' },
+            { id: 'expense-accounts', label: 'Expense Accounts' },
+            { id: 'currency-master', label: 'Currency Master' },
+            { id: 'cost-center', label: 'Cost Center' },
+            { id: 'acc-department', label: 'Acc department' },
+            { id: 'financial-session', label: 'Financial Session' },
+            { id: 'transaction-search', label: 'Transaction Search' }
+          ]
+        },
+        {
+          id: 'transactions',
+          label: 'Transactions',
+          subItems: [
+            { id: 'customer-receivable', label: 'Customer Receivable' },
+            { id: 'supplier-payable', label: 'Supplier Payable' },
+            { id: 'general-voucher', label: 'General Voucher Entry' },
+            { id: 'expense-entry', label: 'Expense Entry' },
+            { id: 'employee-salary', label: 'Emp. Salary Pay' }
+          ]
+        },
+        {
+          id: 'accounts-report',
+          label: 'Accounts Report',
+          subItems: [
+            { id: 'accounts-summary', label: 'Accounts Summary' },
+            { id: 'accounts-detail', label: 'Accounts Detail' },
+            { id: 'cash-bank-report', label: 'Cash N Bank Report' }
+          ]
+        },
+        {
+          id: 'finance-report',
+          label: 'Finance Report',
+          subItems: [
+            { id: 'income-expense', label: 'Income and Expense' },
+            { id: 'trial-balance', label: 'Trial Balance' },
+            { id: 'profit-loss', label: 'Profit and Loss' },
+            { id: 'balance-sheet', label: 'Balance Sheet' }
+          ]
+        },
+        {
+          id: 'admin-setup',
+          label: 'Admin Setup',
+          subItems: [
+            { id: 'transaction-types', label: 'Transaction Types' },
+            { id: 'user-privileges', label: 'User Privileges' },
+            { id: 'user-info', label: 'User Info' },
+            { id: 'translation-manager', label: 'Translation Manager' },
+            { id: 'company-info', label: 'Company Info' },
+            { id: 'common-setting', label: 'Common Setting' },
+            { id: 'entry-settings', label: 'Entry Settings' },
+            { id: 'zatca-config', label: 'Zatca Config' }
+          ]
+        },
+        { id: 'settings', label: 'Settings' }
+      ];
+
+      const flattened = [];
+      navItems.forEach(item => {
+        flattened.push({
+          Head: item.label,
+          Menu_Code: item.id,
+          Menu_type: 1,
+          Menu_Name: item.label,
+          Form_name: item.id,
+          FLAG: 'A',
+          Head_Det: 0
+        });
+        if (item.subItems) {
+          item.subItems.forEach(sub => {
+            flattened.push({
+              Head: item.label,
+              Menu_Code: sub.id,
+              Menu_type: 2,
+              Menu_Name: sub.label,
+              Form_name: sub.id,
+              FLAG: 'A',
+              Head_Det: 1
+            });
+          });
+        }
+      });
+
+      const res = await fetch(API_ENDPOINTS.USER_PRIVILEGES_SYNC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ menus: flattened })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(`Menu synchronization complete!\nAdded ${data.insertedCount} new or missing menu items.`);
+        
+        // Reload filters
+        const [grpRes, mhRes] = await Promise.all([
+          fetch(API_ENDPOINTS.USER_PRIVILEGES_GROUPS),
+          fetch(API_ENDPOINTS.USER_PRIVILEGES_MENU_HEADS)
+        ]);
+        if (grpRes.ok) {
+          const grps = await grpRes.json();
+          setGroups(grps);
+        }
+        if (mhRes.ok) {
+          setMenuHeads(await mhRes.json());
+        }
+        fetchGrid();
+      } else {
+        alert("Failed to synchronize menus with server");
+      }
+    } catch (err) {
+      alert("Network error during menu synchronization");
+    }
+    setSyncing(false);
+  };
+
   const permCols = [
     { key: 'ins', label: 'ADDITION' },
     { key: 'upd', label: 'CHANGES' },
@@ -143,6 +324,15 @@ export default function UserPrivilegesPage() {
             <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">Manage access rights for user groups across menu screens.</p>
           </div>
           <div className="flex items-center gap-3">
+            <button 
+              onClick={handleSync}
+              disabled={syncing}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all shadow-md active:scale-95 text-sm bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 disabled:opacity-50`}
+              title="Sync & import missing menus from the React frontend to the database Menu_Master_Web table"
+            >
+              <RefreshCw size={14} className={`${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'SYNCING...' : 'SYNC MENUS'}
+            </button>
             <button 
               onClick={handleSave}
               disabled={!hasChanges || saving}
