@@ -3501,11 +3501,12 @@ app.get('/api/opening-stock/item/:itemCode', async (req, res) => {
 });
 
 app.post('/api/opening-stock/save', async (req, res) => {
-  const { item, barcodes = [], warehouses = [], invoiceNo = '', remarks = '' } = req.body;
+  const { item, barcodes = [], warehouses = [], invoiceNo = '', remarks = '', userId = '1' } = req.body;
   if (!item || !item.ITEM_CODE) {
     return res.status(400).json({ error: 'Item details are required' });
   }
 
+  const userIdNum = parseInt(userId, 10) || 1;
   const pool = await getPool();
   const transaction = new sql.Transaction(pool);
 
@@ -3526,20 +3527,22 @@ app.post('/api/opening-stock/save', async (req, res) => {
               @INVOICE_NO   NVARCHAR(50),
               @TRN_TYPE     NVARCHAR(50),
               @REMARKS      NVARCHAR(500),
-              @WR_CODE      NVARCHAR(50)
+              @WR_CODE      NVARCHAR(50),
+              @USER_ID      NVARCHAR(50)
           )
           AS
           BEGIN
-              IF EXISTS (SELECT 1 FROM dbo.DATA_ENTRY_GRID WHERE BARCODE = @BARCODE AND TRN_TYPE = @TRN_TYPE AND WR_CODE = @WR_CODE)
+              SET NOCOUNT ON;
+              IF EXISTS (SELECT 1 FROM dbo.GRID_ITEM WHERE INVOICE_NO = @INVOICE_NO AND TRN_TYPE = @TRN_TYPE AND BARCODE = @BARCODE)
               BEGIN
-                  UPDATE dbo.DATA_ENTRY_GRID 
-                  SET QTY = @QTY, PRICE = @PRICE, VAT_PERCENT = @VAT_PERCENT, REMARKS = @REMARKS, INVOICE_NO = @INVOICE_NO, DESCRIPTION = @DESCRIPTION, UNIT = @UNIT
-                  WHERE BARCODE = @BARCODE AND TRN_TYPE = @TRN_TYPE AND WR_CODE = @WR_CODE;
+                  UPDATE dbo.GRID_ITEM 
+                  SET QTY = @QTY, PRICE = @PRICE, VAT_PERCENT = @VAT_PERCENT, REMARKS = @REMARKS, WR_CODE = @WR_CODE, DESCRIPTION = @DESCRIPTION, UNIT = @UNIT
+                  WHERE INVOICE_NO = @INVOICE_NO AND TRN_TYPE = @TRN_TYPE AND BARCODE = @BARCODE;
               END
               ELSE
               BEGIN
-                  INSERT INTO dbo.DATA_ENTRY_GRID (BARCODE, DESCRIPTION, UNIT, QTY, PRICE, VAT_PERCENT, INVOICE_NO, TRN_TYPE, REMARKS, WR_CODE, BRN_CODE)
-                  VALUES (@BARCODE, @DESCRIPTION, @UNIT, @QTY, @PRICE, @VAT_PERCENT, @INVOICE_NO, @TRN_TYPE, @REMARKS, @WR_CODE, 1);
+                  INSERT INTO dbo.GRID_ITEM (BARCODE, DESCRIPTION, UNIT, QTY, PRICE, VAT_PERCENT, INVOICE_NO, TRN_TYPE, REMARKS, WR_CODE)
+                  VALUES (@BARCODE, @DESCRIPTION, @UNIT, @QTY, @PRICE, @VAT_PERCENT, @INVOICE_NO, @TRN_TYPE, @REMARKS, @WR_CODE);
               END
           END
         ')
@@ -3547,68 +3550,11 @@ app.post('/api/opening-stock/save', async (req, res) => {
     `);
 
     await transaction.begin();
-    const itemCode = String(item.ITEM_CODE);
 
-    // 0. UPDATE HD_ITEMMASTER DESCRIPTION AND UNIT
-    await new sql.Request(transaction)
-      .input('description', sql.NVarChar(255), String(item.DESCRIPTION || ''))
-      .input('unit', sql.NVarChar(50), String(item.UNIT_CODE || ''))
-      .input('itemCode', sql.VarChar(50), itemCode)
-      .query(`
-        UPDATE dbo.HD_ITEMMASTER 
-        SET DESCRIPTION = @description, UNIT = @unit
-        WHERE ITEM_CODE = @itemCode
-      `);
-
-    // 1. UPDATE BARCODE SALE_PRICE AND RETAIL_PRICE
-    for (const bc of barcodes) {
-      await new sql.Request(transaction)
-        .input('sale_price', sql.Real, parseFloat(bc.SALE_PRICE) || 0)
-        .input('retail_price', sql.Real, parseFloat(bc.RETAIL_PRICE) || 0)
-        .input('barcode', sql.VarChar(100), String(bc.BARCODE))
-        .input('itemCode', sql.VarChar(50), itemCode)
-        .query(`
-          UPDATE dbo.BARCODE 
-          SET SALE_PRICE = @sale_price, RETAIL_PRICE = @retail_price 
-          WHERE BARCODE = @barcode AND ITEM_CODE = @itemCode
-        `);
-    }
-
-    // 2. UPDATE WR_STOCK_MASTER AND EXECUTE STORED PROCEDURE SEQUENTIALLY
-    let totalOpStock = 0;
+    // Loop through warehouses to run the stored procedure per warehouse
     for (const wh of warehouses) {
       const opStockVal = parseFloat(wh.OP_STOCK) || 0;
-      totalOpStock += opStockVal;
 
-      const checkRes = await new sql.Request(transaction)
-        .input('itemCode', sql.VarChar(50), itemCode)
-        .input('wrCode', sql.SmallInt, parseInt(wh.WR_CODE, 10))
-        .query('SELECT 1 FROM dbo.WR_STOCK_MASTER WHERE ITEM_CODE = @itemCode AND WR_CODE = @wrCode');
-
-      if (checkRes.recordset.length > 0) {
-        await new sql.Request(transaction)
-          .input('op_stock', sql.Float, opStockVal)
-          .input('location', sql.NVarChar(50), wh.LOCATION || '')
-          .input('itemCode', sql.VarChar(50), itemCode)
-          .input('wrCode', sql.SmallInt, parseInt(wh.WR_CODE, 10))
-          .query(`
-            UPDATE dbo.WR_STOCK_MASTER 
-            SET OP_STOCK = @op_stock, LOCATION = @location 
-            WHERE ITEM_CODE = @itemCode AND WR_CODE = @wrCode
-          `);
-      } else {
-        await new sql.Request(transaction)
-          .input('itemCode', sql.VarChar(50), itemCode)
-          .input('wrCode', sql.SmallInt, parseInt(wh.WR_CODE, 10))
-          .input('op_stock', sql.Float, opStockVal)
-          .input('location', sql.NVarChar(50), wh.LOCATION || '')
-          .query(`
-            INSERT INTO dbo.WR_STOCK_MASTER (ITEM_CODE, WR_CODE, OP_STOCK, STOCK, LOCATION, BRN_CODE)
-            VALUES (@itemCode, @wrCode, @op_stock, @op_stock, @location, 1)
-          `);
-      }
-
-      // Call Stored Procedure
       const spReq = new sql.Request(transaction);
       spReq.input('BARCODE', sql.NVarChar(100), String(item.BARCODE || barcodes[0]?.BARCODE || ''));
       spReq.input('DESCRIPTION', sql.NVarChar(255), String(item.DESCRIPTION || ''));
@@ -3616,29 +3562,20 @@ app.post('/api/opening-stock/save', async (req, res) => {
       spReq.input('QTY', sql.Decimal(18, 2), opStockVal);
       spReq.input('PRICE', sql.Decimal(18, 2), parseFloat(item.COST_PRICE) || 0);
       spReq.input('VAT_PERCENT', sql.Decimal(18, 2), parseFloat(item.VAT_PERCENT) || 0);
-      spReq.input('INVOICE_NO', sql.NVarChar(50), String(invoiceNo || item.DOC_NO || 'OS-UPD'));
+      spReq.input('INVOICE_NO', sql.NVarChar(50), (invoiceNo && String(invoiceNo).trim() !== '') ? String(invoiceNo) : null);
       spReq.input('TRN_TYPE', sql.NVarChar(50), '0');
       spReq.input('REMARKS', sql.NVarChar(500), String(remarks || ''));
       spReq.input('WR_CODE', sql.NVarChar(50), String(wh.WR_CODE));
+      spReq.input('USER_ID', sql.NVarChar(50), String(userIdNum));
 
       await spReq.execute('dbo.usp_InsertUpdate_GridItem');
     }
 
-    // 3. UPDATE STOCK_MASTER
-    await new sql.Request(transaction)
-      .input('cost_price', sql.Real, parseFloat(item.COST_PRICE) || 0)
-      .input('total_op_stock', sql.Float, totalOpStock)
-      .input('itemCode', sql.VarChar(50), itemCode)
-      .query(`
-        UPDATE dbo.STOCK_MASTER 
-        SET AVG_PUR_PRICE = @cost_price, OP_STOCK = @total_op_stock
-        WHERE ITEM_CODE = @itemCode
-      `);
-
     await transaction.commit();
+    console.log(`✅ Stored procedure usp_InsertUpdate_GridItem called successfully for Item: ${item.ITEM_CODE}`);
     res.json({ success: true });
   } catch (err) {
-    console.error("Failed to save opening stock/price update:", err);
+    console.error("Failed to execute opening stock stored procedure:", err);
     try {
       await transaction.rollback();
     } catch (rollErr) {

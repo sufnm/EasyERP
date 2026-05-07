@@ -6,7 +6,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { API_ENDPOINTS } from '../config';
 
-export default function OpeningStockPage() {
+export default function OpeningStockPage({ user }) {
   const { language } = useLanguage();
   const isRtl = language === 'ar';
 
@@ -146,8 +146,9 @@ export default function OpeningStockPage() {
         item,
         barcodes,
         warehouses,
-        invoiceNo: invoiceNo || item.DOC_NO || 'OS-UPD',
-        remarks
+        invoiceNo: (invoiceNo && invoiceNo.trim() !== '') ? invoiceNo : null,
+        remarks,
+        userId: user?.userid || 1
       };
 
       const res = await fetch(API_ENDPOINTS.OPENING_STOCK_SAVE, {
@@ -395,15 +396,15 @@ export default function OpeningStockPage() {
                     </div>
                   </div>
 
-                  {/* EDITABLE FIELD: INVOICE NO / DOC NO */}
+                  {/* READONLY FIELD: INVOICE NO / DOC NO */}
                   <div className="space-y-1">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase">{isRtl ? 'رقم المستند / الفاتورة' : 'Invoice No / Doc No'}</span>
                     <input
                       type="text"
-                      placeholder="OS-UPD"
+                      placeholder={isRtl ? 'تلقائي' : 'Auto'}
                       value={invoiceNo}
-                      onChange={(e) => setInvoiceNo(e.target.value)}
-                      className="w-full p-2 bg-muted border border-border rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-foreground"
+                      readOnly
+                      className="w-full p-2 bg-muted/60 cursor-not-allowed border border-border rounded-lg text-xs font-bold focus:outline-none text-zinc-500 dark:text-zinc-400"
                     />
                   </div>
 

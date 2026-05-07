@@ -77,7 +77,7 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
           {activePage === 'purchase-accounts' && <PurchaseAccountsPage setActivePage={navigateTo} />}
           {activePage === 'customer-account-form' && <CustomerAccountForm setActivePage={navigateTo} params={activePageParams} />}
           {activePage === 'item-creation' && <ItemCreationPage />}
-          {activePage === 'opening-stock' && <OpeningStockPage />}
+          {activePage === 'opening-stock' && <OpeningStockPage user={user} />}
           {activePage === 'item-group' && <ItemGroupPage />}
           {activePage === 'unit-master' && <UnitMasterPage />}
           {activePage === 'transaction-types' && <TransactionTypesPage />}
