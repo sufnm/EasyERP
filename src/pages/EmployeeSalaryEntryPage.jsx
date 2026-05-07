@@ -317,38 +317,7 @@ export default function EmployeeSalaryEntryPage({ setActivePage, user }) {
                 {activeEditId ? `Editing Salary #${activeEditId}` : 'Record Employee Salaries'}
               </p>
             </div>
-<<<<<<< HEAD
-=======
-            Emp. Salary Pay
-          </h1>
-          <p className="text-zinc-500 dark:text-zinc-400 text-[9px] font-bold uppercase tracking-widest mt-0.5">
-            {activeEditId ? `Editing Salary #${activeEditId}` : 'Record Employee Salaries'}
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={resetForm}
-            className="p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-border"
-            title="New Transaction"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-2">
-        {/* Entry Form */}
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
-          <div className="px-3 py-1.5 border-b border-border bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
-            <h3 className="text-[10px] font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-widest flex items-center gap-1.5">
-              <Pencil size={11} className="text-rose-500" />
-              Salary Details
-            </h3>
-            {activeEditId && (
-              <span className="text-[9px] font-black bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded-full uppercase">Edit Mode</span>
-            )}
->>>>>>> 927ced4 (6 may)
           </div>
           
           <div className="flex items-center gap-3">

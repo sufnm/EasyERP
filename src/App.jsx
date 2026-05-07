@@ -25,13 +25,10 @@ import SalesReturnPage from './pages/SalesReturnPage';
 import GeneralVoucherPage from './pages/GeneralVoucherPage';
 import ExpenseEntryPage from './pages/ExpenseEntryPage';
 import EmployeeSalaryEntryPage from './pages/EmployeeSalaryEntryPage';
-<<<<<<< HEAD
 import PurchasePage from './pages/PurchasePage';
 import PurchaseHistoryPage from './pages/PurchaseHistoryPage';
-=======
 import ItemCreationPage from './pages/ItemCreationPage';
 import OpeningStockPage from './pages/OpeningStockPage';
->>>>>>> 927ced4 (6 may)
 import { CacheProvider } from './context/CacheContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Menu } from 'lucide-react';
