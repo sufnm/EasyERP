@@ -17,6 +17,8 @@ export function CacheProvider({ children }) {
   const [currencies, setCurrencies] = useState([]);
   const [defaultCurrency, setDefaultCurrency] = useState({ code: 'SAR', no: 1 });
   const [pendingSales, setPendingSales] = useState([]);
+  const [pendingPurchases, setPendingPurchases] = useState([]);
+  const [pendingReturns, setPendingReturns] = useState([]);
 
   // Global App Settings (Preserved across page navigation)
   const [taxIncluded, setTaxIncluded] = useState(true);
@@ -164,7 +166,15 @@ export function CacheProvider({ children }) {
       pendingSales,
       addPendingSale: (sale) => setPendingSales(prev => [sale, ...prev]),
       removePendingSale: (id) => setPendingSales(prev => prev.filter(p => p.id !== id)),
-      clearPendingSales: () => setPendingSales([])
+      clearPendingSales: () => setPendingSales([]),
+      pendingPurchases,
+      addPendingPurchase: (purchase) => setPendingPurchases(prev => [purchase, ...prev]),
+      removePendingPurchase: (id) => setPendingPurchases(prev => prev.filter(p => p.id !== id)),
+      clearPendingPurchases: () => setPendingPurchases([]),
+      pendingReturns,
+      addPendingReturn: (ret) => setPendingReturns(prev => [ret, ...prev]),
+      removePendingReturn: (id) => setPendingReturns(prev => prev.filter(p => p.id !== id)),
+      clearPendingReturns: () => setPendingReturns([])
     }}>
       {children}
     </CacheContext.Provider>

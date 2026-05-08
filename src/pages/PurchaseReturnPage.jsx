@@ -9,9 +9,9 @@ import SalesGrid from '../components/SalesGrid';
 import SummaryFooter from '../components/SummaryFooter';
 import InvoiceModal from '../components/InvoiceModal';
 import { useLanguage } from '../context/LanguageContext';
-import PendingPurchasesModal from '../components/PendingPurchasesModal';
+import PendingReturnsModal from '../components/PendingReturnsModal';
 
-export default function PurchasePage({ user, params = {}, navigateTo, onBack }) {
+export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBack }) {
   const { t, language } = useLanguage();
   const {
     refreshCache,
@@ -22,7 +22,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
     cachedAccounts,
     currencies,
     showInvoiceAfterSave, setShowInvoiceAfterSave,
-    pendingPurchases, addPendingPurchase, removePendingPurchase, clearPendingPurchases
+    pendingReturns, addPendingReturn, removePendingReturn, clearPendingReturns
   } = useCache();
 
   const [pVisibleColumns, setPVisibleColumns] = useState({
@@ -32,18 +32,18 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
     unit: true,
     qty: true,
     purchasePrice: true,
-    salePrice: true,
-    retailPrice: true,
+    salePrice: false,
+    retailPrice: false,
     vatAmt: true,
     total: true
   });
 
   const [rows, setRows] = useState([
-    { id: 1, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
-    { id: 2, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
-    { id: 3, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
-    { id: 4, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
-    { id: 5, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+    { id: 1, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+    { id: 2, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+    { id: 3, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+    { id: 4, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+    { id: 5, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
   ]);
 
   const [invoiceNo, setInvoiceNo] = useState('Loading...');
@@ -64,6 +64,8 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
   const [editingRecNo, setEditingRecNo] = useState(null);
   const [selectedAccount, setSelectedAccount] = useState('120101');
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedPurchase, setSelectedPurchase] = useState(null);
+  const [purchaseItems, setPurchaseItems] = useState(null);
   const [showPendingModal, setShowPendingModal] = useState(false);
 
   const fetchNextInvoice = async () => {
@@ -96,12 +98,42 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [supplier, rows, totals, referenceNo, vatNumber]);
+  }, [supplier, rows, totals, referenceNo, vatNumber, selectedPurchase, purchaseItems]);
 
+  const handlePurchaseSelect = async (purchase) => {
+    setSelectedPurchase(purchase);
+    if (!purchase) {
+      resetPage();
+      return;
+    }
+
+    setSupplier({ id: purchase.ACCODE, name: purchase.ENAME });
+    setVatNumber(purchase.VAT_NUMBER || '');
+    setReferenceNo(purchase.INVOICE_NO.toString());
+    
+    // Fetch items for this purchase
+    try {
+      const res = await fetch(API_ENDPOINTS.PURCHASE_ITEMS(purchase.REC_NO));
+      if (res.ok) {
+        const items = await res.json();
+        setPurchaseItems(items);
+        // Reset rows to empty so user can search or "Add All"
+        setRows([
+          { id: 1, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+          { id: 2, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+          { id: 3, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+          { id: 4, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+          { id: 5, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+        ]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch purchase items:", err);
+    }
+  };
 
   const handleSave = async () => {
     if (!supplier.id) {
-      alert('Please select a supplier before saving.');
+      alert('Please select a supplier or original invoice before saving.');
       return;
     }
 
@@ -110,6 +142,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
 
     if (rows.filter(r => r.itemCode.trim() !== '').length === 0) {
       alert('Please add at least one item before saving.');
+      setIsSaving(false);
       return;
     }
 
@@ -131,7 +164,9 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
       WR_CODE: selectedWarehouse,
       CURRENCY: selectedCurrency,
       REF_INV_NO: referenceNo,
-      ADDRESS: address
+      ADDRESS: address,
+      // TRN_TYPE: Cash Return = 8, Credit Return = 9
+      TRN_TYPE: paymentMethod === 'Cash' ? 8 : 9
     };
 
     try {
@@ -143,7 +178,6 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
       if (res.ok) {
         const result = await res.json();
         
-        // Prepare invoice data for modal
         const invoiceData = {
           REC_NO: result.REC_NO,
           INVOICE_NO: result.INVOICE_NO,
@@ -155,7 +189,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
           NET_AMOUNT: totals.net,
           VAT_AMOUNT: totals.vat,
           VAT_NUMBER: vatNumber,
-          TRN_TYPE: paymentMethod === 'Cash' ? 1 : 2,
+          TRN_TYPE: payload.TRN_TYPE,
           REF_NO: referenceNo,
           CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
         };
@@ -163,15 +197,15 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
         if (showInvoiceAfterSave) {
           setSavedInvoice(invoiceData);
         } else {
-          alert(`Purchase saved successfully! Invoice: ${result.INVOICE_NO}`);
+          alert(`Purchase Return saved successfully! Invoice: ${result.INVOICE_NO}`);
         }
         resetPage();
       } else {
-        alert('Failed to save purchase');
+        alert('Failed to save purchase return');
       }
     } catch (err) {
       console.error("Save error:", err);
-      alert('Error saving purchase');
+      alert('Error saving purchase return');
     } finally {
       setIsSaving(false);
     }
@@ -193,10 +227,12 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
       selectedCurrency,
       paymentMethod,
       cashPaid,
-      otherPaid
+      otherPaid,
+      selectedPurchase,
+      purchaseItems
     };
     
-    addPendingPurchase(draft);
+    addPendingReturn(draft);
     resetPage();
   };
 
@@ -212,18 +248,20 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
     setPaymentMethod(draft.paymentMethod);
     setCashPaid(draft.cashPaid);
     setOtherPaid(draft.otherPaid);
+    setSelectedPurchase(draft.selectedPurchase);
+    setPurchaseItems(draft.purchaseItems);
     
-    removePendingPurchase(draft.id);
+    removePendingReturn(draft.id);
     setShowPendingModal(false);
   };
 
   const resetPage = () => {
     setRows([
-      { id: 1, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
-      { id: 2, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
-      { id: 3, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
-      { id: 4, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
-      { id: 5, itemCode: '', description: '', unit: '', unitId: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+      { id: 1, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+      { id: 2, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+      { id: 3, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+      { id: 4, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
+      { id: 5, itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', salePrice: '', retailPrice: '', total: '', vatPercent: 15, vatAmt: '' },
     ]);
     setSupplier({ id: '', name: 'SELECT A SUPPLIER' });
     setVatNumber('');
@@ -232,6 +270,8 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
     setCashPaid(0);
     setOtherPaid(0);
     setEditingRecNo(null);
+    setSelectedPurchase(null);
+    setPurchaseItems(null);
     fetchNextInvoice();
   };
 
@@ -245,28 +285,27 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
               setVisibleColumns={setPVisibleColumns} 
               taxIncluded={taxIncluded} 
               setTaxIncluded={setTaxIncluded} 
-              enterToQty={enterToQty} 
-              setEnterToQty={setEnterToQty}
               showInvoiceAfterSave={showInvoiceAfterSave}
               setShowInvoiceAfterSave={setShowInvoiceAfterSave}
               onSave={handleSave} 
               onNew={resetPage}
               onPending={() => setShowPendingModal(true)}
-              pendingCount={pendingPurchases.length}
+              pendingCount={pendingReturns.length}
               onHistory={() => navigateTo('purchase-history')}
-              onReturn={() => navigateTo('purchase-return')}
               onClear={resetPage}
               currencies={currencies}
               selectedCurrency={selectedCurrency}
               setSelectedCurrency={setSelectedCurrency}
               user={user}
               isSaving={isSaving}
+              onReturn={() => navigateTo('purchase')}
               isPurchase={true}
+              isReturn={true}
             />
           </div>
           <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-black text-indigo-600 uppercase tracking-widest hidden sm:block drop-shadow-sm shrink-0">
-              PURCHASE
+            <h2 className="text-2xl font-black text-rose-600 uppercase tracking-widest hidden sm:block drop-shadow-sm shrink-0">
+              PURCHASE RETURN
             </h2>
           </div>
         </div>
@@ -280,7 +319,10 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
                 selectedWarehouse={selectedWarehouse}
                 setSelectedWarehouse={setSelectedWarehouse}
                 warehouses={warehouses}
-                hideInvoiceNo={true}
+                isReturn={true}
+                isPurchase={true}
+                onInvoiceSelect={handlePurchaseSelect}
+                selectedInvoice={selectedPurchase}
               />
             </div>
             <div className="flex-[1.5] min-w-0">
@@ -302,8 +344,8 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
               setRows={setRows}
               visibleColumns={pVisibleColumns}
               taxIncluded={taxIncluded}
-              enterToQty={enterToQty}
               isPurchase={true}
+              restrictedItems={purchaseItems}
             />
           </div>
 
@@ -340,13 +382,13 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
         />
       )}
 
-      <PendingPurchasesModal 
+      <PendingReturnsModal 
         isOpen={showPendingModal}
         onClose={() => setShowPendingModal(false)}
-        pendingPurchases={pendingPurchases}
+        pendingReturns={pendingReturns}
         onSelect={handleRestore}
-        onRemove={removePendingPurchase}
-        onClearAll={clearPendingPurchases}
+        onRemove={removePendingReturn}
+        onClearAll={clearPendingReturns}
       />
     </div>
   );

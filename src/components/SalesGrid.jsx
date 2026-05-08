@@ -73,6 +73,7 @@ export default function SalesGrid({
         itemCode: d.itemCode || d.id || '',
         description: d.description || d.name || '',
         unit: d.unit || '',
+        unitId: d.unitId || d.UNIT_ID || '',
         qty: d.qty || '',
         price: d.price || 0,
         aliasCode: '',
@@ -90,6 +91,9 @@ export default function SalesGrid({
       if (row.id !== id) return row;
       
       let finalValue = value;
+      
+      // Safeguard: Prevent purchasePrice edits in return mode
+      if (field === 'purchasePrice' && restrictedItems) return row;
       
       // RESTRICTION: Clamp Quantity if restrictedItems is active
       if (field === 'qty' && restrictedItems) {
@@ -219,7 +223,7 @@ export default function SalesGrid({
         i.DESCRIPTION.toLowerCase().includes(q)
       ).map(i => ({
         ...i,
-        SALE_PRICE: i.UNIT_PRICE // Map from original invoice field names
+        SALE_PRICE: isPurchase ? i.PRICE : i.UNIT_PRICE // Map correct price field
       }));
     } else {
       // 1. Try local cache first
@@ -323,6 +327,7 @@ export default function SalesGrid({
           itemCode: '', 
           description: '', 
           unit: '', 
+          unitId: '',
           qty: '', 
           price: '', 
           purchasePrice: '',
@@ -330,7 +335,7 @@ export default function SalesGrid({
           retailPrice: '',
           aliasCode: '', 
           vatAmt: '', 
-          vatPercent: 0, 
+          vatPercent: isPurchase ? 15 : 0, 
           total: '', 
           stock: '' 
         };
@@ -341,41 +346,45 @@ export default function SalesGrid({
       // Standard logic for new item
       let nextRows = prevRows.map(row => 
         row.id === id 
-          ? { 
-              ...row, 
-              unit: item.isManual 
-                ? (cachedUnits.find(u => u.Unit_Name?.toUpperCase() === 'PCS')?.Unit_Name || '')
-                : (restrictedItems ? item.UNIT : getUnitName(item.UNIT)), 
-              itemCode: item.ITEM_CODE || item.BARCODE,
-              description: item.DESCRIPTION || '',
-              vatPercent: item.VAT_PERCENT || 0,
-              qty: item.isManual ? '' : (Number(row.qty || 0) + 1),
-              purchasePrice: item.AVG_PUR_PRICE || 0,
-              salePrice: item.SALE_PRICE || item.price || 0,
-              retailPrice: item.RETAIL_PRICE || 0,
-              price: isPurchase ? (item.AVG_PUR_PRICE || 0) : (item.SALE_PRICE || item.price || 0),
-              isManual: item.isManual || false
-            }
+            ? { 
+                ...row, 
+                unit: item.isManual 
+                  ? (cachedUnits.find(u => u.Unit_Name?.toUpperCase() === 'PCS')?.Unit_Name || '')
+                  : (restrictedItems ? item.UNIT : getUnitName(item.UNIT)), 
+                unitId: item.isManual
+                  ? (cachedUnits.find(u => u.Unit_Name?.toUpperCase() === 'PCS')?.Unit_id || '')
+                  : (restrictedItems ? item.UNIT_ID : item.UNIT),
+                itemCode: item.ITEM_CODE || item.BARCODE,
+                description: item.DESCRIPTION || '',
+                vatPercent: item.vat_percent || item.VAT_PERCENT || 0,
+                qty: item.isManual ? '' : (Number(row.qty || 0) + 1),
+                purchasePrice: isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || item.AVG_PUR_PRICE || 0) : 0,
+                salePrice: item.SALE_PRICE || item.price || 0,
+                retailPrice: item.RETAIL_PRICE || 0,
+                price: isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || item.AVG_PUR_PRICE || 0) : (item.SALE_PRICE || item.price || 0),
+                isManual: item.isManual || false
+              }
           : row
       );
       
       if (!enterToQty && id === prevRows[prevRows.length - 1].id) {
-         nextRows.push({ 
-           id: Date.now() + 1, 
-           itemCode: '', 
-           description: '', 
-           unit: '', 
-           qty: '', 
-           price: '', 
-           purchasePrice: '',
-           salePrice: '',
-           retailPrice: '',
-           aliasCode: '', 
-           vatAmt: '', 
-           vatPercent: 0, 
-           total: '', 
-           stock: '' 
-         });
+          nextRows.push({ 
+            id: Date.now() + 1, 
+            itemCode: '', 
+            description: '', 
+            unit: '', 
+            unitId: '',
+            qty: '', 
+            price: '', 
+            purchasePrice: '',
+            salePrice: '',
+            retailPrice: '',
+            aliasCode: '', 
+            vatAmt: '', 
+            vatPercent: 0, 
+            total: '', 
+            stock: '' 
+          });
       }
       return nextRows;
     });
@@ -397,6 +406,11 @@ export default function SalesGrid({
 
       if (item.isManual) {
         document.getElementById(`description-${id}`)?.focus();
+      } else if (isPurchase) {
+        // For purchases, ALWAYS focus QTY first to allow sequential price editing
+        const qtyInput = document.getElementById(`qty-${id}`);
+        qtyInput?.focus();
+        qtyInput?.select();
       } else if (enterToQty) {
         const qtyInput = document.getElementById(`qty-${id}`);
         qtyInput?.focus();
@@ -431,9 +445,13 @@ export default function SalesGrid({
       itemCode: item.BARCODE,
       description: item.DESCRIPTION,
       unit: item.UNIT,
+      unitId: item.UNIT_ID || '',
       qty: item.QTY,
-      price: item.UNIT_PRICE,
-      vatPercent: item.VAT_PERCENT || 0,
+      price: isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || 0) : (item.UNIT_PRICE || item.price || 0),
+      purchasePrice: isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || 0) : 0,
+      salePrice: item.SALE_PRICE || 0,
+      retailPrice: item.RETAIL_PRICE || 0,
+      vatPercent: item.vat_percent || item.VAT_PERCENT || 0,
       vatAmt: '',
       total: '',
       aliasCode: '',
@@ -454,7 +472,7 @@ export default function SalesGrid({
   }, [searchSelectedIndex]);
 
   const addRow = () => {
-    setRows([...rows, { id: Date.now(), itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }]);
+    setRows([...rows, { id: Date.now(), itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }]);
   };
 
   const removeRow = (id) => {
@@ -602,7 +620,12 @@ export default function SalesGrid({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       if (unitSearchResults.length > 0) {
-                        updateRow(row.id, 'unit', unitSearchResults[0].Unit_Name || unitSearchResults[0].unit_name);
+                        const selectedUnit = unitSearchResults[0];
+                        setRows(rows.map(r => r.id === row.id ? { 
+                          ...r, 
+                          unit: selectedUnit.Unit_Name || selectedUnit.unit_name,
+                          unitId: selectedUnit.Unit_id || selectedUnit.unit_id
+                        } : r));
                         setActiveUnitSearchId(null);
                       }
                       document.getElementById(`qty-${row.id}`)?.focus();
@@ -630,7 +653,11 @@ export default function SalesGrid({
                         <div 
                           key={idx} 
                           onClick={() => {
-                            updateRow(row.id, 'unit', u.Unit_Name || u.unit_name);
+                            setRows(rows.map(r => r.id === row.id ? { 
+                              ...r, 
+                              unit: u.Unit_Name || u.unit_name,
+                              unitId: u.Unit_id || u.unit_id
+                            } : r));
                             setActiveUnitSearchId(null);
                           }}
                           className="p-2.5 hover:bg-primary/10 cursor-pointer border-b border-border last:border-0 flex justify-between items-center group transition-colors"
@@ -648,27 +675,37 @@ export default function SalesGrid({
                   type="number" 
                   value={row.qty} 
                   onChange={(e) => updateRow(row.id, 'qty', e.target.value)} 
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      if (!row.qty) updateRow(row.id, 'qty', '0');
-                      const newId = Date.now();
-                      setRows(prev => {
-                        const isLast = prev[prev.length - 1].id === row.id;
-                        if (isLast) {
-                          const nextRows = [...prev, { id: newId, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }];
-                          setTimeout(() => document.getElementById(`itemCode-${newId}`)?.focus(), 50);
-                          return nextRows;
-                        } else {
-                          const currentIndex = prev.findIndex(r => r.id === row.id);
-                          const nextRow = prev[currentIndex + 1];
-                          if (nextRow) setTimeout(() => document.getElementById(`itemCode-${nextRow.id}`)?.focus(), 10);
-                          return prev;
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (!row.qty) updateRow(row.id, 'qty', '0');
+                        
+                        if (isPurchase && !restrictedItems) {
+                          // For normal purchases, move to Purchase Price
+                          document.getElementById(`purchasePrice-${row.id}`)?.focus();
+                          return;
                         }
-                      });
-                    } else {
-                      handleGridKeyDown(e, row.id, 'qty');
-                    }
-                  }} 
+                        const newId = Date.now();
+                        setRows(prev => {
+                          const isLast = prev[prev.length - 1].id === row.id;
+                          if (isLast) {
+                            const nextRows = [...prev, { 
+                              id: newId, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', 
+                              purchasePrice: '', salePrice: '', retailPrice: '',
+                              aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' 
+                            }];
+                            setTimeout(() => document.getElementById(`itemCode-${newId}`)?.focus(), 50);
+                            return nextRows;
+                          } else {
+                            const currentIndex = prev.findIndex(r => r.id === row.id);
+                            const nextRow = prev[currentIndex + 1];
+                            if (nextRow) setTimeout(() => document.getElementById(`itemCode-${nextRow.id}`)?.focus(), 10);
+                            return prev;
+                          }
+                        });
+                      } else {
+                        handleGridKeyDown(e, row.id, 'qty');
+                      }
+                    }} 
                   className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
                 /></td>}
                 {visibleColumns.purchasePrice && <td className="p-1">
@@ -676,13 +713,19 @@ export default function SalesGrid({
                     id={`purchasePrice-${row.id}`}
                     type="number" 
                     value={row.purchasePrice} 
-                    onChange={(e) => updateRow(row.id, 'purchasePrice', e.target.value)}
-                    onKeyDown={(e) => {
+                    onChange={!restrictedItems ? (e) => updateRow(row.id, 'purchasePrice', e.target.value) : undefined}
+                    onKeyDown={!restrictedItems ? (e) => {
                       if (e.key === 'Enter') {
                         document.getElementById(`salePrice-${row.id}`)?.focus();
                       }
-                    }}
-                    className="w-full bg-transparent p-2 outline-none focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary rounded text-right dark:text-zinc-200" 
+                    } : undefined}
+                    readOnly={!!restrictedItems}
+                    disabled={!!restrictedItems}
+                    className={`w-full p-2 outline-none rounded text-right dark:text-zinc-200 ${
+                      restrictedItems 
+                        ? 'bg-zinc-50 dark:bg-zinc-900/50 text-zinc-500 cursor-not-allowed' 
+                        : 'bg-transparent focus:bg-white dark:focus:bg-zinc-800 focus:ring-1 focus:ring-primary'
+                    }`} 
                   />
                 </td>}
                 {visibleColumns.salePrice && <td className="p-1">
@@ -712,9 +755,9 @@ export default function SalesGrid({
                           const isLast = prev[prev.length - 1].id === row.id;
                           if (isLast) {
                             const nextRows = [...prev, { 
-                              id: newId, itemCode: '', description: '', unit: '', qty: '', 
+                              id: newId, itemCode: '', description: '', unit: '', unitId: '', qty: '', 
                               purchasePrice: '', salePrice: '', retailPrice: '', 
-                              aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' 
+                              aliasCode: '', vatAmt: '', vatPercent: isPurchase ? 15 : 0, total: '', stock: '' 
                             }];
                             setTimeout(() => document.getElementById(`itemCode-${newId}`)?.focus(), 50);
                             return nextRows;
@@ -758,7 +801,11 @@ export default function SalesGrid({
                       setRows(prev => {
                         const isLast = prev[prev.length - 1].id === row.id;
                         if (isLast) {
-                          const nextRows = [...prev, { id: newId, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' }];
+                          const nextRows = [...prev, { 
+                            id: newId, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', 
+                            purchasePrice: '', salePrice: '', retailPrice: '',
+                            aliasCode: '', vatAmt: '', vatPercent: isPurchase ? 15 : 0, total: '', stock: '' 
+                          }];
                           setTimeout(() => document.getElementById(`itemCode-${newId}`)?.focus(), 50);
                           return nextRows;
                         } else {

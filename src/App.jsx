@@ -26,6 +26,7 @@ import GeneralVoucherPage from './pages/GeneralVoucherPage';
 import ExpenseEntryPage from './pages/ExpenseEntryPage';
 import EmployeeSalaryEntryPage from './pages/EmployeeSalaryEntryPage';
 import PurchasePage from './pages/PurchasePage';
+import PurchaseReturnPage from './pages/PurchaseReturnPage';
 import PurchaseHistoryPage from './pages/PurchaseHistoryPage';
 import ItemCreationPage from './pages/ItemCreationPage';
 import OpeningStockPage from './pages/OpeningStockPage';
@@ -93,6 +94,9 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
           {activePage === 'employee-salary' && <EmployeeSalaryEntryPage setActivePage={navigateTo} user={user} />}
           {activePage === 'purchase' && <PurchasePage user={user} params={activePageParams} navigateTo={navigateTo} />}
           {activePage === 'purchase-history' && <PurchaseHistoryPage setActivePage={navigateTo} />}
+          {activePage === 'purchase-return' && <PurchaseReturnPage user={user} params={activePageParams} navigateTo={navigateTo} />}
+          {activePage === 'edit-purchase' && <PurchasePage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('purchase-history')} />}
+          {activePage === 'edit-purchase-return' && <PurchaseReturnPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('purchase-history')} />}
           {activePage === 'translation-manager' && <TranslationManagerPage />}
           {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager', 'item-creation', 'opening-stock'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">

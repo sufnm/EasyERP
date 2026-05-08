@@ -13,7 +13,8 @@ export default function InvoiceHeader({
   selectedInvoice = null,
   onReferenceChange,
   referenceNo = '',
-  hideInvoiceNo = false
+  hideInvoiceNo = false,
+  isPurchase = false
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -37,8 +38,12 @@ export default function InvoiceHeader({
 
     try {
       setIsSearching(true);
-      // Fetch only sales (6, 7) and restrict search to INVOICE_NO field
-      const res = await fetch(`${API_ENDPOINTS.SALES_HISTORY}?q=${encodeURIComponent(val)}&trnType=6,7&searchField=INVOICE_NO`);
+      // If it's a purchase return, search purchase history (1, 2)
+      // If it's a sales return, search sales history (6, 7)
+      const endpoint = isPurchase ? API_ENDPOINTS.PURCHASE_HISTORY : API_ENDPOINTS.SALES_HISTORY;
+      const trnTypes = isPurchase ? '1,2' : '6,7';
+      
+      const res = await fetch(`${endpoint}?q=${encodeURIComponent(val)}&trnType=${trnTypes}&searchField=INVOICE_NO`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data);

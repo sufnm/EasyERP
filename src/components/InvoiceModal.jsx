@@ -125,11 +125,13 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
         {/* Modal Header */}
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/30 print:hidden">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/20">
+            <div className={"w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg " + (isPurchase ? 'bg-rose-600 shadow-rose-600/20' : 'bg-indigo-600 shadow-indigo-600/20')}>
               <FileText size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight uppercase">Invoice #{sale.INVOICE_NO}</h2>
+              <h2 className="text-xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight uppercase">
+                {isPurchase ? (sale.TRN_TYPE === 8 || sale.TRN_TYPE === 9 ? 'Purchase Return' : 'Purchase Invoice') : (sale.TRN_TYPE === 4 || sale.TRN_TYPE === 5 ? 'Sales Return' : 'Invoice')} #{sale.INVOICE_NO}
+              </h2>
               <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest flex items-center gap-2">
                 <Calendar size={12} /> {sale.CURDATE ? new Date(sale.CURDATE).toLocaleDateString() : new Date().toLocaleDateString()}
                 <span className="mx-1">•</span>
@@ -137,7 +139,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                 {sale.REF_NO && (
                   <>
                     <span className="mx-1">•</span>
-                    <span className="text-indigo-600 dark:text-indigo-400">REF #{sale.REF_NO}</span>
+                    <span className={"mx-1 " + (isPurchase ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400')}>REF #{sale.REF_NO}</span>
                   </>
                 )}
               </p>
@@ -155,7 +157,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
         <div className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
           {loadingItems ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4 print:hidden">
-              <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className={"w-10 h-10 border-4 border-t-transparent rounded-full animate-spin " + (isPurchase ? 'border-rose-600' : 'border-indigo-600')}></div>
               <p className="text-xs font-black text-zinc-400 uppercase tracking-widest animate-pulse">Loading items...</p>
             </div>
           ) : (
@@ -164,18 +166,26 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                <div className="hidden print:block mb-8">
                   <div className="flex justify-between items-start mb-6">
                     <div>
-                      <h1 className="text-3xl font-black text-zinc-900 uppercase">EasyERP Invoice</h1>
-                      <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Sales Receipt</p>
+                      <h1 className="text-3xl font-black text-zinc-900 uppercase tracking-tight">
+                        EasyERP {isPurchase ? (sale.TRN_TYPE === 8 || sale.TRN_TYPE === 9 ? 'Purchase Return' : 'Purchase') : (sale.TRN_TYPE === 4 || sale.TRN_TYPE === 5 ? 'Sales Return' : '')} Invoice
+                      </h1>
+                      <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">
+                        {isPurchase ? (sale.TRN_TYPE === 8 || sale.TRN_TYPE === 9 ? 'Return Receipt' : 'Purchase Receipt') : (sale.TRN_TYPE === 4 || sale.TRN_TYPE === 5 ? 'Return Receipt' : 'Sales Receipt')}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-black text-zinc-900">#{sale.INVOICE_NO}</p>
                       <p className="text-xs text-zinc-500 font-bold">{sale.CURDATE ? new Date(sale.CURDATE).toLocaleDateString() : new Date().toLocaleDateString()}</p>
-                      {sale.REF_NO && <p className="text-[10px] font-bold text-indigo-600 mt-1">Ref: #{sale.REF_NO}</p>}
+                      {sale.REF_NO && (
+                        <p className={"text-[10px] font-bold mt-1 uppercase tracking-wider " + (isPurchase ? "text-rose-600" : "text-indigo-600")}>
+                          Ref: #{sale.REF_NO}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-8 py-6 border-y border-zinc-100">
                     <div>
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Customer</p>
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">{isPurchase ? 'Supplier' : 'Customer'}</p>
                       <p className="text-sm font-bold text-zinc-800">{sale.ENAME || 'Cash Customer'}</p>
                       {sale.ACCODE && <p className="text-xs text-zinc-500">ID: {sale.ACCODE}</p>}
                       {customerAddress && (
@@ -197,10 +207,10 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
 
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 print:hidden">
                   <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2">Customer Details</p>
+                    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2">{isPurchase ? 'Supplier' : 'Customer'} Details</p>
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700">
-                        <User size={16} className="text-indigo-600" />
+                        <User size={16} className={isPurchase ? 'text-rose-600' : 'text-indigo-600'} />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{sale.ENAME || 'Cash Customer'}</p>
@@ -221,12 +231,12 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                     <div className="space-y-3 mt-4">
                       <div className="flex justify-between items-center">
                         <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">VAT Number</span>
-                        <span className="text-sm font-mono font-black text-indigo-600 dark:text-indigo-400">{sale.VAT_NUMBER || 'NOT REGISTERED'}</span>
+                        <span className={"text-sm font-mono font-black " + (isPurchase ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400')}>{sale.VAT_NUMBER || 'NOT REGISTERED'}</span>
                       </div>
                       {sale.REF_NO && (
                         <div className="flex justify-between items-center pt-2 border-t border-zinc-200/60 dark:border-zinc-700/60">
                           <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">Reference #</span>
-                          <span className="text-sm font-mono font-black text-indigo-600 dark:text-indigo-400">#{sale.REF_NO}</span>
+                          <span className={"text-sm font-mono font-black " + (isPurchase ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400')}>#{sale.REF_NO}</span>
                         </div>
                       )}
                     </div>
@@ -295,9 +305,13 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                         {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.VAT_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
-                    <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/30 print:bg-white print:border-none">
-                      <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Net Total</p>
-                      <p className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                    <div className={"p-4 rounded-xl border print:bg-white print:border-none " + (
+                      isPurchase 
+                      ? 'bg-rose-50/50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30' 
+                      : 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30'
+                    )}>
+                      <p className={"text-[9px] font-black uppercase tracking-widest mb-1 " + (isPurchase ? 'text-rose-400' : 'text-indigo-400')}>Net Total</p>
+                      <p className={"text-lg font-black " + (isPurchase ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400')}>
                         {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
@@ -317,17 +331,17 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                         </p>
                       </div>
                     </div>
-                    <div className={`p-4 rounded-xl border print:bg-white print:border-none ${
+                    <div className={"p-4 rounded-xl border print:bg-white print:border-none " + (
                       balanceAmount > 0 
                       ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' 
                       : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800'
-                    }`}>
-                      <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${
+                    )}>
+                      <p className={"text-[9px] font-black uppercase tracking-widest mb-1 " + (
                         balanceAmount > 0 ? 'text-amber-500' : 'text-zinc-400'
-                      }`}>Balance</p>
-                      <p className={`text-lg font-black ${
+                      )}>Balance</p>
+                      <p className={"text-lg font-black " + (
                         balanceAmount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-700 dark:text-zinc-200'
-                      }`}>
+                      )}>
                         {sale.CURRENCY_CODE || 'SAR'} {balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>

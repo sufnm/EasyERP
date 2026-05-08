@@ -18,7 +18,8 @@ export default function SummaryFooter({
   customerId,
   currencyCode = 'SAR',
   isReturn = false,
-  isPurchase = false
+  isPurchase = false,
+  isSaving = false
 }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -380,11 +381,20 @@ export default function SummaryFooter({
               </button>
               <button 
                 onClick={handleFinalSave}
-                disabled={!paymentMethod}
-                className={`flex-[2] text-xs font-black uppercase tracking-widest px-8 py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 group ${paymentMethod ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none'}`}
+                disabled={!paymentMethod || isSaving}
+                className={`flex-[2] text-xs font-black uppercase tracking-widest px-8 py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 group ${paymentMethod && !isSaving ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20' : 'bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none'}`}
               >
-                <FileCheck size={18} className={paymentMethod ? "group-hover:scale-110 transition-transform" : ""} />
-                Confirm & Save
+                {isSaving ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-zinc-400 border-t-white rounded-full animate-spin"></div>
+                    Saving...
+                  </div>
+                ) : (
+                  <>
+                    <FileCheck size={18} className="group-hover:scale-110 transition-transform" />
+                    Confirm & Save
+                  </>
+                )}
               </button>
             </div>
           </div>

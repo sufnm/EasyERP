@@ -985,11 +985,12 @@ app.post('/api/purchases/save', async (req, res) => {
       }
 
       if (ROWS && Array.isArray(ROWS)) {
+        console.time('📝 Purchase Details Saving');
         let rowNum = 1;
+        const detailRequest = new sql.Request(transaction);
         for (const row of ROWS) {
           if (!row.itemCode) continue;
 
-          const detailRequest = new sql.Request(transaction);
           const unitPrice = Number(row.price) || 0;
           const qty = Number(row.qty) || 0;
           const vatPercent = Number(row.vatPercent) || 0;
@@ -1004,31 +1005,43 @@ app.post('/api/purchases/save', async (req, res) => {
             grossTotal = netSubtotal + vatAmount;
           }
 
+          // Clear previous inputs to be safe when reusing request (though inputs are keyed, it's cleaner)
+          // Note: In mssql, .input() replaces if already exists, so it's fine.
           await detailRequest
-            .input('recNo', sql.Numeric(18, 0), REC_NO)
-            .input('rowNum', sql.Int, rowNum++)
-            .input('barcode', sql.VarChar, String(row.itemCode || ''))
-            .input('qty', sql.Decimal(18, 2), qty)
-            .input('price', sql.Decimal(18, 2), unitPrice)
-            .input('unit', sql.VarChar, String(row.unit || 'Pcs'))
-            .input('description', sql.VarChar, String(row.description || ''))
-            .input('total', sql.Decimal(18, 2), grossTotal)
-            .input('vatPercent', sql.Decimal(18, 2), vatPercent)
-            .input('vatAmount', sql.Decimal(18, 2), vatAmount)
-            .input('trnType', sql.Int, trnType)
-            .input('invoiceNo', sql.VarChar, String(INVOICE_NO))
-            .input('wrCode', sql.SmallInt, Number(WR_CODE))
+            .input(`recNo${rowNum}`, sql.Numeric(18, 0), REC_NO)
+            .input(`rowNum${rowNum}`, sql.Int, rowNum)
+            .input(`barcode${rowNum}`, sql.VarChar, String(row.itemCode || ''))
+            .input(`qty${rowNum}`, sql.Decimal(18, 2), qty)
+            .input(`price${rowNum}`, sql.Decimal(18, 2), unitPrice)
+            .input(`unit${rowNum}`, sql.VarChar, String(row.unitId || row.unit || 'Pcs'))
+            .input(`description${rowNum}`, sql.VarChar, String(row.description || ''))
+            .input(`total${rowNum}`, sql.Decimal(18, 2), grossTotal)
+            .input(`vatPercent${rowNum}`, sql.Decimal(18, 2), vatPercent)
+            .input(`vatAmount${rowNum}`, sql.Decimal(18, 2), vatAmount)
+            .input(`trnType${rowNum}`, sql.Int, trnType)
+            .input(`invoiceNo${rowNum}`, sql.VarChar, String(INVOICE_NO))
+            .input(`wrCode${rowNum}`, sql.SmallInt, Number(WR_CODE))
+            .input(`salePrice${rowNum}`, sql.Decimal(18, 2), Number(row.salePrice || 0))
+            .input(`retailPrice${rowNum}`, sql.Decimal(18, 2), Number(row.retailPrice || 0))
             .query(`
                 INSERT INTO dbo.GRID_ITEM (
                   REC_NO, ROWNUM, BARCODE, QTY, price, UNIT, DESCRIPTION,
                   TOTAL, vat_percent, VAT_AMOUNT, TRN_TYPE, INVOICE_NO, WR_CODE
                 )
                 VALUES (
-                  @recNo, @rowNum, @barcode, @qty, @price, @unit, @description,
-                  @total, @vatPercent, @vatAmount, @trnType, @invoiceNo, @wrCode
-                )
+                  @recNo${rowNum}, @rowNum${rowNum}, @barcode${rowNum}, @qty${rowNum}, @price${rowNum}, @unit${rowNum}, @description${rowNum},
+                  @total${rowNum}, @vatPercent${rowNum}, @vatAmount${rowNum}, @trnType${rowNum}, @invoiceNo${rowNum}, @wrCode${rowNum}
+                );
+
+                -- Update STOCK_MASTER prices
+                UPDATE dbo.STOCK_MASTER 
+                SET SALE_PRICE = @salePrice${rowNum}, 
+                    RETAIL_PRICE = @retailPrice${rowNum}
+                WHERE ITEM_CODE = @barcode${rowNum};
               `);
+          rowNum++;
         }
+        console.timeEnd('📝 Purchase Details Saving');
       }
 
       await transaction.commit();
@@ -1083,7 +1096,7 @@ app.get('/api/purchases/:recNo/items', async (req, res) => {
     const result = await pool.request()
       .input('recNo', sql.Numeric(18, 0), recNo)
       .query(`
-        SELECT BARCODE, DESCRIPTION, UNIT, QTY, price as UNIT_PRICE, 
+        SELECT BARCODE, DESCRIPTION, UNIT, QTY, price, 
                vat_percent as VAT_PERCENT, VAT_AMOUNT, TOTAL as ITM_TOTAL
         FROM dbo.GRID_ITEM 
         WHERE REC_NO = @recNo 
@@ -2217,7 +2230,7 @@ app.post('/api/sales/save', async (req, res) => {
             .input('barcode', sql.VarChar, String(row.itemCode || ''))
             .input('qty', sql.Decimal(18, 2), qty)
             .input('price', sql.Decimal(18, 2), unitPrice)
-            .input('unit', sql.VarChar, String(row.unit_name || row.unit || 'Pcs'))
+            .input('unit', sql.VarChar, String(row.unitId || row.unit_name || row.unit || 'Pcs'))
             .input('description', sql.VarChar, String(row.description || ''))
             .input('total', sql.Decimal(18, 2), grossTotal)
             .input('vatPercent', sql.Decimal(18, 2), vatPercent)

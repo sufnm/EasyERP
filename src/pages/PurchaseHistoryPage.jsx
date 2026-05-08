@@ -25,7 +25,8 @@ export default function PurchaseHistoryPage({ setActivePage }) {
     const matchesType = 
       filterType === 'all' || 
       (filterType === 'cash' && p.TRN_TYPE === 1) || 
-      (filterType === 'credit' && p.TRN_TYPE === 2);
+      (filterType === 'credit' && p.TRN_TYPE === 2) ||
+      (filterType === 'return' && (p.TRN_TYPE === 8 || p.TRN_TYPE === 9));
     
     return matchesSearch && matchesType;
   });
@@ -75,7 +76,7 @@ export default function PurchaseHistoryPage({ setActivePage }) {
           </div>
 
           <div className="flex gap-2 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl w-fit">
-            {['all', 'cash', 'credit'].map(type => (
+            {['all', 'cash', 'credit', 'return'].map(type => (
               <button 
                 key={type}
                 onClick={() => setFilterType(type)}
@@ -126,9 +127,13 @@ export default function PurchaseHistoryPage({ setActivePage }) {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-tighter ${
-                        p.TRN_TYPE === 1 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'
+                        p.TRN_TYPE === 1 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
+                        p.TRN_TYPE === 2 ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                        'bg-rose-50 text-rose-600 border border-rose-100'
                       }`}>
-                        {p.TRN_TYPE === 1 ? 'Cash' : 'Credit'}
+                        {p.TRN_TYPE === 1 ? 'Cash' : 
+                         p.TRN_TYPE === 2 ? 'Credit' : 
+                         p.TRN_TYPE === 8 ? 'Cash Return' : 'Credit Return'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right font-black text-zinc-800 dark:text-zinc-100">

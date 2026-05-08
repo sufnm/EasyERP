@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Save, Printer, Search, Trash2, Clock, LogOut, Settings, X, History, Undo2, ShoppingCart } from 'lucide-react';
+import { Plus, Save, Printer, Search, Trash2, Clock, LogOut, Settings, X, History, Undo2, ShoppingCart, ShoppingBag } from 'lucide-react';
 
 const ToolbarButton = ({ icon: Icon, label, shortcut, onClick, colorClass = "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800" }) => (
   <button 
@@ -23,7 +23,7 @@ export default function Toolbar({
   showInvoiceAfterSave, setShowInvoiceAfterSave,
   currencies = [], selectedCurrency, setSelectedCurrency,
   onNew, onPending, onHistory, onReturn, onClear, 
-  pendingCount = 0, isReturn = false
+  pendingCount = 0, isReturn = false, isPurchase = false
 }) {
   const [showOptions, setShowOptions] = useState(false);
   const toggleColumn = (key) => setVisibleColumns?.(prev => ({ ...prev, [key]: !prev[key] }));
@@ -69,13 +69,15 @@ export default function Toolbar({
                     <input type="checkbox" checked={taxIncluded} onChange={() => setTaxIncluded?.(!taxIncluded)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
                     <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Unit Price includes VAT</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
-                    <input type="checkbox" checked={enterToQty} onChange={() => setEnterToQty?.(!enterToQty)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
-                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Enter Adds and Moves to QTY</span>
-                  </label>
+                  {!isPurchase && (
+                    <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
+                      <input type="checkbox" checked={enterToQty} onChange={() => setEnterToQty?.(!enterToQty)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
+                      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Enter Adds and Moves to QTY</span>
+                    </label>
+                  )}
                   <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
                     <input type="checkbox" checked={showInvoiceAfterSave} onChange={() => setShowInvoiceAfterSave?.(!showInvoiceAfterSave)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
-                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Show Invoice after Sale</span>
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Show Invoice after {isPurchase ? 'Purchase' : 'Sale'}</span>
                   </label>
                   
                   <div className="flex flex-col gap-2 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border rounded-xl transition-all shadow-sm">
@@ -121,8 +123,8 @@ export default function Toolbar({
       )}
 
       <ToolbarButton 
-        icon={isReturn ? ShoppingCart : Undo2} 
-        label={isReturn ? "Sales" : "Return"} 
+        icon={isReturn ? (isPurchase ? ShoppingBag : ShoppingCart) : Undo2} 
+        label={isReturn ? (isPurchase ? "Purchase" : "Sales") : "Return"} 
         onClick={onReturn}
         colorClass={isReturn ? "text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20" : "text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"} 
       />

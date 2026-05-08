@@ -27,11 +27,11 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
 
   const [salesData, setSalesData] = useState([]);
   const [rows, setRows] = useState([
-    { id: 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-    { id: 2, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-    { id: 3, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-    { id: 4, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-    { id: 5, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+    { id: 1, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+    { id: 2, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+    { id: 3, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+    { id: 4, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+    { id: 5, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
   ]);
 
   // Shared Sales State
@@ -60,6 +60,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
   const [editingRecNo, setEditingRecNo] = useState(null);
   const [currencies, setCurrencies] = useState([]);
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency.no);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
 
@@ -132,11 +133,11 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     setAddress({ street: '', city: '', district: '', building: '', pincode: '' });
     setReferenceNo('');
     setRows([
-      { id: Date.now(), itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-      { id: Date.now() + 1, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-      { id: Date.now() + 2, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-      { id: Date.now() + 3, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
-      { id: Date.now() + 4, itemCode: '', description: '', unit: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now(), itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now() + 1, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now() + 2, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now() + 3, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
+      { id: Date.now() + 4, itemCode: '', description: '', unit: '', unitId: '', qty: '', price: '', aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' },
     ]);
   };
 
@@ -177,6 +178,9 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
       }
     }
     setValidationErrors([]);
+
+    if (isSaving) return;
+    setIsSaving(true);
 
     try {
       const finalPaymentMethod = isQuickSave ? 'Others' : paymentMethod;
@@ -248,7 +252,9 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
       }
     } catch (err) {
       console.error("Save error:", err);
-      alert('Connection error');
+      alert('Error saving sale');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -347,7 +353,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
             mappedRows.push({ 
               id: mappedRows.length + 1, 
               itemCode: '', description: '', unit: '', qty: '', price: '', 
-              aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '' 
+              aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '', unitId: '' 
             });
           }
           setRows(mappedRows);
@@ -459,6 +465,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
             selectedAccount={selectedAccount}
             setSelectedAccount={setSelectedAccount}
             customerId={customer.id}
+            isSaving={isSaving}
             currencyCode={currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'}
           />
         </div>
