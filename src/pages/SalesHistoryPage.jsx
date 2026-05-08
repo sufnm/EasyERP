@@ -222,7 +222,7 @@ export default function SalesHistoryPage({ setActivePage }) {
                         </div>
                         <div>
                           <span className="font-bold text-zinc-700 dark:text-zinc-200 block">#{sale.INVOICE_NO}</span>
-                          {sale.REF_NO && <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 block uppercase tracking-tighter">Ref: #{sale.REF_NO}</span>}
+                          {sale.REF_NO && sale.REF_NO !== '0' && String(sale.REF_NO).trim() !== '' && <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 block uppercase tracking-tighter">Ref: #{sale.REF_NO}</span>}
                         </div>
                       </div>
                     </td>

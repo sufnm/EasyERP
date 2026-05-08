@@ -10,6 +10,7 @@ export default function PurchaseHistoryPage({ setActivePage }) {
   const [loading, setLoading] = useState(!isReady);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all'); // all, purchases, returns
   const [selectedPurchase, setSelectedPurchase] = useState(null);
 
   useEffect(() => {
@@ -24,11 +25,16 @@ export default function PurchaseHistoryPage({ setActivePage }) {
     
     const matchesType = 
       filterType === 'all' || 
-      (filterType === 'cash' && p.TRN_TYPE === 1) || 
-      (filterType === 'credit' && p.TRN_TYPE === 2) ||
-      (filterType === 'return' && (p.TRN_TYPE === 8 || p.TRN_TYPE === 9));
+      (filterType === 'cash' && (p.TRN_TYPE === 1 || p.TRN_TYPE === 8)) || 
+      (filterType === 'credit' && (p.TRN_TYPE === 2 || p.TRN_TYPE === 9)) ||
+      (filterType === 'pending' && (Number(p.CASH_PAID || 0) + Number(p.OTHER_PAID || 0)) !== Number(p.NET_AMOUNT || 0));
     
-    return matchesSearch && matchesType;
+    const matchesCategory = 
+      categoryFilter === 'all' ||
+      (categoryFilter === 'purchases' && (p.TRN_TYPE === 1 || p.TRN_TYPE === 2)) ||
+      (categoryFilter === 'returns' && (p.TRN_TYPE === 8 || p.TRN_TYPE === 9));
+
+    return matchesSearch && matchesType && matchesCategory;
   });
 
   return (
@@ -51,14 +57,23 @@ export default function PurchaseHistoryPage({ setActivePage }) {
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm">
             <div>
               <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Total Purchases</p>
-              <p className="text-xl font-black text-indigo-600 leading-none">
+              <p className="text-xl font-black text-emerald-600 leading-none">
                 {defaultCurrency.code} {filteredPurchases.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
             </div>
             <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
             <div>
               <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Orders</p>
-              <p className="text-xl font-black text-zinc-800 dark:text-zinc-100 leading-none">{filteredPurchases.length}</p>
+              <p className="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{filteredPurchases.length}</p>
+            </div>
+            <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
+            <div>
+              <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Avg. Value</p>
+              <p className="text-xl font-black text-amber-500 leading-none">
+                {defaultCurrency.code} {filteredPurchases.length > 0 
+                  ? (filteredPurchases.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0) / filteredPurchases.length).toLocaleString(undefined, { maximumFractionDigits: 0 }) 
+                  : '0'}
+              </p>
             </div>
           </div>
         </div>
@@ -71,22 +86,86 @@ export default function PurchaseHistoryPage({ setActivePage }) {
               placeholder="Search by Invoice # or Supplier Name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all shadow-sm dark:text-zinc-200"
             />
           </div>
 
-          <div className="flex gap-2 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl w-fit">
-            {['all', 'cash', 'credit', 'return'].map(type => (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl gap-1 shadow-sm">
               <button 
-                key={type}
-                onClick={() => setFilterType(type)}
+                onClick={() => setCategoryFilter('all')}
                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  filterType === type ? 'bg-white dark:bg-zinc-700 shadow-sm text-primary' : 'text-zinc-500'
+                  categoryFilter === 'all' 
+                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-700'
                 }`}
               >
-                {type}
+                All Transactions
               </button>
-            ))}
+              <button 
+                onClick={() => setCategoryFilter('purchases')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  categoryFilter === 'purchases' 
+                  ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-700'
+                }`}
+              >
+                Purchases
+              </button>
+              <button 
+                onClick={() => setCategoryFilter('returns')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  categoryFilter === 'returns' 
+                  ? 'bg-white dark:bg-zinc-700 text-rose-600 dark:text-rose-400 shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-700'
+                }`}
+              >
+                Returns
+              </button>
+            </div>
+          
+            <div className="flex gap-2 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl shadow-sm">
+              <button 
+                onClick={() => setFilterType('all')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filterType === 'all' 
+                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-zinc-700'
+                }`}
+              >
+                All
+              </button>
+              <button 
+                onClick={() => setFilterType('cash')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filterType === 'cash' 
+                  ? 'bg-emerald-600 text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-emerald-600'
+                }`}
+              >
+                Cash
+              </button>
+              <button 
+                onClick={() => setFilterType('credit')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filterType === 'credit' 
+                  ? 'bg-amber-500 text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-amber-500'
+                }`}
+              >
+                Credit
+              </button>
+              <button 
+                onClick={() => setFilterType('pending')}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filterType === 'pending' 
+                  ? 'bg-rose-500 text-white shadow-sm' 
+                  : 'text-zinc-500 hover:text-rose-500'
+                }`}
+              >
+                Pending
+              </button>
+            </div>
           </div>
         </div>
 
@@ -114,7 +193,12 @@ export default function PurchaseHistoryPage({ setActivePage }) {
                       <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600">
                         <FileText size={16} />
                       </div>
-                      <span className="font-bold text-zinc-700 dark:text-zinc-200">#{p.INVOICE_NO}</span>
+                      <div>
+                        <span className="font-bold text-zinc-700 dark:text-zinc-200 block">#{p.INVOICE_NO}</span>
+                        {p.REF_NO && p.REF_NO !== '0' && String(p.REF_NO).trim() !== '' && (
+                          <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 block uppercase tracking-tighter">Ref: #{p.REF_NO}</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-zinc-500 dark:text-zinc-400">
                       {new Date(p.CURDATE).toLocaleDateString()}
