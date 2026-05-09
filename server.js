@@ -2251,6 +2251,35 @@ app.post('/api/sales/save', async (req, res) => {
         }
       }
 
+      // 3. Save Terms & Conditions if provided (for quotations / invoices)
+      const quotTerms = req.body.QUOT_TERMS;
+      if (Array.isArray(quotTerms)) {
+        console.log(`📝 Saving ${quotTerms.length} terms for invoice ${INVOICE_NO}...`);
+        
+        // Delete existing terms
+        const deleteTermsRequest = new sql.Request(transaction);
+        await deleteTermsRequest
+          .input('invoiceNo', sql.VarChar, String(INVOICE_NO))
+          .input('trnType', sql.Int, trnType)
+          .query('DELETE FROM dbo.QUOT_TERM_DET WHERE INVOICE_NO = @invoiceNo AND TRN_TYPE = @trnType');
+          
+        // Insert new terms
+        for (const term of quotTerms) {
+          if (!term.QUOT_TERM_ID || !term.QUOT_DESCRIPTION?.trim()) continue;
+          
+          const insertTermRequest = new sql.Request(transaction);
+          await insertTermRequest
+            .input('invoiceNo', sql.VarChar, String(INVOICE_NO))
+            .input('termId', sql.Int, parseInt(term.QUOT_TERM_ID))
+            .input('description', sql.NVarChar, String(term.QUOT_DESCRIPTION))
+            .input('trnType', sql.Int, trnType)
+            .query(`
+              INSERT INTO dbo.QUOT_TERM_DET (INVOICE_NO, QUOT_TERM_ID, QUOT_DESCRIPTION, TRN_TYPE)
+              VALUES (@invoiceNo, @termId, @description, @trnType)
+            `);
+        }
+      }
+
       await transaction.commit();
       console.log(`🎉 Sale ${isUpdate ? 'updated' : 'saved'} successfully: Invoice #${INVOICE_NO}`);
       res.json({ success: true, message: `Sale ${isUpdate ? 'updated' : 'saved'} successfully`, REC_NO, INVOICE_NO, debugTrnType: trnType });
@@ -2408,6 +2437,41 @@ app.get('/api/sales/:invoiceNo/address', async (req, res) => {
   } catch (error) {
     console.error("Failed to fetch invoice address:", error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// --- QUOTATION TERMS ENDPOINTS ---
+
+app.get('/api/quotations/terms', async (req, res, next) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ID, DESC_NAME, DESC_ANAME 
+      FROM dbo.QUOT_TERMS 
+      ORDER BY ID ASC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/sales/:invoiceNo/terms', async (req, res, next) => {
+  const { invoiceNo } = req.params;
+  const { trnType = 19 } = req.query;
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('invoiceNo', sql.VarChar, invoiceNo)
+      .input('trnType', sql.Int, parseInt(trnType))
+      .query(`
+        SELECT QUOT_TERM_ID, QUOT_DESCRIPTION 
+        FROM dbo.QUOT_TERM_DET 
+        WHERE INVOICE_NO = @invoiceNo AND TRN_TYPE = @trnType
+      `);
+    res.json(result.recordset);
+  } catch (error) {
+    next(error);
   }
 });
 

@@ -19,6 +19,7 @@ export function CacheProvider({ children }) {
   const [pendingSales, setPendingSales] = useState([]);
   const [pendingPurchases, setPendingPurchases] = useState([]);
   const [pendingReturns, setPendingReturns] = useState([]);
+  const [pendingQuotations, setPendingQuotations] = useState([]);
 
   // Global App Settings (Preserved across page navigation)
   const [taxIncluded, setTaxIncluded] = useState(true);
@@ -32,6 +33,8 @@ export function CacheProvider({ children }) {
     price: true, vatPercent: true, vatAmt: true, total: true
   });
   const [showInvoiceAfterSave, setShowInvoiceAfterSave] = useState(true);
+  const [selectedQuotationTermIds, setSelectedQuotationTermIds] = useState([]);
+  const [quotationTermDetails, setQuotationTermDetails] = useState({});
 
   const loadCache = useCallback(async () => {
     try {
@@ -156,6 +159,10 @@ export function CacheProvider({ children }) {
       setHistoryInvoiceColumns,
       showInvoiceAfterSave,
       setShowInvoiceAfterSave,
+      selectedQuotationTermIds,
+      setSelectedQuotationTermIds,
+      quotationTermDetails,
+      setQuotationTermDetails,
       currencies,
       defaultCurrency,
       setDefaultCurrency: (curr) => {
@@ -174,7 +181,11 @@ export function CacheProvider({ children }) {
       pendingReturns,
       addPendingReturn: (ret) => setPendingReturns(prev => [ret, ...prev]),
       removePendingReturn: (id) => setPendingReturns(prev => prev.filter(p => p.id !== id)),
-      clearPendingReturns: () => setPendingReturns([])
+      clearPendingReturns: () => setPendingReturns([]),
+      pendingQuotations,
+      addPendingQuotation: (quotation) => setPendingQuotations(prev => [quotation, ...prev]),
+      removePendingQuotation: (id) => setPendingQuotations(prev => prev.filter(p => p.id !== id)),
+      clearPendingQuotations: () => setPendingQuotations([])
     }}>
       {children}
     </CacheContext.Provider>

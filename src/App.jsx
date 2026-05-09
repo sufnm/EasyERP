@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import HomePage from './pages/HomePage';
 import SalesPage from './pages/SalesPage';
+import QuotationPage from './pages/QuotationPage';
+import ActiveQuotationsPage from './pages/ActiveQuotationsPage';
 import SalesHistoryPage from './pages/SalesHistoryPage';
 import AccountsPage from './pages/AccountsPage';
 import CreateAccountPage from './pages/CreateAccountPage';
@@ -30,13 +32,45 @@ import PurchaseReturnPage from './pages/PurchaseReturnPage';
 import PurchaseHistoryPage from './pages/PurchaseHistoryPage';
 import ItemCreationPage from './pages/ItemCreationPage';
 import OpeningStockPage from './pages/OpeningStockPage';
+import DeliveryNotePage from './pages/DeliveryNotePage';
+import DeliveryHistoryPage from './pages/DeliveryHistoryPage';
 import { CacheProvider } from './context/CacheContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
-import { Menu } from 'lucide-react';
+import { Menu, AlertCircle, CheckCircle, X } from 'lucide-react';
 
 function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo, user, handleLogout, prevPage }) {
   const { language, t } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [globalToast, setGlobalToast] = useState(null);
+
+  useEffect(() => {
+    const originalAlert = window.alert;
+    
+    window.alert = (message) => {
+      const msgStr = String(message || '');
+      const isSuccess = msgStr.toLowerCase().includes('success') || 
+                        msgStr.includes('تم ') || 
+                        msgStr.includes('بنجاح') ||
+                        msgStr.includes('موفق');
+      setGlobalToast({
+        message: msgStr,
+        type: isSuccess ? 'success' : 'error'
+      });
+    };
+
+    return () => {
+      window.alert = originalAlert;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (globalToast) {
+      const timer = setTimeout(() => {
+        setGlobalToast(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [globalToast]);
 
   return (
     <div className={`flex h-screen overflow-hidden font-sans antialiased selection:bg-indigo-200 transition-colors duration-300 bg-background text-foreground ${(theme === 'dark' || theme === 'skyblue') ? 'dark' : ''} ${theme === 'skyblue' ? 'skyblue' : ''} ${language === 'ar' ? 'rtl' : ''}`}>
@@ -97,14 +131,45 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
           {activePage === 'purchase-return' && <PurchaseReturnPage user={user} params={activePageParams} navigateTo={navigateTo} />}
           {activePage === 'edit-purchase' && <PurchasePage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('purchase-history')} />}
           {activePage === 'edit-purchase-return' && <PurchaseReturnPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('purchase-history')} />}
+           {activePage === 'quotation-entry' && <QuotationPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={activePageParams?.editQuotation ? () => navigateTo('active-quotations') : null} />}
+          {activePage === 'active-quotations' && <ActiveQuotationsPage setActivePage={navigateTo} />}
+          {activePage === 'delivery-note' && <DeliveryNotePage user={user} params={activePageParams} navigateTo={navigateTo} />}
+          {activePage === 'delivery-history' && <DeliveryHistoryPage setActivePage={navigateTo} />}
           {activePage === 'translation-manager' && <TranslationManagerPage />}
-          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager', 'item-creation', 'opening-stock'].includes(activePage) ? null : (
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager', 'item-creation', 'opening-stock', 'quotation-entry', 'active-quotations', 'delivery-note', 'delivery-history'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
               <p className="text-zinc-400 text-lg font-medium text-center w-full">{t('comingSoon')}</p>
             </div>
           )}
         </main>
       </div>
+
+      {/* Centralized Glassmorphic Toast Container */}
+      {globalToast && (
+        <div 
+          onClick={() => setGlobalToast(null)}
+          className={`fixed top-6 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-3 px-4 py-3.5 rounded-2xl shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 border cursor-pointer max-w-md w-full sm:w-auto ${
+            globalToast.type === 'error'
+              ? 'bg-rose-500/90 dark:bg-rose-950/90 border-rose-500/20 text-white backdrop-blur-xl shadow-rose-500/10'
+              : 'bg-emerald-500/90 dark:bg-emerald-950/90 border-emerald-500/20 text-white backdrop-blur-xl shadow-emerald-500/10'
+          }`}
+        >
+          {globalToast.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 text-white shrink-0 animate-bounce" />
+          ) : (
+            <CheckCircle className="w-5 h-5 text-white shrink-0" />
+          )}
+          <div className="flex-1 min-w-[180px]">
+            <p className="text-xs font-black tracking-wide leading-relaxed">{globalToast.message}</p>
+          </div>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setGlobalToast(null); }}
+            className="p-1 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

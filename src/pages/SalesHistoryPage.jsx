@@ -14,7 +14,11 @@ export default function SalesHistoryPage({ setActivePage }) {
   const [selectedSale, setSelectedSale] = useState(null);
 
   useEffect(() => {
-    setSales(cachedSales);
+    const filtered = cachedSales.filter(sale => 
+      sale.TRN_TYPE === 6 || sale.TRN_TYPE === 7 || 
+      sale.TRN_TYPE === 3 || sale.TRN_TYPE === 4
+    );
+    setSales(filtered);
     if (isReady) setLoading(false);
   }, [cachedSales, isReady]);
 
@@ -132,7 +136,7 @@ export default function SalesHistoryPage({ setActivePage }) {
                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                   categoryFilter === 'returns' 
                   ? 'bg-white dark:bg-zinc-700 text-rose-600 dark:text-rose-400 shadow-sm' 
-                  : 'text-zinc-500 hover:text-zinc-700'
+                  : 'text-zinc-500 hover:text-rose-700'
                 }`}
               >
                 Returns

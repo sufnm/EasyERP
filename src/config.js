@@ -90,6 +90,8 @@ export const API_ENDPOINTS = {
   OPENING_STOCK_SEARCH: `${API_BASE_URL}/api/opening-stock/search`,
   OPENING_STOCK_ITEM: (itemCode) => `${API_BASE_URL}/api/opening-stock/item/${itemCode}`,
   OPENING_STOCK_SAVE: `${API_BASE_URL}/api/opening-stock/save`,
+  QUOTATION_TERMS: `${API_BASE_URL}/api/quotations/terms`,
+  QUOTATION_SAVED_TERMS: (invoiceNo, trnType = 19) => `${API_BASE_URL}/api/sales/${invoiceNo}/terms?trnType=${trnType}`,
 };
 
 export default API_BASE_URL;

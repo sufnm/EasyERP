@@ -15,6 +15,8 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
   const [saleItems, setSaleItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [customerAddress, setCustomerAddress] = useState(null);
+  const [masterTerms, setMasterTerms] = useState([]);
+  const [savedTerms, setSavedTerms] = useState([]);
 
   useEffect(() => {
     if (sale && sale.REC_NO) {
@@ -38,6 +40,24 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
             setCustomerAddress(null);
           }
         });
+      }
+      if (sale.TRN_TYPE === 19) {
+        fetch(API_ENDPOINTS.QUOTATION_TERMS)
+          .then(res => res.json())
+          .then(m => setMasterTerms(m))
+          .catch(err => console.error("Failed to fetch master terms inside modal:", err));
+
+        fetch(API_ENDPOINTS.QUOTATION_SAVED_TERMS(sale.INVOICE_NO, sale.TRN_TYPE))
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data)) {
+              setSavedTerms(data);
+            }
+          })
+          .catch(err => console.error("Failed to fetch saved terms for print modal:", err));
+      } else {
+        setSavedTerms([]);
+        setMasterTerms([]);
       }
     }
   }, [sale, passedAddress]);
@@ -115,7 +135,47 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
     window.print();
   };
 
+  const getInvoiceTitles = () => {
+    let modalTitle = 'Invoice';
+    let printH1 = 'EasyERP Invoice';
+    let printSub = 'Sales Receipt';
+
+    if (sale?.TRN_TYPE === 19) {
+      modalTitle = 'Quotation';
+      printH1 = 'EasyERP Quotation';
+      printSub = 'Quotation Estimate';
+    } else if (sale?.TRN_TYPE === 16) {
+      modalTitle = 'Delivery Invoice';
+      printH1 = 'EasyERP Delivery Invoice';
+      printSub = 'Delivery Receipt';
+    } else if (isPurchase) {
+      if (sale?.TRN_TYPE === 8 || sale?.TRN_TYPE === 9) {
+        modalTitle = 'Purchase Return';
+        printH1 = 'EasyERP Purchase Return Invoice';
+        printSub = 'Return Receipt';
+      } else {
+        modalTitle = 'Purchase Invoice';
+        printH1 = 'EasyERP Purchase Invoice';
+        printSub = 'Purchase Receipt';
+      }
+    } else {
+      if (sale?.TRN_TYPE === 3 || sale?.TRN_TYPE === 4 || sale?.TRN_TYPE === 5) {
+        modalTitle = 'Sales Return';
+        printH1 = 'EasyERP Sales Return Invoice';
+        printSub = 'Return Receipt';
+      } else {
+        modalTitle = 'Invoice';
+        printH1 = 'EasyERP Invoice';
+        printSub = 'Sales Receipt';
+      }
+    }
+
+    return { modalTitle, printH1, printSub };
+  };
+
   if (!sale) return null;
+
+  const { modalTitle, printH1, printSub } = getInvoiceTitles();
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
@@ -130,7 +190,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
             </div>
             <div>
               <h2 className="text-xl font-black text-zinc-800 dark:text-zinc-100 tracking-tight uppercase">
-                {isPurchase ? (sale.TRN_TYPE === 8 || sale.TRN_TYPE === 9 ? 'Purchase Return' : 'Purchase Invoice') : (sale.TRN_TYPE === 4 || sale.TRN_TYPE === 5 ? 'Sales Return' : 'Invoice')} #{sale.INVOICE_NO}
+                {modalTitle} #{sale.INVOICE_NO}
               </h2>
               <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest flex items-center gap-2">
                 <Calendar size={12} /> {sale.CURDATE ? new Date(sale.CURDATE).toLocaleDateString() : new Date().toLocaleDateString()}
@@ -167,10 +227,10 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                   <div className="flex justify-between items-start mb-6">
                     <div>
                       <h1 className="text-3xl font-black text-zinc-900 uppercase tracking-tight">
-                        EasyERP {isPurchase ? (sale.TRN_TYPE === 8 || sale.TRN_TYPE === 9 ? 'Purchase Return' : 'Purchase') : (sale.TRN_TYPE === 4 || sale.TRN_TYPE === 5 ? 'Sales Return' : '')} Invoice
+                        {printH1}
                       </h1>
                       <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">
-                        {isPurchase ? (sale.TRN_TYPE === 8 || sale.TRN_TYPE === 9 ? 'Return Receipt' : 'Purchase Receipt') : (sale.TRN_TYPE === 4 || sale.TRN_TYPE === 5 ? 'Return Receipt' : 'Sales Receipt')}
+                        {printSub}
                       </p>
                     </div>
                     <div className="text-right">
@@ -284,9 +344,10 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
               {(() => {
                 const paidAmount = Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0);
                 const balanceAmount = Number(sale.NET_AMOUNT || 0) - paidAmount;
+                const isQuotationType = sale.TRN_TYPE === 19;
                 
                 return (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 print:grid-cols-6 print:mt-8">
+                  <div className={`grid grid-cols-2 md:grid-cols-3 ${isQuotationType ? 'lg:grid-cols-4' : 'lg:grid-cols-6'} gap-4 print:mt-8 ${isQuotationType ? 'print:grid-cols-4' : 'print:grid-cols-6'}`}>
                     <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800 print:bg-white print:border-none">
                       <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Gross Total</p>
                       <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
@@ -315,39 +376,64 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                         {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
-                    <div className="p-4 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30 print:bg-white print:border-none">
-                      <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Paid Amount</p>
-                      <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                        {sale.CURRENCY_CODE || 'SAR'} {paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
-                      <div className="mt-1.5 pt-1.5 border-t border-emerald-500/10 flex flex-col gap-0.5">
-                        <p className="text-[8px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase flex justify-between">
-                          <span>Cash:</span> 
-                          <span>{sale.CURRENCY_CODE || 'SAR'} {Number(sale.CASH_PAID || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </p>
-                        <p className="text-[8px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase flex justify-between">
-                          <span>Other:</span> 
-                          <span>{sale.CURRENCY_CODE || 'SAR'} {Number(sale.OTHER_PAID || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                        </p>
-                      </div>
-                    </div>
-                    <div className={"p-4 rounded-xl border print:bg-white print:border-none " + (
-                      balanceAmount > 0 
-                      ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' 
-                      : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800'
-                    )}>
-                      <p className={"text-[9px] font-black uppercase tracking-widest mb-1 " + (
-                        balanceAmount > 0 ? 'text-amber-500' : 'text-zinc-400'
-                      )}>Balance</p>
-                      <p className={"text-lg font-black " + (
-                        balanceAmount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-700 dark:text-zinc-200'
-                      )}>
-                        {sale.CURRENCY_CODE || 'SAR'} {balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
+                    {!isQuotationType && (
+                      <>
+                        <div className="p-4 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30 print:bg-white print:border-none">
+                          <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Paid Amount</p>
+                          <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                            {sale.CURRENCY_CODE || 'SAR'} {paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </p>
+                          <div className="mt-1.5 pt-1.5 border-t border-emerald-500/10 flex flex-col gap-0.5">
+                            <p className="text-[8px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase flex justify-between">
+                              <span>Cash:</span> 
+                              <span>{sale.CURRENCY_CODE || 'SAR'} {Number(sale.CASH_PAID || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </p>
+                            <p className="text-[8px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase flex justify-between">
+                              <span>Other:</span> 
+                              <span>{sale.CURRENCY_CODE || 'SAR'} {Number(sale.OTHER_PAID || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className={"p-4 rounded-xl border print:bg-white print:border-none " + (
+                          balanceAmount > 0 
+                          ? 'bg-amber-50/50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' 
+                          : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800'
+                        )}>
+                          <p className={"text-[9px] font-black uppercase tracking-widest mb-1 " + (
+                            balanceAmount > 0 ? 'text-amber-500' : 'text-zinc-400'
+                          )}>Balance</p>
+                          <p className={"text-lg font-black " + (
+                            balanceAmount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-700 dark:text-zinc-200'
+                          )}>
+                            {sale.CURRENCY_CODE || 'SAR'} {balanceAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })()}
+
+              {/* Terms & Conditions (Only for Quotations) */}
+              {sale.TRN_TYPE === 19 && savedTerms.length > 0 && (
+                <div className="mt-8 border-t border-zinc-100 dark:border-zinc-800 pt-6">
+                  <h3 className="text-xs font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
+                    Terms & Conditions / الشروط والأحكام
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {savedTerms.map((term, index) => {
+                      const master = masterTerms.find(m => m.ID === term.QUOT_TERM_ID);
+                      const label = master ? master.DESC_NAME : `Term #${term.QUOT_TERM_ID}`;
+                      return (
+                        <div key={index} className="p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl border border-zinc-100 dark:border-zinc-800/80 print:bg-white print:p-2 print:border-none">
+                          <p className="text-[9px] font-black text-zinc-400 uppercase tracking-wider mb-0.5">{label.replace('_', ' ')}</p>
+                          <p className="text-xs font-bold text-zinc-700 dark:text-zinc-200 leading-relaxed">{term.QUOT_DESCRIPTION}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -374,7 +460,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
               }}
               className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
             >
-              <FileText size={14} /> Edit Invoice
+              <FileText size={14} /> {sale.TRN_TYPE === 19 ? 'Edit Quotation' : 'Edit Invoice'}
             </button>
            )}
         </div>
