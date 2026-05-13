@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Calendar, User, Printer } from 'lucide-react';
+import { X, FileText, Calendar, User, Printer, ShoppingCart } from 'lucide-react';
 import { API_ENDPOINTS } from '../config';
 
-export default function InvoiceModal({ sale, onClose, onEdit, address: passedAddress, historyInvoiceColumns = {
+export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, address: passedAddress, historyInvoiceColumns = {
   barcode: true,
   description: true,
   unit: true,
@@ -176,6 +176,17 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
   if (!sale) return null;
 
   const { modalTitle, printH1, printSub } = getInvoiceTitles();
+  const isDeliveryType = sale?.TRN_TYPE === 16;
+  const activeColumns = isDeliveryType ? {
+    barcode: true,
+    description: true,
+    unit: true,
+    qty: true,
+    price: false,
+    vatPercent: false,
+    vatAmt: false,
+    total: false
+  } : historyInvoiceColumns;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
@@ -307,14 +318,14 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-                      {historyInvoiceColumns.barcode && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest">Barcode</th>}
-                      {historyInvoiceColumns.description && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest">Description</th>}
-                      {historyInvoiceColumns.unit && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">UNIT</th>}
-                      {historyInvoiceColumns.qty && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Qty</th>}
-                      {historyInvoiceColumns.price && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">PRICE</th>}
-                      {historyInvoiceColumns.vatPercent && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">VAT%</th>}
-                      {historyInvoiceColumns.vatAmt && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">VAT Amt</th>}
-                      {historyInvoiceColumns.total && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">Total</th>}
+                      {activeColumns.barcode && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest">Barcode</th>}
+                      {activeColumns.description && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest">Description</th>}
+                      {activeColumns.unit && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">UNIT</th>}
+                      {activeColumns.qty && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Qty</th>}
+                      {activeColumns.price && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">PRICE</th>}
+                      {activeColumns.vatPercent && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">VAT%</th>}
+                      {activeColumns.vatAmt && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">VAT Amt</th>}
+                      {activeColumns.total && <th className="px-4 py-3 text-[9px] font-black text-zinc-400 uppercase tracking-widest text-right">Total</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -325,14 +336,14 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                       
                       return (
                         <tr key={idx} className="text-[11px] print:text-[10px]">
-                          {historyInvoiceColumns.barcode && <td className="px-4 py-3 font-mono text-zinc-500">{item.BARCODE}</td>}
-                          {historyInvoiceColumns.description && <td className="px-4 py-3 font-bold text-zinc-700 dark:text-zinc-200">{item.DESCRIPTION}</td>}
-                          {historyInvoiceColumns.unit && <td className="px-4 py-3 text-center font-medium">{item.UNIT || 'Pcs'}</td>}
-                          {historyInvoiceColumns.qty && <td className="px-4 py-3 text-center">{qty.toFixed(2)}</td>}
-                          {historyInvoiceColumns.price && <td className="px-4 py-3 text-right text-zinc-500 font-bold">{sale.CURRENCY_CODE || 'SAR'} {unitPrice.toFixed(2)}</td>}
-                          {historyInvoiceColumns.vatPercent && <td className="px-4 py-3 text-right text-zinc-400">{Number(item.VAT_PERCENT || 0).toFixed(0)}%</td>}
-                          {historyInvoiceColumns.vatAmt && <td className="px-4 py-3 text-right text-zinc-400">{sale.CURRENCY_CODE || 'SAR'} {Number(item.VAT_AMOUNT || 0).toFixed(2)}</td>}
-                          {historyInvoiceColumns.total && <td className="px-4 py-3 text-right font-black text-zinc-800 dark:text-zinc-100">{sale.CURRENCY_CODE || 'SAR'} {Number(item.ITM_TOTAL).toFixed(2)}</td>}
+                          {activeColumns.barcode && <td className="px-4 py-3 font-mono text-zinc-500">{item.BARCODE}</td>}
+                          {activeColumns.description && <td className="px-4 py-3 font-bold text-zinc-700 dark:text-zinc-200">{item.DESCRIPTION}</td>}
+                          {activeColumns.unit && <td className="px-4 py-3 text-center font-medium">{item.UNIT || 'Pcs'}</td>}
+                          {activeColumns.qty && <td className="px-4 py-3 text-center">{qty.toFixed(2)}</td>}
+                          {activeColumns.price && <td className="px-4 py-3 text-right text-zinc-500 font-bold">{sale.CURRENCY_CODE || 'SAR'} {unitPrice.toFixed(2)}</td>}
+                          {activeColumns.vatPercent && <td className="px-4 py-3 text-right text-zinc-400">{Number(item.VAT_PERCENT || 0).toFixed(0)}%</td>}
+                          {activeColumns.vatAmt && <td className="px-4 py-3 text-right text-zinc-400">{sale.CURRENCY_CODE || 'SAR'} {Number(item.VAT_AMOUNT || 0).toFixed(2)}</td>}
+                          {activeColumns.total && <td className="px-4 py-3 text-right font-black text-zinc-800 dark:text-zinc-100">{sale.CURRENCY_CODE || 'SAR'} {Number(item.ITM_TOTAL).toFixed(2)}</td>}
                         </tr>
                       );
                     })}
@@ -341,7 +352,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
               </div>
 
               {/* Summary Cards */}
-              {(() => {
+              {!isDeliveryType && (() => {
                 const paidAmount = Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0);
                 const balanceAmount = Number(sale.NET_AMOUNT || 0) - paidAmount;
                 const isQuotationType = sale.TRN_TYPE === 19;
@@ -452,6 +463,17 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
            >
              <Printer size={14} /> Print
            </button>
+           {sale?.TRN_TYPE === 19 && onCompleteSales && (
+            <button 
+              onClick={() => {
+                onCompleteSales(sale);
+                onClose();
+              }}
+              className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+            >
+              <ShoppingCart size={14} /> Complete Sales
+            </button>
+           )}
            {onEdit && (
             <button 
               onClick={() => {

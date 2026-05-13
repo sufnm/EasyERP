@@ -495,6 +495,7 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
         onClose={handleCloseInvoice}
         address={address}
         historyInvoiceColumns={historyInvoiceColumns}
+        onCompleteSales={(quote) => navigateTo('sales', { loadQuotation: quote })}
       />
 
       {/* Pending Quotations Dialog Overlay */}
