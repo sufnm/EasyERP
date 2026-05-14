@@ -423,6 +423,8 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
       VAT_NUMBER: vatNumber,
       TRN_TYPE: paymentMethod === 'Cash' ? 3 : 4,
       REF_NO: selectedInvoice?.INVOICE_NO || manualReferenceNo || null,
+      CASH_PAID: cashPaid,
+      OTHER_PAID: otherPaid,
       CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
     };
     setSavedInvoice(invoiceData);

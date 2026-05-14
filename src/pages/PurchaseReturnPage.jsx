@@ -301,6 +301,8 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
       VAT_NUMBER: vatNumber,
       TRN_TYPE: paymentMethod === 'Cash' ? 8 : 9,
       REF_NO: referenceNo,
+      CASH_PAID: cashPaid,
+      OTHER_PAID: otherPaid,
       CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
     };
     setSavedInvoice(invoiceData);
