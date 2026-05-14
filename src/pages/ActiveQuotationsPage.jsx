@@ -310,6 +310,7 @@ export default function ActiveQuotationsPage({ setActivePage }) {
         sale={selectedQuotation} 
         onClose={() => setSelectedQuotation(null)} 
         onEdit={handleEditQuotation}
+        onCompleteSales={(quote) => setActivePage('sales', { loadQuotation: quote })}
         historyInvoiceColumns={historyInvoiceColumns}
       />
     </div>

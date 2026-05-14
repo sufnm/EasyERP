@@ -473,6 +473,78 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     }
   }, [params]);
 
+  // Handle Load Quotation Mode from Params
+  useEffect(() => {
+    if (params && params.loadQuotation) {
+      const sale = params.loadQuotation;
+      setEditingRecNo(null);
+      fetchInvoiceNo();
+      setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
+      setVatNumber(sale.VAT_NUMBER || '');
+      setReferenceNo(sale.INVOICE_NO ? `QTN-${sale.INVOICE_NO}` : '');
+      
+      // Fetch Sale Items
+      fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO))
+        .then(res => res.json())
+        .then(items => {
+          const mappedRows = items.map((item, idx) => ({
+            id: idx + 1,
+            itemCode: item.BARCODE,
+            description: item.DESCRIPTION,
+            unit: item.UNIT,
+            qty: item.QTY,
+            price: item.UNIT_PRICE,
+            vatPercent: item.VAT_PERCENT,
+            vatAmt: item.VAT_AMOUNT,
+            total: item.ITM_TOTAL,
+            aliasCode: '',
+            stock: ''
+          }));
+          
+          // Fill up to at least 5 rows
+          while (mappedRows.length < 5) {
+            mappedRows.push({ 
+              id: mappedRows.length + 1, 
+              itemCode: '', description: '', unit: '', qty: '', price: '', 
+              aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '', unitId: '' 
+            });
+          }
+          setRows(mappedRows);
+        })
+        .catch(err => console.error("Failed to fetch edit items:", err));
+        
+      // Fetch Address (First from invoice address, then fallback to customer info)
+      fetch(API_ENDPOINTS.INVOICE_ADDRESS(sale.INVOICE_NO, sale.TRN_TYPE))
+        .then(res => res.ok ? res.json() : null)
+        .then(adhocAddress => {
+          if (adhocAddress) {
+            setAddress({
+              building: adhocAddress.building || '',
+              street: adhocAddress.street || '',
+              district: adhocAddress.district || '',
+              city: adhocAddress.city || '',
+              pincode: adhocAddress.pincode || ''
+            });
+          } else if (sale.ACCODE && sale.ACCODE !== '6000') {
+            fetch(API_ENDPOINTS.CUSTOMER_INFO(sale.ACCODE))
+              .then(res => res.json())
+              .then(data => {
+                if (data) {
+                  setAddress({
+                    building: data.building_no || '',
+                    street: data.street_name || '',
+                    district: data.district || '',
+                    city: data.city_name || '',
+                    pincode: data.postal_zone || ''
+                  });
+                }
+              });
+          }
+        })
+        .catch(err => console.error("Failed to fetch address for quotation load:", err));
+    }
+  }, [params]);
+
   useEffect(() => {
     if (cachedAccounts.length > 0) {
       setAccounts(cachedAccounts);

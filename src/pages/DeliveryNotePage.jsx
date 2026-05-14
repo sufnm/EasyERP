@@ -56,7 +56,8 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
 
   const selectReferenceDocument = async (doc, sourceType) => {
     setSelectedRefSourceDoc(doc);
-    setReferenceNo(String(doc.INVOICE_NO));
+    const isQuot = doc.TRN_TYPE === 19 || sourceType === 'quotation';
+    setReferenceNo(isQuot ? `QTN-${doc.INVOICE_NO}` : `INV-${doc.INVOICE_NO}`);
     
     // Load Customer
     if (doc.ACCODE) {

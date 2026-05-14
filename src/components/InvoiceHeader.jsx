@@ -98,6 +98,18 @@ export default function InvoiceHeader({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (selectedRefSourceDoc) {
+      setSourceType(selectedRefSourceDoc.TRN_TYPE === 19 ? 'quotation' : 'invoice');
+    } else if (referenceNo) {
+      if (String(referenceNo).startsWith('QTN-')) {
+        setSourceType('quotation');
+      } else if (String(referenceNo).startsWith('INV-')) {
+        setSourceType('invoice');
+      }
+    }
+  }, [selectedRefSourceDoc, referenceNo]);
+
   return (
     <div className="bg-card p-4 rounded-xl border border-border shadow-sm transition-all duration-300">
       <div className={`grid grid-cols-2 ${isDelivery ? 'md:grid-cols-5' : hideInvoiceNo ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-3`}>
@@ -125,7 +137,7 @@ export default function InvoiceHeader({
                   <input
                     ref={inputRef}
                     type="text"
-                    value={selectedRefSourceDoc ? `${sourceType === 'quotation' ? 'QTN' : 'INV'} #${selectedRefSourceDoc.INVOICE_NO}` : (!sourceType ? referenceNo : searchTerm)}
+                    value={selectedRefSourceDoc ? `${sourceType === 'quotation' ? 'QTN' : 'INV'} #${selectedRefSourceDoc.INVOICE_NO}` : (searchTerm || referenceNo)}
                     onChange={(e) => {
                       if (!selectedRefSourceDoc) {
                         if (sourceType) {
