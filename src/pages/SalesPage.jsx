@@ -19,6 +19,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     taxIncluded, setTaxIncluded,
     historyInvoiceColumns,
     defaultCurrency,
+    appSetup,
     pendingSales, addPendingSale, removePendingSale, clearPendingSales
   } = useCache();
 
@@ -66,8 +67,11 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
   const [selectedWarehouse, setSelectedWarehouse] = useState('1');
   const [savedInvoice, setSavedInvoice] = useState(null);
   const [editingRecNo, setEditingRecNo] = useState(null);
+  const [sourceQuotationRecNo, setSourceQuotationRecNo] = useState(null);
   const [currencies, setCurrencies] = useState([]);
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency.no);
+  const [selectedCurrencyRate, setSelectedCurrencyRate] = useState(1);
+  const prevRateRef = React.useRef(selectedCurrencyRate);
   const [isSaving, setIsSaving] = useState(false);
   const [isZatcaEnabled, setIsZatcaEnabled] = useState(false);
   const [isPrintEnabled, setIsPrintEnabled] = useState(false);
@@ -131,12 +135,58 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     loadUserOptions();
   }, [user]);
 
+  // Handle real-time currency conversion when rate changes
+  useEffect(() => {
+    if (prevRateRef.current !== selectedCurrencyRate) {
+      const oldRate = prevRateRef.current;
+      const newRate = selectedCurrencyRate;
+
+      // Convert rows
+      setRows(prevRows => prevRows.map(row => ({
+        ...row,
+        price: row.price ? (row.price * oldRate) / newRate : '',
+        purchasePrice: row.purchasePrice ? (row.purchasePrice * oldRate) / newRate : '',
+        salePrice: row.salePrice ? (row.salePrice * oldRate) / newRate : '',
+        retailPrice: row.retailPrice ? (row.retailPrice * oldRate) / newRate : '',
+      })));
+
+      // Convert paid amounts
+      setCashPaid(prev => (prev * oldRate) / newRate);
+      setOtherPaid(prev => (prev * oldRate) / newRate);
+
+      prevRateRef.current = newRate;
+    }
+  }, [selectedCurrencyRate]);
+
   // Sync when local settings are manipulated, ensuring instant backend sync on click of options
   useEffect(() => {
     if (user?.userid) {
       saveUserOptions();
     }
   }, [autoPrint, defaultPrintPaper, showInvoiceAfterSave, enterToQty, visibleColumns, crystalPrint]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        handleHoldAndNew();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        const hasItems = rows.some(r => r.itemCode && r.itemCode.trim() !== '');
+        if (!hasItems) {
+          alert("Please add at least one item before proceeding.");
+          return;
+        }
+        handleSave(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [rows, customer, totals, vatNumber, address, referenceNo, paymentMethod, cashPaid, otherPaid, selectedWarehouse, selectedCurrency, selectedCurrencyRate, editingRecNo, isSaving]);
+
+  
+
+  
   
   const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
 
@@ -198,6 +248,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
 
   const resetPage = () => {
     setEditingRecNo(null);
+    setSourceQuotationRecNo(null);
     setIsZatcaEnabled(false);
     setIsPrintEnabled(false);
     fetchInvoiceNo();
@@ -255,20 +306,37 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     setIsSaving(true);
 
     try {
-      const finalPaymentMethod = isQuickSave ? 'Others' : paymentMethod;
-      const finalCashPaid = isQuickSave ? 0 : cashPaid;
-      const finalOtherPaid = isQuickSave ? 0 : otherPaid;
+      const isCashCustomer = String(customer.id) === String(appSetup.CASH_SALE_AC);
+      
+      let finalPaymentMethod, finalCashPaid, finalOtherPaid, finalTrnType;
+
+      if (isQuickSave) {
+        finalPaymentMethod = "Cash";
+        finalCashPaid = totals.net;
+        finalOtherPaid = 0;
+        finalTrnType = 6;
+      } else {
+        // Final Save (Payment clicked)
+        finalPaymentMethod = paymentMethod;
+        finalCashPaid = cashPaid;
+        finalOtherPaid = otherPaid;
+        const totalPaid = (Number(cashPaid) || 0) + (Number(otherPaid) || 0);
+        const isFullPaid = Math.abs(totalPaid - totals.net) < 0.01;
+        finalTrnType = isFullPaid ? 6 : 7;
+      }
 
       const payload = {
         INVOICE_NO: String(invoiceNo),
         ACCODE: String(customer.id || ''),
         ENAME: String(customer.name || ''),
-        G_TOTAL: totals.gross,
-        DISC_AMT: totals.discount,
-        NET_AMOUNT: totals.net,
-        VAT_AMOUNT: totals.vat,
-        CASH_PAID: finalCashPaid,
-        OTHER_PAID: finalOtherPaid,
+        G_TOTAL: totals.gross * selectedCurrencyRate,
+        DISC_AMT: totals.discount * selectedCurrencyRate,
+        NET_AMOUNT: totals.net * selectedCurrencyRate,
+        VAT_AMOUNT: totals.vat * selectedCurrencyRate,
+        TAXABLE_AMOUNT: (totals.net - totals.vat) * selectedCurrencyRate,
+        FRN_AMOUNT: totals.net,
+        CASH_PAID: finalCashPaid * selectedCurrencyRate,
+        OTHER_PAID: finalOtherPaid * selectedCurrencyRate,
         VAT_NUMBER: String(vatNumber || ''),
         PAYMENT_METHOD: finalPaymentMethod,
         TAX_INCLUDED: taxIncluded,
@@ -276,10 +344,29 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
         WR_CODE: selectedWarehouse,
         REC_NO: editingRecNo,
         CURRENCY: selectedCurrency,
-        TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7,
+        TRN_TYPE: finalTrnType,
         ADDRESS: address,
+        CURRENCY_RATE: selectedCurrencyRate,
+        CRATE: selectedCurrencyRate,
         REF_INV_NO: referenceNo,
-        ROWS: rows.filter(r => r.itemCode.trim() !== '')
+        SOURCE_REC_NO: sourceQuotationRecNo,
+        ROWS: rows.filter(r => r.itemCode.trim() !== '').map(r => {
+          const rowQty = Number(r.qty || 0);
+          const rowPrice = Number(r.price || 0);
+          const vatRate = (Number(r.vatPercent || 0) / 100);
+          const lineTotalUI = taxIncluded ? (rowQty * rowPrice) : (rowQty * rowPrice * (1 + vatRate));
+          const lineVatUI = taxIncluded ? (rowQty * (rowPrice - (rowPrice / (1 + vatRate)))) : (rowQty * rowPrice * vatRate);
+          const lineTaxableUI = lineTotalUI - lineVatUI;
+          
+          return {
+            ...r,
+            price: rowPrice * selectedCurrencyRate,
+            vatAmt: lineVatUI * selectedCurrencyRate,
+            total: lineTotalUI * selectedCurrencyRate,
+            FRN_AMOUNT: lineTotalUI,
+            TAXABLE_AMOUNT: lineTaxableUI * selectedCurrencyRate
+          };
+        })
       };
 
       console.log('💎 SALES_PAGE: Sending payload:', payload);
@@ -293,12 +380,8 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
         const result = await res.json();
         
         refreshCache();
-        setIsZatcaEnabled(true);
-        setIsPrintEnabled(true);
-        setInvoiceNo(result.INVOICE_NO);
-        setEditingRecNo(result.REC_NO);
-
-        if (autoPrint || (showInvoiceAfterSave && !isQuickSave)) {
+        
+        if (autoPrint || showInvoiceAfterSave) {
           // Prepare invoice data for modal
           const invoiceData = {
             REC_NO: result.REC_NO,
@@ -306,20 +389,23 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
             CURDATE: new Date().toISOString(),
             ENAME: customer.name || 'Cash Customer',
             ACCODE: customer.id,
-            G_TOTAL: totals.gross,
-            DISC_AMT: totals.discount,
-            NET_AMOUNT: totals.net,
-            VAT_AMOUNT: totals.vat,
+            G_TOTAL: totals.gross * selectedCurrencyRate,
+            DISC_AMT: totals.discount * selectedCurrencyRate,
+            NET_AMOUNT: totals.net * selectedCurrencyRate,
+            VAT_AMOUNT: totals.vat * selectedCurrencyRate,
             VAT_NUMBER: vatNumber,
-            TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7,
+            TRN_TYPE: finalTrnType,
             REF_NO: referenceNo,
-            CASH_PAID: finalCashPaid,
-            OTHER_PAID: finalOtherPaid,
+            CASH_PAID: finalCashPaid * selectedCurrencyRate,
+            OTHER_PAID: finalOtherPaid * selectedCurrencyRate,
+            CRATE: selectedCurrencyRate,
             CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
           };
           setSavedInvoice(invoiceData);
         } else {
           alert(`Sale saved successfully! Invoice No: ${result.INVOICE_NO}`);
+          // Reset page for new transaction if no modal is shown
+          resetPage();
         }
       } else {
         const err = await res.json();
@@ -335,21 +421,29 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
 
   const handlePrint = () => {
     if (!invoiceNo || invoiceNo === 'Loading...') return;
+    
+    const isCashCustomer = String(customer.id) === String(appSetup.CASH_SALE_AC);
+    const totalPaid = (Number(cashPaid) || 0) + (Number(otherPaid) || 0);
+    const isFullPaid = Math.abs(totalPaid - totals.net) < 0.01;
+    
+    const finalTrnType = isFullPaid ? 6 : 7;
+
     const invoiceData = {
       REC_NO: editingRecNo || 0,
       INVOICE_NO: invoiceNo,
       CURDATE: new Date().toISOString(),
       ENAME: customer.name || 'Cash Customer',
       ACCODE: customer.id,
-      G_TOTAL: totals.gross,
-      DISC_AMT: totals.discount,
-      NET_AMOUNT: totals.net,
-      VAT_AMOUNT: totals.vat,
+      G_TOTAL: totals.gross * selectedCurrencyRate,
+      DISC_AMT: totals.discount * selectedCurrencyRate,
+      NET_AMOUNT: totals.net * selectedCurrencyRate,
+      VAT_AMOUNT: totals.vat * selectedCurrencyRate,
       VAT_NUMBER: vatNumber,
-      TRN_TYPE: paymentMethod === 'Cash' ? 6 : 7,
+      TRN_TYPE: finalTrnType,
       REF_NO: referenceNo,
-      CASH_PAID: cashPaid,
-      OTHER_PAID: otherPaid,
+      CASH_PAID: cashPaid * selectedCurrencyRate,
+      OTHER_PAID: otherPaid * selectedCurrencyRate,
+      CRATE: selectedCurrencyRate,
       CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
     };
     setSavedInvoice(invoiceData);
@@ -357,6 +451,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
 
   const handleCloseInvoice = () => {
     setSavedInvoice(null);
+    resetPage();
   };
 
   useEffect(() => {
@@ -405,21 +500,20 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
   }, []);
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'F1') {
-        e.preventDefault();
-        handleHoldAndNew();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [rows, customer, vatNumber, address, totals, selectedWarehouse, selectedCurrency, paymentMethod, cashPaid, otherPaid]);
+    const curr = currencies.find(c => c.Currency_No === selectedCurrency);
+    if (curr) {
+      setSelectedCurrencyRate(curr.Currency_Rate || 1);
+    }
+  }, [selectedCurrency, currencies]);
+
+  
 
   // Handle Edit Mode from Params
   useEffect(() => {
     if (params && params.editSale) {
       const sale = params.editSale;
       setEditingRecNo(sale.REC_NO);
+      setSourceQuotationRecNo(null);
       setIsZatcaEnabled(true);
       setIsPrintEnabled(true);
       setInvoiceNo(sale.INVOICE_NO);
@@ -427,6 +521,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
       setVatNumber(sale.VAT_NUMBER || '');
       setPaymentMethod(sale.TRN_TYPE === 6 ? 'Cash' : 'Others');
       setReferenceNo(sale.REF_NO || '');
+      setSelectedCurrencyRate(sale.CRATE || 1);
       
       // Fetch Sale Items
       fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO))
@@ -438,10 +533,10 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
             description: item.DESCRIPTION,
             unit: item.UNIT,
             qty: item.QTY,
-            price: item.UNIT_PRICE,
+            price: item.UNIT_PRICE / (sale.CRATE || 1),
             vatPercent: item.VAT_PERCENT,
-            vatAmt: item.VAT_AMOUNT,
-            total: item.ITM_TOTAL,
+            vatAmt: item.VAT_AMOUNT / (sale.CRATE || 1),
+            total: item.ITM_TOTAL / (sale.CRATE || 1),
             aliasCode: '',
             stock: ''
           }));
@@ -482,6 +577,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     if (params && params.loadQuotation) {
       const sale = params.loadQuotation;
       setEditingRecNo(null);
+      setSourceQuotationRecNo(sale.REC_NO || null);
       fetchInvoiceNo();
       setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
       setVatNumber(sale.VAT_NUMBER || '');
@@ -497,10 +593,10 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
             description: item.DESCRIPTION,
             unit: item.UNIT,
             qty: item.QTY,
-            price: item.UNIT_PRICE,
+            price: item.UNIT_PRICE / (sale.CRATE || 1),
             vatPercent: item.VAT_PERCENT,
-            vatAmt: item.VAT_AMOUNT,
-            total: item.ITM_TOTAL,
+            vatAmt: item.VAT_AMOUNT / (sale.CRATE || 1),
+            total: item.ITM_TOTAL / (sale.CRATE || 1),
             aliasCode: '',
             stock: ''
           }));
@@ -556,21 +652,23 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     }
   }, [cachedAccounts, selectedAccount]);
 
-  const handleZatcaSubmit = async () => {
+  const handleZatcaSubmit = async (invoiceData) => {
     try {
-      const trnType = paymentMethod === 'Cash' ? 6 : 7;
-      alert(`ZATCA: Submitting Sales Invoice #${invoiceNo} (Type: ${trnType === 6 ? 'Cash Sale' : 'Credit Sale'}) to ZATCA server...`);
+      const targetInvoiceNo = invoiceData?.INVOICE_NO || invoiceNo;
+      const targetTrnType = invoiceData?.TRN_TYPE || (paymentMethod === 'Cash' ? 6 : 7);
+
+      alert(`ZATCA: Submitting Sales Invoice #${targetInvoiceNo} (Type: ${targetTrnType === 6 ? 'Cash Sale' : 'Credit Sale'}) to ZATCA server...`);
       const res = await fetch(API_ENDPOINTS.ZATCA_SUBMIT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invoiceNo: String(invoiceNo),
-          trnType: trnType
+          invoiceNo: String(targetInvoiceNo),
+          trnType: targetTrnType
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(`✅ ZATCA SUCCESS: Invoice #${invoiceNo} processed and submitted successfully!\n${data.message || ''}`);
+        alert(`✅ ZATCA SUCCESS: Invoice #${targetInvoiceNo} processed and submitted successfully!\n${data.message || ''}`);
       } else {
         alert(`❌ ZATCA ERROR: ${data.error || 'Submission failed'}\n${data.details || ''}`);
       }
@@ -597,6 +695,8 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
               currencies={currencies}
               selectedCurrency={selectedCurrency}
               setSelectedCurrency={setSelectedCurrency}
+              selectedCurrencyRate={selectedCurrencyRate}
+              setSelectedCurrencyRate={setSelectedCurrencyRate}
               onNew={handleHoldAndNew}
               onPending={() => setIsPendingModalOpen(true)}
               onHistory={() => navigateTo?.('sales-history')}
@@ -650,7 +750,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
             />
           </div>
 
-          <SalesGrid initialData={[]} rows={rows} setRows={setRows} visibleColumns={visibleColumns} enterToQty={enterToQty} taxIncluded={taxIncluded} />
+          <SalesGrid initialData={[]} rows={rows} setRows={setRows} visibleColumns={visibleColumns} enterToQty={enterToQty} taxIncluded={taxIncluded} selectedCurrencyRate={selectedCurrencyRate} />
 
           <SummaryFooter
             rows={rows}
@@ -669,12 +769,9 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
             customerId={customer.id}
             isSaving={isSaving}
             currencyCode={currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'}
-            isZatcaEnabled={isZatcaEnabled}
-            onZatcaSubmit={handleZatcaSubmit}
-            isPrintEnabled={isPrintEnabled}
-            onPrint={handlePrint}
             autoPrint={autoPrint}
             setAutoPrint={setAutoPrint}
+            selectedCurrencyRate={selectedCurrencyRate}
           />
         </div>
       </div>
@@ -684,6 +781,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
         sale={savedInvoice} 
         onClose={handleCloseInvoice}
         address={address}
+        onZatcaSubmit={handleZatcaSubmit}
         historyInvoiceColumns={historyInvoiceColumns}
         autoPrint={autoPrint}
         crystalPrint={crystalPrint}

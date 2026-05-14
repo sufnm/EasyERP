@@ -1,35 +1,14 @@
-import sql from 'mssql';
-import dotenv from 'dotenv';
-dotenv.config();
-
-const dbConfig = { 
-  user: process.env.DB_USER, 
-  password: process.env.DB_PASSWORD, 
-  server: process.env.DB_SERVER || process.env.DB_HOST, 
-  database: process.env.DB_NAME, 
-  options: { encrypt: false, trustServerCertificate: true } 
-};
+import { getPool } from '../db.js';
 
 async function checkIdentity() {
   try {
-    const pool = await sql.connect(dbConfig);
-    const result = await pool.request().query(`
-      SELECT name FROM sys.columns 
-      WHERE object_id = OBJECT_ID('ACCOUNTS') 
-      AND is_identity = 1
-    `);
-    console.log("Identity columns on ACCOUNTS:", result.recordset);
-
-    const result2 = await pool.request().query(`
-      SELECT name FROM sys.columns 
-      WHERE object_id = OBJECT_ID('TRN_ACCOUNTS') 
-      AND is_identity = 1
-    `);
-    console.log("Identity columns on TRN_ACCOUNTS:", result2.recordset);
-  } catch (e) {
-    console.error(e);
-  } finally {
-    process.exit();
+    const pool = await getPool();
+    const result = await pool.request().query("SELECT COLUMN_NAME, COLUMNPROPERTY(OBJECT_ID(TABLE_NAME), COLUMN_NAME, 'IsIdentity') as IsIdentity FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DATA_ENTRY' AND COLUMN_NAME = 'TRAN_NO'");
+    console.table(result.recordset);
+    process.exit(0);
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
   }
 }
 checkIdentity();

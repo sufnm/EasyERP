@@ -20,20 +20,28 @@ export default function SummaryFooter({
   isReturn = false,
   isPurchase = false,
   isSaving = false,
-  isZatcaEnabled = false,
-  onZatcaSubmit,
-  isPrintEnabled = false,
-  onPrint
+  selectedCurrencyRate = 1
 }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const prevRateRef = React.useRef(selectedCurrencyRate);
+
+  // Convert discount when rate changes
+  React.useEffect(() => {
+    if (prevRateRef.current !== selectedCurrencyRate) {
+      const oldRate = prevRateRef.current;
+      const newRate = selectedCurrencyRate;
+      setDiscountAmount(prev => (prev * oldRate) / newRate);
+      prevRateRef.current = newRate;
+    }
+  }, [selectedCurrencyRate]);
   
   const cashInputRef = React.useRef(null);
   const otherInputRef = React.useRef(null);
   
   const vatAmount = rows.reduce((acc, row) => {
     const qty = Number(row.qty) || 0;
-    const price = Number(row.price) || 0;
+    const price = Number(row.price || row.purchasePrice) || 0;
     const vatRate = (Number(row.vatPercent) || 0) / 100;
     const lineVat = taxIncluded 
       ? (qty * (price - (price / (1 + vatRate))))
@@ -43,7 +51,7 @@ export default function SummaryFooter({
 
   const totalPayable = rows.reduce((acc, row) => {
     const qty = Number(row.qty) || 0;
-    const price = Number(row.price) || 0;
+    const price = Number(row.price || row.purchasePrice) || 0;
     const vatRate = (Number(row.vatPercent) || 0) / 100;
     const lineTotal = taxIncluded 
       ? (qty * price)
@@ -165,8 +173,8 @@ export default function SummaryFooter({
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1 px-1">Discount</span>
               <input 
                 type="number" 
-                value={discountAmount || ''} 
-                onChange={(e) => setDiscountAmount(Number(e.target.value) || 0)}
+                value={discountAmount} 
+                onChange={(e) => setDiscountAmount(e.target.value === '' ? 0 : Number(e.target.value))}
                 placeholder="0.00"
                 className="bg-zinc-950 dark:bg-zinc-900 text-left text-sm font-black text-white w-24 px-2 py-1 rounded-lg border border-zinc-800 outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all"
               />
@@ -176,48 +184,22 @@ export default function SummaryFooter({
 
           {/* Action Buttons Group */}
           <div className="flex items-center gap-3 shrink-0 self-center">
-            <button 
-              type="button"
-              onClick={onPrint}
-              disabled={!isPrintEnabled}
-              title={!isPrintEnabled ? "Save or Edit the invoice to enable printing" : "Print Invoice"}
-              className={`text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg flex items-center gap-2 group shrink-0 ${
-                !isPrintEnabled 
-                ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-not-allowed shadow-none opacity-65' 
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white font-black border border-indigo-500 shadow-indigo-950/30'
-              }`}
-            >
-              Print
-              <Printer size={18} className={isPrintEnabled ? "group-hover:scale-110 transition-transform" : "opacity-65"} />
-            </button>
 
-            <button 
-              type="button"
-              onClick={onZatcaSubmit}
-              disabled={!isZatcaEnabled}
-              title={!isZatcaEnabled ? "Save or Edit the invoice to enable ZATCA submission" : "Submit invoice to ZATCA"}
-              className={`text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg flex items-center gap-2 group shrink-0 ${
-                !isZatcaEnabled 
-                ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-not-allowed shadow-none opacity-65' 
-                : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black border border-amber-400 shadow-amber-950/30'
-              }`}
-            >
-              Zatca Submit
-              <CloudUpload size={18} className={isZatcaEnabled ? "group-hover:scale-110 transition-transform text-zinc-950" : "text-zinc-400 opacity-65"} />
-            </button>
+
+
 
             <button 
               type="button"
               onClick={handleQuickSave}
-              disabled={netAmount <= 0}
-              title={netAmount <= 0 ? "Add items to enable saving" : "Save Invoice"}
+              disabled={netAmount <= 0 || isSaving}
+              title={netAmount <= 0 ? "Add items to enable saving" : (isPurchase ? "Complete Purchase" : (isReturn ? "Complete Return" : "Complete Sale"))}
               className={`text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg flex items-center gap-2 group shrink-0 ${
                 netAmount <= 0 
                 ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-not-allowed shadow-none opacity-65' 
-                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 shadow-zinc-950/50'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/50 shadow-emerald-900/20'
               }`}
             >
-              Save Invoice
+              {isPurchase ? 'Complete Purchase' : (isReturn ? 'Complete Return' : 'Complete Sale')}
               <FileCheck size={18} className={netAmount > 0 ? "group-hover:scale-110 transition-transform" : "opacity-65"} />
             </button>
 
@@ -346,8 +328,8 @@ export default function SummaryFooter({
                           <input 
                             ref={cashInputRef}
                             type="number"
-                            value={cashPaid || ''}
-                            onChange={(e) => setCashPaid(Number(e.target.value) || 0)}
+                            value={cashPaid}
+                            onChange={(e) => setCashPaid(e.target.value === '' ? 0 : Number(e.target.value))}
                             placeholder="0.00"
                             className="w-full bg-zinc-950 text-lg font-black text-emerald-400 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
                           />
@@ -363,8 +345,8 @@ export default function SummaryFooter({
                             <input 
                               ref={otherInputRef}
                               type="number"
-                              value={otherPaid || ''}
-                              onChange={(e) => setOtherPaid(Number(e.target.value) || 0)}
+                              value={otherPaid}
+                              onChange={(e) => setOtherPaid(e.target.value === '' ? 0 : Number(e.target.value))}
                               placeholder="0.00"
                               className="w-full bg-zinc-950 text-lg font-black text-indigo-400 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
                             />
@@ -387,7 +369,7 @@ export default function SummaryFooter({
                         </div>
                       )}
                       
-                      {paymentMethod === 'Both' && (
+                      {paymentMethod && (
                         <div className={`mt-2 p-3 rounded-xl border text-center ${Math.abs((cashPaid + otherPaid) - netAmount) < 0.01 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
                           <p className="text-[10px] font-bold uppercase tracking-widest">
                             Total Paid: {currencyCode} {(cashPaid + otherPaid).toFixed(2)} 

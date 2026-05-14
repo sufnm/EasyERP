@@ -12,7 +12,8 @@ export default function SalesGrid({
   enterToQty = false, 
   taxIncluded = true,
   restrictedItems = null,
-  isPurchase = false
+  isPurchase = false,
+  selectedCurrencyRate = 1
 }) {
   const { searchItems, cachedUnits } = useCache();
   const [searchResults, setSearchResults] = useState([]);
@@ -358,10 +359,10 @@ export default function SalesGrid({
                 description: item.DESCRIPTION || '',
                 vatPercent: item.vat_percent || item.VAT_PERCENT || 0,
                 qty: item.isManual ? '' : (Number(row.qty || 0) + 1),
-                purchasePrice: isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || item.AVG_PUR_PRICE || 0) : 0,
-                salePrice: item.SALE_PRICE || item.price || 0,
-                retailPrice: item.RETAIL_PRICE || 0,
-                price: isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || item.AVG_PUR_PRICE || 0) : (item.SALE_PRICE || item.price || 0),
+                purchasePrice: isPurchase ? ((item.price || item.PRICE || item.UNIT_PRICE || item.AVG_PUR_PRICE || 0) / selectedCurrencyRate) : 0,
+                salePrice: (item.SALE_PRICE || item.price || 0) / selectedCurrencyRate,
+                retailPrice: (item.RETAIL_PRICE || 0) / selectedCurrencyRate,
+                price: isPurchase ? ((item.price || item.PRICE || item.UNIT_PRICE || item.AVG_PUR_PRICE || 0) / selectedCurrencyRate) : ((item.SALE_PRICE || item.price || 0) / selectedCurrencyRate),
                 isManual: item.isManual || false
               }
           : row
@@ -447,10 +448,10 @@ export default function SalesGrid({
       unit: item.UNIT,
       unitId: item.UNIT_ID || '',
       qty: item.QTY,
-      price: isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || 0) : (item.UNIT_PRICE || item.price || 0),
-      purchasePrice: isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || 0) : 0,
-      salePrice: item.SALE_PRICE || 0,
-      retailPrice: item.RETAIL_PRICE || 0,
+      price: (isPurchase ? (item.price || item.PRICE || item.UNIT_PRICE || 0) : (item.UNIT_PRICE || item.price || 0)) / selectedCurrencyRate,
+      purchasePrice: isPurchase ? ((item.price || item.PRICE || item.UNIT_PRICE || 0) / selectedCurrencyRate) : 0,
+      salePrice: (item.SALE_PRICE || 0) / selectedCurrencyRate,
+      retailPrice: (item.RETAIL_PRICE || 0) / selectedCurrencyRate,
       vatPercent: item.vat_percent || item.VAT_PERCENT || 0,
       vatAmt: '',
       total: '',

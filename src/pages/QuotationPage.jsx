@@ -61,6 +61,8 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
   const [editingRecNo, setEditingRecNo] = useState(null);
   const [currencies, setCurrencies] = useState([]);
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency.no);
+  const [selectedCurrencyRate, setSelectedCurrencyRate] = useState(1);
+  const prevRateRef = React.useRef(selectedCurrencyRate);
   const [isSaving, setIsSaving] = useState(false);
   const [allTerms, setAllTerms] = useState([]);
   const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
@@ -109,13 +111,35 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
   };
 
   const fetchInvoiceNo = () => {
-    if (editingRecNo) return; // Don't fetch if editing
-    // Fetch via generic next invoice endpoint
+    if (editingRecNo) return; 
     fetch(API_ENDPOINTS.INVOICE_NEXT)
       .then(res => res.json())
       .then(data => setInvoiceNo(data.nextInvoice))
       .catch(err => console.error("Failed to fetch next quotation invoice:", err));
   };
+
+  useEffect(() => {
+    fetchInvoiceNo();
+  }, []);
+
+  // Handle real-time currency conversion when rate changes
+  useEffect(() => {
+    if (prevRateRef.current !== selectedCurrencyRate) {
+      const oldRate = prevRateRef.current;
+      const newRate = selectedCurrencyRate;
+
+      // Convert rows
+      setRows(prevRows => prevRows.map(row => ({
+        ...row,
+        price: row.price ? (row.price * oldRate) / newRate : '',
+        purchasePrice: row.purchasePrice ? (row.purchasePrice * oldRate) / newRate : '',
+        salePrice: row.salePrice ? (row.salePrice * oldRate) / newRate : '',
+        retailPrice: row.retailPrice ? (row.retailPrice * oldRate) / newRate : '',
+      })));
+
+      prevRateRef.current = newRate;
+    }
+  }, [selectedCurrencyRate]);
 
   const resetPage = () => {
     setEditingRecNo(null);
@@ -188,10 +212,10 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
         INVOICE_NO: String(invoiceNo),
         ACCODE: String(customer.id || ''),
         ENAME: String(customer.name || ''),
-        G_TOTAL: totals.gross,
-        DISC_AMT: totals.discount,
-        NET_AMOUNT: totals.net,
-        VAT_AMOUNT: totals.vat,
+        G_TOTAL: totals.gross * selectedCurrencyRate,
+        DISC_AMT: totals.discount * selectedCurrencyRate,
+        NET_AMOUNT: totals.net * selectedCurrencyRate,
+        VAT_AMOUNT: totals.vat * selectedCurrencyRate,
         CASH_PAID: 0,
         OTHER_PAID: 0,
         VAT_NUMBER: String(vatNumber || ''),
@@ -201,6 +225,8 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
         WR_CODE: selectedWarehouse,
         REC_NO: editingRecNo,
         CURRENCY: selectedCurrency,
+        CRATE: selectedCurrencyRate,
+        CURRENCY_RATE: selectedCurrencyRate,
         TRN_TYPE: 19, // Quotation transaction type
         ADDRESS: address,
         REF_INV_NO: referenceNo,
@@ -208,7 +234,23 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
           QUOT_TERM_ID: id,
           QUOT_DESCRIPTION: termDetails[id] || ''
         })).filter(t => t.QUOT_DESCRIPTION.trim() !== ''),
-        ROWS: rows.filter(r => r.itemCode.trim() !== '')
+        ROWS: rows.filter(r => r.itemCode.trim() !== '').map(r => {
+          const rowQty = Number(r.qty || 0);
+          const rowPrice = Number(r.price || 0);
+          const vatRate = (Number(r.vatPercent || 0) / 100);
+          const lineTotalUI = taxIncluded ? (rowQty * rowPrice) : (rowQty * rowPrice * (1 + vatRate));
+          const lineVatUI = taxIncluded ? (rowQty * (rowPrice - (rowPrice / (1 + vatRate)))) : (rowQty * rowPrice * vatRate);
+          const lineTaxableUI = lineTotalUI - lineVatUI;
+          
+          return {
+            ...r,
+            price: rowPrice * selectedCurrencyRate,
+            vatAmt: lineVatUI * selectedCurrencyRate,
+            total: lineTotalUI * selectedCurrencyRate,
+            FRN_AMOUNT: lineTotalUI,
+            TAXABLE_AMOUNT: lineTaxableUI * selectedCurrencyRate
+          };
+        })
       };
 
       console.log('💎 QUOTATION_PAGE: Sending payload:', payload);
@@ -230,18 +272,17 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
             CURDATE: new Date().toISOString(),
             ENAME: customer.name || 'Cash Customer',
             ACCODE: customer.id,
-            G_TOTAL: totals.gross,
-            DISC_AMT: totals.discount,
-            NET_AMOUNT: totals.net,
-            VAT_AMOUNT: totals.vat,
+            G_TOTAL: totals.gross * selectedCurrencyRate,
+            DISC_AMT: totals.discount * selectedCurrencyRate,
+            NET_AMOUNT: totals.net * selectedCurrencyRate,
+            VAT_AMOUNT: totals.vat * selectedCurrencyRate,
             VAT_NUMBER: vatNumber,
             TRN_TYPE: 19,
-            REF_NO: referenceNo
-          };
-          setSavedInvoice({
-            ...invoiceData,
+            REF_NO: referenceNo,
+            CRATE: selectedCurrencyRate,
             CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
-          });
+          };
+          setSavedInvoice(invoiceData);
         } else {
           alert('Quotation saved successfully!');
           resetPage();
@@ -308,6 +349,13 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
       .catch(err => console.error("Failed to fetch quotation terms:", err));
   }, []);
 
+  useEffect(() => {
+    const curr = currencies.find(c => c.Currency_No === selectedCurrency);
+    if (curr) {
+      setSelectedCurrencyRate(curr.Currency_Rate || 1);
+    }
+  }, [selectedCurrency, currencies]);
+
   // Handle Edit Mode from Params (if navigating back to edit)
   useEffect(() => {
     if (params && params.editQuotation) {
@@ -317,6 +365,7 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
       setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
       setVatNumber(sale.VAT_NUMBER || '');
       setReferenceNo(sale.REF_NO || '');
+      setSelectedCurrencyRate(sale.CRATE || 1);
       
       // Fetch Sale Items (reusing sales endpoints)
       fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO))
@@ -328,10 +377,10 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
             description: item.DESCRIPTION,
             unit: item.UNIT,
             qty: item.QTY,
-            price: item.UNIT_PRICE,
+            price: item.UNIT_PRICE / (sale.CRATE || 1),
             vatPercent: item.VAT_PERCENT,
-            vatAmt: item.VAT_AMOUNT,
-            total: item.ITM_TOTAL,
+            vatAmt: item.VAT_AMOUNT / (sale.CRATE || 1),
+            total: item.ITM_TOTAL / (sale.CRATE || 1),
             aliasCode: '',
             stock: ''
           }));
@@ -400,6 +449,8 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
               currencies={currencies}
               selectedCurrency={selectedCurrency}
               setSelectedCurrency={setSelectedCurrency}
+              selectedCurrencyRate={selectedCurrencyRate}
+              setSelectedCurrencyRate={setSelectedCurrencyRate}
               onNew={handleHoldAndNew}
               onPending={() => setIsPendingModalOpen(true)}
               onHistory={() => navigateTo?.('active-quotations')}
@@ -451,7 +502,7 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
           </div>
 
           <div className="flex flex-col gap-2 shrink-0">
-            <SalesGrid initialData={[]} rows={rows} setRows={setRows} visibleColumns={visibleColumns} enterToQty={enterToQty} taxIncluded={taxIncluded} />
+            <SalesGrid initialData={[]} rows={rows} setRows={setRows} visibleColumns={visibleColumns} enterToQty={enterToQty} taxIncluded={taxIncluded} selectedCurrencyRate={selectedCurrencyRate} />
 
             {selectedTermIds.length > 0 && (
               <div className="bg-card p-4 rounded-xl border border-border shadow-sm transition-all duration-300 mt-2">
@@ -485,6 +536,7 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
             onSave={handleSave}
             currencyCode={currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'}
             isSaving={isSaving}
+            selectedCurrencyRate={selectedCurrencyRate}
           />
         </div>
       </div>

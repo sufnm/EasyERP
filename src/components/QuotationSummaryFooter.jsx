@@ -7,9 +7,21 @@ export default function QuotationSummaryFooter({
   onTotalsChange, 
   onSave, 
   currencyCode = 'SAR',
-  isSaving = false
+  isSaving = false,
+  selectedCurrencyRate = 1
 }) {
   const [discountAmount, setDiscountAmount] = useState(0);
+  const prevRateRef = React.useRef(selectedCurrencyRate);
+
+  // Convert discount when rate changes
+  React.useEffect(() => {
+    if (prevRateRef.current !== selectedCurrencyRate) {
+      const oldRate = prevRateRef.current;
+      const newRate = selectedCurrencyRate;
+      setDiscountAmount(prev => (prev * oldRate) / newRate);
+      prevRateRef.current = newRate;
+    }
+  }, [selectedCurrencyRate]);
   
   const vatAmount = rows.reduce((acc, row) => {
     const qty = Number(row.qty) || 0;
@@ -86,8 +98,8 @@ export default function QuotationSummaryFooter({
             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1 px-1">Discount</span>
             <input 
               type="number" 
-              value={discountAmount || ''} 
-              onChange={(e) => setDiscountAmount(Number(e.target.value) || 0)}
+              value={discountAmount} 
+              onChange={(e) => setDiscountAmount(e.target.value === '' ? 0 : Number(e.target.value))}
               placeholder="0.00"
               className="bg-zinc-950 dark:bg-zinc-900 text-left text-sm font-black text-white w-24 px-2 py-1 rounded-lg border border-zinc-800 outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all"
             />

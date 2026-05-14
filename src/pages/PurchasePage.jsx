@@ -19,6 +19,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
     defaultCurrency,
     cachedAccounts,
     currencies,
+    appSetup,
     pendingPurchases, addPendingPurchase, removePendingPurchase, clearPendingPurchases
   } = useCache();
 
@@ -63,11 +64,32 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
   const [otherPaid, setOtherPaid] = useState(0);
   const [selectedWarehouse, setSelectedWarehouse] = useState('1');
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency.no);
+  const [selectedCurrencyRate, setSelectedCurrencyRate] = useState(1);
+  const prevRateRef = React.useRef(selectedCurrencyRate);
   const [savedInvoice, setSavedInvoice] = useState(null);
   const [warehouses, setWarehouses] = useState([]);
   const [editingRecNo, setEditingRecNo] = useState(null);
   const [selectedAccount, setSelectedAccount] = useState('120101');
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        handleHold();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        const hasItems = rows.some(r => r.itemCode && r.itemCode.trim() !== '');
+        if (!hasItems) {
+          alert("Please add at least one item before proceeding.");
+          return;
+        }
+        handleSave(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [supplier, rows, totals, referenceNo, vatNumber, paymentMethod, cashPaid, otherPaid, selectedWarehouse, selectedCurrency, selectedCurrencyRate, editingRecNo, isSaving]);
   const [isZatcaEnabled, setIsZatcaEnabled] = useState(false);
   const [isPrintEnabled, setIsPrintEnabled] = useState(false);
   const loadUserOptions = async () => {
@@ -163,14 +185,110 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
       if (e.key === 'F1') {
         e.preventDefault();
         handleHold();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        handleSave(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [supplier, rows, totals, referenceNo, vatNumber]);
+  }, [supplier, rows, totals, referenceNo, vatNumber, paymentMethod, cashPaid, otherPaid, selectedWarehouse, selectedCurrency, selectedCurrencyRate, editingRecNo, isSaving]);
+
+  useEffect(() => {
+    const curr = currencies.find(c => c.Currency_No === selectedCurrency);
+    if (curr) {
+      setSelectedCurrencyRate(curr.Currency_Rate || 1);
+    }
+  }, [selectedCurrency, currencies]);
+
+  // Handle real-time currency conversion when rate changes
+  useEffect(() => {
+    if (prevRateRef.current !== selectedCurrencyRate) {
+      const oldRate = prevRateRef.current;
+      const newRate = selectedCurrencyRate;
+
+      // Convert rows
+      setRows(prevRows => prevRows.map(row => ({
+        ...row,
+        price: row.price ? (row.price * oldRate) / newRate : '',
+        purchasePrice: row.purchasePrice ? (row.purchasePrice * oldRate) / newRate : '',
+        salePrice: row.salePrice ? (row.salePrice * oldRate) / newRate : '',
+        retailPrice: row.retailPrice ? (row.retailPrice * oldRate) / newRate : '',
+      })));
+
+      // Convert paid amounts
+      setCashPaid(prev => (prev * oldRate) / newRate);
+      setOtherPaid(prev => (prev * oldRate) / newRate);
+
+      prevRateRef.current = newRate;
+    }
+  }, [selectedCurrencyRate]);
+  
+  // Handle Edit Mode from Params
+  useEffect(() => {
+    if (params && params.editSale) {
+      const sale = params.editSale;
+      setEditingRecNo(sale.REC_NO);
+      setIsZatcaEnabled(true);
+      setIsPrintEnabled(true);
+      setInvoiceNo(sale.INVOICE_NO);
+      setSupplier({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
+      setVatNumber(sale.VAT_NUMBER || '');
+      setPaymentMethod(sale.TRN_TYPE === 1 ? 'Cash' : 'Others');
+      setReferenceNo(sale.REF_NO || '');
+      setSelectedCurrencyRate(sale.CRATE || 1);
+      
+      // Fetch Purchase Items
+      fetch(API_ENDPOINTS.PURCHASE_ITEMS(sale.REC_NO))
+        .then(res => res.json())
+        .then(items => {
+          const mappedRows = items.map((item, idx) => ({
+            id: idx + 1,
+            itemCode: item.BARCODE,
+            description: item.DESCRIPTION,
+            unit: item.UNIT,
+            qty: item.QTY,
+            purchasePrice: item.UNIT_PRICE / (sale.CRATE || 1),
+            vatPercent: item.VAT_PERCENT,
+            vatAmt: item.VAT_AMOUNT / (sale.CRATE || 1),
+            total: item.ITM_TOTAL / (sale.CRATE || 1),
+            salePrice: item.SALE_PRICE / (sale.CRATE || 1),
+            retailPrice: item.RETAIL_PRICE / (sale.CRATE || 1),
+            unitId: item.UNIT_ID
+          }));
+          
+          while (mappedRows.length < 5) {
+            mappedRows.push({ 
+              id: mappedRows.length + 1, 
+              itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', 
+              salePrice: '', retailPrice: '', vatAmt: '', vatPercent: 15, total: '', unitId: '' 
+            });
+          }
+          setRows(mappedRows);
+        })
+        .catch(err => console.error("Failed to fetch edit items:", err));
+        
+      // Fetch Supplier Info for address
+      if (sale.ACCODE) {
+        fetch(API_ENDPOINTS.SUPPLIER_INFO(sale.ACCODE))
+          .then(res => res.json())
+          .then(data => {
+            if (data) {
+              setAddress({
+                building: data.building_no || '',
+                street: data.street_name || '',
+                district: data.district || '',
+                city: data.city_name || '',
+                pincode: data.postal_zone || ''
+              });
+            }
+          });
+      }
+    }
+  }, [params]);
 
 
-  const handleSave = async () => {
+  const handleSave = async (isQuickSave = false) => {
     if (!supplier.id) {
       alert('Please select a supplier before saving.');
       return;
@@ -181,31 +299,76 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
 
     if (rows.filter(r => r.itemCode.trim() !== '').length === 0) {
       alert('Please add at least one item before saving.');
+      setIsSaving(false);
       return;
     }
 
+    try {
+      const isCashSupplier = String(supplier.id) === String(appSetup.CASH_PUR_AC);
+      
+      let finalPaymentMethod, finalCashPaid, finalOtherPaid, finalTrnType;
+
+      if (isQuickSave) {
+        finalPaymentMethod = "Cash";
+        finalCashPaid = totals.net;
+        finalOtherPaid = 0;
+        finalTrnType = 1;
+      } else {
+        // Final Save (Payment clicked)
+        finalPaymentMethod = paymentMethod;
+        finalCashPaid = cashPaid;
+        finalOtherPaid = otherPaid;
+        const totalPaid = (Number(cashPaid) || 0) + (Number(otherPaid) || 0);
+        const isFullPaid = Math.abs(totalPaid - totals.net) < 0.01;
+        finalTrnType = isFullPaid ? 1 : 2;
+      }
+
     const payload = {
       REC_NO: editingRecNo,
+      INVOICE_NO: String(invoiceNo),
       ACCODE: supplier.id,
       ENAME: supplier.name,
-      G_TOTAL: totals.gross,
-      DISC_AMT: totals.discount,
-      NET_AMOUNT: totals.net,
-      VAT_AMOUNT: totals.vat,
+      G_TOTAL: totals.gross * selectedCurrencyRate,
+      DISC_AMT: totals.discount * selectedCurrencyRate,
+      NET_AMOUNT: totals.net * selectedCurrencyRate,
+      VAT_AMOUNT: totals.vat * selectedCurrencyRate,
+      TAXABLE_AMOUNT: (totals.net - totals.vat) * selectedCurrencyRate,
+      FRN_AMOUNT: totals.net,
       VAT_NUMBER: vatNumber,
-      ROWS: rows.filter(r => r.itemCode.trim() !== ''),
-      PAYMENT_METHOD: paymentMethod,
+      ROWS: rows.filter(r => r.itemCode.trim() !== '').map(r => {
+        const rowQty = Number(r.qty || 0);
+        const rowPrice = Number(r.purchasePrice || 0);
+        const vatRate = (Number(r.vatPercent || 0) / 100);
+        const lineTotalUI = taxIncluded ? (rowQty * rowPrice) : (rowQty * rowPrice * (1 + vatRate));
+        const lineVatUI = taxIncluded ? (rowQty * (rowPrice - (rowPrice / (1 + vatRate)))) : (rowQty * rowPrice * vatRate);
+        const lineTaxableUI = lineTotalUI - lineVatUI;
+
+        return {
+          ...r,
+          price: Number(r.price || 0) * selectedCurrencyRate,
+          purchasePrice: rowPrice * selectedCurrencyRate,
+          salePrice: Number(r.salePrice || 0) * selectedCurrencyRate,
+          retailPrice: Number(r.retailPrice || 0) * selectedCurrencyRate,
+          vatAmt: lineVatUI * selectedCurrencyRate,
+          total: lineTotalUI * selectedCurrencyRate,
+          FRN_AMOUNT: lineTotalUI,
+          TAXABLE_AMOUNT: lineTaxableUI * selectedCurrencyRate
+        };
+      }),
+      PAYMENT_METHOD: finalPaymentMethod,
       TAX_INCLUDED: taxIncluded,
-      CASH_PAID: cashPaid,
-      OTHER_PAID: otherPaid,
+      CASH_PAID: finalCashPaid * selectedCurrencyRate,
+      OTHER_PAID: finalOtherPaid * selectedCurrencyRate,
       USERNAME: user.username,
+      TRN_TYPE: finalTrnType,
       WR_CODE: selectedWarehouse,
       CURRENCY: selectedCurrency,
+      CRATE: selectedCurrencyRate,
+      CURRENCY_RATE: selectedCurrencyRate,
       REF_INV_NO: referenceNo,
       ADDRESS: address
     };
 
-    try {
       const res = await fetch(API_ENDPOINTS.PURCHASE_SAVE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -213,10 +376,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
       });
       if (res.ok) {
         const result = await res.json();
-        setIsZatcaEnabled(true);
-        setIsPrintEnabled(true);
-        setInvoiceNo(result.INVOICE_NO);
-        setEditingRecNo(result.REC_NO);
+        refreshCache();
         
         // Prepare invoice data for modal
         const invoiceData = {
@@ -225,22 +385,25 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
           CURDATE: new Date().toISOString(),
           ENAME: supplier.name,
           ACCODE: supplier.id,
-          G_TOTAL: totals.gross,
-          DISC_AMT: totals.discount,
-          NET_AMOUNT: totals.net,
-          VAT_AMOUNT: totals.vat,
+          G_TOTAL: totals.gross * selectedCurrencyRate,
+          DISC_AMT: totals.discount * selectedCurrencyRate,
+          NET_AMOUNT: totals.net * selectedCurrencyRate,
+          VAT_AMOUNT: totals.vat * selectedCurrencyRate,
           VAT_NUMBER: vatNumber,
-          TRN_TYPE: paymentMethod === 'Cash' ? 1 : 2,
+          TRN_TYPE: finalTrnType,
           REF_NO: referenceNo,
+          CRATE: selectedCurrencyRate,
           CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR',
-          CASH_PAID: cashPaid,
-          OTHER_PAID: otherPaid
+          CASH_PAID: finalCashPaid * selectedCurrencyRate,
+          OTHER_PAID: finalOtherPaid * selectedCurrencyRate
         };
         
         if (autoPrint || showInvoiceAfterSave) {
           setSavedInvoice(invoiceData);
         } else {
           alert(`Purchase saved successfully! Invoice: ${result.INVOICE_NO}`);
+          // Reset page for new transaction
+          resetPage();
         }
       } else {
         alert('Failed to save purchase');
@@ -261,15 +424,16 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
       CURDATE: new Date().toISOString(),
       ENAME: supplier.name,
       ACCODE: supplier.id,
-      G_TOTAL: totals.gross,
-      DISC_AMT: totals.discount,
-      NET_AMOUNT: totals.net,
-      VAT_AMOUNT: totals.vat,
+      G_TOTAL: totals.gross * selectedCurrencyRate,
+      DISC_AMT: totals.discount * selectedCurrencyRate,
+      NET_AMOUNT: totals.net * selectedCurrencyRate,
+      VAT_AMOUNT: totals.vat * selectedCurrencyRate,
       VAT_NUMBER: vatNumber,
       TRN_TYPE: paymentMethod === 'Cash' ? 1 : 2,
       REF_NO: referenceNo,
-      CASH_PAID: cashPaid,
-      OTHER_PAID: otherPaid,
+      CASH_PAID: cashPaid * selectedCurrencyRate,
+      OTHER_PAID: otherPaid * selectedCurrencyRate,
+      CRATE: selectedCurrencyRate,
       CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
     };
     setSavedInvoice(invoiceData);
@@ -277,6 +441,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
 
   const handleCloseInvoice = () => {
     setSavedInvoice(null);
+    resetPage();
   };
 
   const handleHold = () => {
@@ -346,21 +511,23 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
     }
   }, [editingRecNo]);
 
-  const handleZatcaSubmit = async () => {
+  const handleZatcaSubmit = async (invoiceData) => {
     try {
-      const trnType = paymentMethod === 'Cash' ? 1 : 2;
-      alert(`ZATCA: Submitting Purchase Invoice #${invoiceNo} (Type: ${trnType === 1 ? 'Cash Purchase' : 'Credit Purchase'}) to ZATCA server...`);
+      const targetInvoiceNo = invoiceData?.INVOICE_NO || invoiceNo;
+      const targetTrnType = invoiceData?.TRN_TYPE || (paymentMethod === 'Cash' ? 1 : 2);
+
+      alert(`ZATCA: Submitting Purchase Invoice #${targetInvoiceNo} (Type: ${targetTrnType === 1 ? 'Cash Purchase' : 'Credit Purchase'}) to ZATCA server...`);
       const res = await fetch(API_ENDPOINTS.ZATCA_SUBMIT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invoiceNo: String(invoiceNo),
-          trnType: trnType
+          invoiceNo: String(targetInvoiceNo),
+          trnType: targetTrnType
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(`✅ ZATCA SUCCESS: Purchase Invoice #${invoiceNo} processed and submitted successfully!\n${data.message || ''}`);
+        alert(`✅ ZATCA SUCCESS: Purchase Invoice #${targetInvoiceNo} processed and submitted successfully!\n${data.message || ''}`);
       } else {
         alert(`❌ ZATCA ERROR: ${data.error || 'Submission failed'}\n${data.details || ''}`);
       }
@@ -394,6 +561,8 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
               currencies={currencies}
               selectedCurrency={selectedCurrency}
               setSelectedCurrency={setSelectedCurrency}
+              selectedCurrencyRate={selectedCurrencyRate}
+              setSelectedCurrencyRate={setSelectedCurrencyRate}
               user={user}
               isSaving={isSaving}
               isPurchase={true}
@@ -447,6 +616,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
               taxIncluded={taxIncluded}
               enterToQty={enterToQty}
               isPurchase={true}
+              selectedCurrencyRate={selectedCurrencyRate}
             />
           </div>
 
@@ -468,12 +638,9 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
             currencyCode="SAR"
             isPurchase={true}
             isSaving={isSaving}
-            isZatcaEnabled={isZatcaEnabled}
-            onZatcaSubmit={handleZatcaSubmit}
-            isPrintEnabled={isPrintEnabled}
-            onPrint={handlePrint}
             autoPrint={autoPrint}
             setAutoPrint={setAutoPrint}
+            selectedCurrencyRate={selectedCurrencyRate}
           />
         </div>
 
@@ -482,6 +649,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
           isOpen={!!savedInvoice}
           onClose={handleCloseInvoice}
           sale={savedInvoice}
+          onZatcaSubmit={handleZatcaSubmit}
           isPurchase={true}
           autoPrint={autoPrint}
           crystalPrint={crystalPrint}

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Calendar, User, Printer, ShoppingCart } from 'lucide-react';
+import { X, FileText, Calendar, User, Printer, ShoppingCart, CloudUpload } from 'lucide-react';
 import { API_ENDPOINTS } from '../config';
 
-export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, address: passedAddress, historyInvoiceColumns = {
+export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, onZatcaSubmit, address: passedAddress, historyInvoiceColumns = {
   barcode: true,
   description: true,
   unit: true,
@@ -363,6 +363,12 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
                         <p className="text-sm font-bold text-zinc-800">{sale.VAT_NUMBER}</p>
                       </div>
                     )}
+                    {sale.QOT_INV_NO && sale.QOT_INV_NO !== '0' && (
+                      <div className="text-right mt-2">
+                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Sale Invoice No.</p>
+                        <p className="text-sm font-bold text-emerald-600">#{sale.QOT_INV_NO}</p>
+                      </div>
+                    )}
                   </div>
                </div>
 
@@ -394,6 +400,12 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
                         <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">VAT Number</span>
                         <span className={"text-sm font-mono font-black " + (isPurchase ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400')}>{sale.VAT_NUMBER || 'NOT REGISTERED'}</span>
                       </div>
+                      {sale.QOT_INV_NO && sale.QOT_INV_NO !== '0' && (
+                        <div className="flex justify-between items-center pt-2 border-t border-zinc-200/60 dark:border-zinc-700/60">
+                          <span className="text-[11px] text-emerald-500 uppercase tracking-wider font-bold">Sale Invoice No.</span>
+                          <span className="text-sm font-mono font-black text-emerald-600 dark:text-emerald-400">#{sale.QOT_INV_NO}</span>
+                        </div>
+                      )}
                       {sale.REF_NO && (
                         <div className="flex justify-between items-center pt-2 border-t border-zinc-200/60 dark:border-zinc-700/60">
                           <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">Reference #</span>
@@ -426,9 +438,9 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                     {saleItems.map((item, idx) => {
-                      const unitPrice = Number(item.UNIT_PRICE) || 0;
+                      const crate = sale.CRATE || 1;
+                      const unitPrice = (Number(item.UNIT_PRICE) || 0) / crate;
                       const qty = Number(item.QTY) || 0;
-                      const netSubtotal = unitPrice * qty;
                       
                       return (
                         <tr key={idx} className="text-[11px] print:text-[10px]">
@@ -438,8 +450,8 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
                           {activeColumns.qty && <td className="px-4 py-3 text-center">{qty.toFixed(2)}</td>}
                           {activeColumns.price && <td className="px-4 py-3 text-right text-zinc-500 font-bold">{sale.CURRENCY_CODE || 'SAR'} {unitPrice.toFixed(2)}</td>}
                           {activeColumns.vatPercent && <td className="px-4 py-3 text-right text-zinc-400">{Number(item.VAT_PERCENT || 0).toFixed(0)}%</td>}
-                          {activeColumns.vatAmt && <td className="px-4 py-3 text-right text-zinc-400">{sale.CURRENCY_CODE || 'SAR'} {Number(item.VAT_AMOUNT || 0).toFixed(2)}</td>}
-                          {activeColumns.total && <td className="px-4 py-3 text-right font-black text-zinc-800 dark:text-zinc-100">{sale.CURRENCY_CODE || 'SAR'} {Number(item.ITM_TOTAL).toFixed(2)}</td>}
+                          {activeColumns.vatAmt && <td className="px-4 py-3 text-right text-zinc-400">{sale.CURRENCY_CODE || 'SAR'} {(Number(item.VAT_AMOUNT || 0) / crate).toFixed(2)}</td>}
+                          {activeColumns.total && <td className="px-4 py-3 text-right font-black text-zinc-800 dark:text-zinc-100">{sale.CURRENCY_CODE || 'SAR'} {(Number(item.ITM_TOTAL) / crate).toFixed(2)}</td>}
                         </tr>
                       );
                     })}
@@ -449,8 +461,9 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
 
               {/* Summary Cards */}
               {!isDeliveryType && (() => {
-                const paidAmount = Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0);
-                const balanceAmount = Number(sale.NET_AMOUNT || 0) - paidAmount;
+                const crate = sale.CRATE || 1;
+                const paidAmount = (Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0)) / crate;
+                const balanceAmount = (Number(sale.NET_AMOUNT || 0) / crate) - paidAmount;
                 const isQuotationType = sale.TRN_TYPE === 19;
                 
                 return (
@@ -458,19 +471,19 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
                     <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800 print:bg-white print:border-none">
                       <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">Gross Total</p>
                       <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
-                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.G_TOTAL) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {sale.CURRENCY_CODE || 'SAR'} {((Number(sale.G_TOTAL) || 0) / crate).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className="p-4 bg-rose-50/50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/30 print:bg-white print:border-none">
                       <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Discount</p>
                       <p className="text-lg font-black text-rose-600 dark:text-rose-400">
-                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.DISC_AMT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {sale.CURRENCY_CODE || 'SAR'} {((Number(sale.DISC_AMT) || 0) / crate).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800 print:bg-white print:border-none">
                       <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">VAT Amount</p>
                       <p className="text-lg font-black text-zinc-700 dark:text-zinc-200">
-                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.VAT_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {sale.CURRENCY_CODE || 'SAR'} {((Number(sale.VAT_AMOUNT) || 0) / crate).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     <div className={"p-4 rounded-xl border print:bg-white print:border-none " + (
@@ -480,7 +493,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
                     )}>
                       <p className={"text-[9px] font-black uppercase tracking-widest mb-1 " + (isPurchase ? 'text-rose-400' : 'text-indigo-400')}>Net Total</p>
                       <p className={"text-lg font-black " + (isPurchase ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400')}>
-                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {sale.CURRENCY_CODE || 'SAR'} {((Number(sale.NET_AMOUNT) || 0) / crate).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </p>
                     </div>
                     {!isQuotationType && (
@@ -493,11 +506,11 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
                           <div className="mt-1.5 pt-1.5 border-t border-emerald-500/10 flex flex-col gap-0.5">
                             <p className="text-[8px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase flex justify-between">
                               <span>Cash:</span> 
-                              <span>{sale.CURRENCY_CODE || 'SAR'} {Number(sale.CASH_PAID || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              <span>{sale.CURRENCY_CODE || 'SAR'} {(Number(sale.CASH_PAID || 0) / crate).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                             </p>
                             <p className="text-[8px] font-bold text-emerald-600/70 dark:text-emerald-400/70 uppercase flex justify-between">
                               <span>Other:</span> 
-                              <span>{sale.CURRENCY_CODE || 'SAR'} {Number(sale.OTHER_PAID || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              <span>{sale.CURRENCY_CODE || 'SAR'} {(Number(sale.OTHER_PAID || 0) / crate).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                             </p>
                           </div>
                         </div>
@@ -583,6 +596,15 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, a
                )}
                {isCrystalPrinting ? 'Printing...' : 'Print'}
              </button>
+             {onZatcaSubmit && (
+                <button 
+                  onClick={() => onZatcaSubmit(sale)}
+                  className="px-6 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm"
+                >
+                  <CloudUpload size={14} />
+                  Submit to ZATCA
+                </button>
+             )}
              {sale?.TRN_TYPE === 19 && onCompleteSales && (
               <button 
                 onClick={() => {

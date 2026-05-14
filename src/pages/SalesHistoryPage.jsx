@@ -5,13 +5,14 @@ import { useCache } from '../context/CacheContext';
 import InvoiceModal from '../components/InvoiceModal';
 
 export default function SalesHistoryPage({ setActivePage }) {
-  const { cachedSales, isReady, historyInvoiceColumns, defaultCurrency } = useCache();
+  const { cachedSales, isReady, currencies, defaultCurrency, refreshCache, historyInvoiceColumns } = useCache();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(!isReady);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all'); // all, sales, returns
   const [selectedSale, setSelectedSale] = useState(null);
+  const currentDefaultRate = currencies.find(c => c.Currency_No === defaultCurrency.no)?.Currency_Rate || 1;
 
   useEffect(() => {
     const filtered = cachedSales.filter(sale => 
@@ -27,11 +28,14 @@ export default function SalesHistoryPage({ setActivePage }) {
       String(sale.INVOICE_NO).includes(searchQuery) || 
       String(sale.ENAME || '').toLowerCase().includes(searchQuery.toLowerCase());
     
+    const paidAmt = Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0);
+    const netAmt = Number(sale.NET_AMOUNT || 0);
+    const isPaid = Math.abs(paidAmt - netAmt) < 0.01;
+
     const matchesType = 
       filterType === 'all' || 
-      (filterType === 'cash' && (sale.TRN_TYPE === 6 || sale.TRN_TYPE === 3)) || 
-      (filterType === 'credit' && (sale.TRN_TYPE === 7 || sale.TRN_TYPE === 4)) ||
-      (filterType === 'pending' && (Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0)) !== Number(sale.NET_AMOUNT || 0));
+      (filterType === 'paid' && isPaid) || 
+      (filterType === 'pending' && !isPaid);
     
     const matchesCategory = 
       categoryFilter === 'all' ||
@@ -51,13 +55,18 @@ export default function SalesHistoryPage({ setActivePage }) {
 
   const handleExportExcel = () => {
     const headers = ['Invoice No', 'Date', 'Customer Name', 'Type', 'Amount'];
-    const data = filteredSales.map(sale => [
-      sale.INVOICE_NO,
-      new Date(sale.CURDATE).toLocaleDateString(),
-      sale.ENAME || 'Cash Customer',
-      sale.TRN_TYPE === 6 ? 'Cash' : sale.TRN_TYPE === 3 ? 'Return Cash' : sale.TRN_TYPE === 4 ? 'Return Credit' : 'Others',
-      sale.NET_AMOUNT
-    ]);
+    const data = filteredSales.map(sale => {
+      const paidAmt = Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0);
+      const netAmt = Number(sale.NET_AMOUNT || 0);
+      const isPaid = Math.abs(paidAmt - netAmt) < 0.01;
+      return [
+        sale.INVOICE_NO,
+        new Date(sale.CURDATE).toLocaleDateString(),
+        sale.ENAME || 'Cash Customer',
+        isPaid ? 'Paid' : 'Pending',
+        ((Number(sale.NET_AMOUNT) || 0) / (sale.CRATE || 1)).toFixed(2)
+      ];
+    });
     
     let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
     html += '<head>';
@@ -91,13 +100,18 @@ export default function SalesHistoryPage({ setActivePage }) {
 
   const handleExportPDF = () => {
     const headers = ['Invoice No', 'Date', 'Customer Name', 'Type', 'Amount'];
-    const data = filteredSales.map(sale => [
-      sale.INVOICE_NO,
-      new Date(sale.CURDATE).toLocaleDateString(),
-      sale.ENAME || 'Cash Customer',
-      sale.TRN_TYPE === 6 ? 'Cash' : sale.TRN_TYPE === 3 ? 'Return Cash' : sale.TRN_TYPE === 4 ? 'Return Credit' : 'Others',
-      sale.NET_AMOUNT
-    ]);
+    const data = filteredSales.map(sale => {
+      const paidAmt = Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0);
+      const netAmt = Number(sale.NET_AMOUNT || 0);
+      const isPaid = Math.abs(paidAmt - netAmt) < 0.01;
+      return [
+        sale.INVOICE_NO,
+        new Date(sale.CURDATE).toLocaleDateString(),
+        sale.ENAME || 'Cash Customer',
+        isPaid ? 'Paid' : 'Pending',
+        ((Number(sale.NET_AMOUNT) || 0) / (sale.CRATE || 1)).toFixed(2)
+      ];
+    });
 
     const printWindow = window.open('', '_blank');
     let html = '<html><head><title>Sales History</title>';
@@ -148,8 +162,8 @@ export default function SalesHistoryPage({ setActivePage }) {
              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm">
                 <div>
                   <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Total Revenue</p>
-                  <p className="text-xl font-black text-emerald-600 leading-none">
-                    {defaultCurrency.code} {filteredSales.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <p className="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-none">
+                    {defaultCurrency.code} {(filteredSales.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0) / currentDefaultRate).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
@@ -161,11 +175,9 @@ export default function SalesHistoryPage({ setActivePage }) {
                 </div>
                 <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
                 <div>
-                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Avg. Value</p>
-                  <p className="text-xl font-black text-amber-500 leading-none">
-                    {defaultCurrency.code} {filteredSales.length > 0 
-                      ? (filteredSales.reduce((acc, curr) => acc + (Number(curr.G_TOTAL) || 0), 0) / filteredSales.length).toLocaleString(undefined, { maximumFractionDigits: 0 }) 
-                      : '0'}
+                  <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Average Invoice</p>
+                  <p className="text-xl font-black text-emerald-600 leading-none">
+                    {defaultCurrency.code} {filteredSales.length > 0 ? ((filteredSales.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0) / filteredSales.length) / currentDefaultRate).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}
                   </p>
                 </div>
              </div>
@@ -237,7 +249,7 @@ export default function SalesHistoryPage({ setActivePage }) {
               </button>
             </div>
           
-            <div className="flex gap-2 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl shadow-sm">
+            <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl shadow-sm">
               <button 
                 onClick={() => setFilterType('all')}
                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
@@ -249,24 +261,14 @@ export default function SalesHistoryPage({ setActivePage }) {
                 All
               </button>
               <button 
-                onClick={() => setFilterType('cash')}
+                onClick={() => setFilterType('paid')}
                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  filterType === 'cash' 
+                  filterType === 'paid' 
                   ? 'bg-emerald-600 text-white shadow-sm' 
                   : 'text-zinc-500 hover:text-emerald-600'
                 }`}
               >
-                Cash
-              </button>
-              <button 
-                onClick={() => setFilterType('credit')}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  filterType === 'credit' 
-                  ? 'bg-amber-500 text-white shadow-sm' 
-                  : 'text-zinc-500 hover:text-amber-500'
-                }`}
-              >
-                Credit
+                Paid
               </button>
               <button 
                 onClick={() => setFilterType('pending')}
@@ -338,17 +340,17 @@ export default function SalesHistoryPage({ setActivePage }) {
                     <td className="px-6 py-4">
                       <div className="flex justify-center">
                         <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-tighter ${
-                          (sale.TRN_TYPE === 6 || sale.TRN_TYPE === 3)
+                          (Math.abs((Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0)) - Number(sale.NET_AMOUNT || 0)) < 0.01)
                           ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800' 
-                          : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800'
+                          : 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800'
                         }`}>
-                          {sale.TRN_TYPE === 6 ? 'Cash' : sale.TRN_TYPE === 3 ? 'Return Cash' : sale.TRN_TYPE === 4 ? 'Return Credit' : 'Others'}
+                          {(Math.abs((Number(sale.CASH_PAID || 0) + Number(sale.OTHER_PAID || 0)) - Number(sale.NET_AMOUNT || 0)) < 0.01) ? 'Paid' : 'Pending'}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span className="font-black text-zinc-800 dark:text-zinc-100">
-                        {sale.CURRENCY_CODE || 'SAR'} {(Number(sale.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {sale.CURRENCY_CODE || 'SAR'} {((Number(sale.NET_AMOUNT) || 0) / (sale.CRATE || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">

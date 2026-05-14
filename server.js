@@ -444,7 +444,7 @@ app.post('/api/receivable/save', async (req, res) => {
     request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
     request.input('PAY_AMOUNT', sql.Real, data.PAY_AMOUNT);
     request.input('CURRENCY_NO', sql.Int, data.CURRENCY || 1);
-    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || 1);
+    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || data.CRATE || 1);
     request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
     request.input('USER_ID', sql.Int, data.USER_ID || 1);
     request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
@@ -532,7 +532,7 @@ app.post('/api/payable/save', async (req, res) => {
     request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
     request.input('PAY_AMOUNT', sql.Real, data.PAY_AMOUNT);
     request.input('CURRENCY_NO', sql.Int, data.CURRENCY || 1);
-    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || 1);
+    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || data.CRATE || 1);
     request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
     request.input('USER_ID', sql.Int, data.USER_ID || 1);
     request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
@@ -630,7 +630,7 @@ app.post('/api/general-voucher/save', async (req, res) => {
     request.input('DESCRIPTION', sql.NVarChar(300), data.DESCRIPTION || '');
     request.input('PAY_AMOUNT', sql.Real, data.PAY_AMOUNT);
     request.input('CURRENCY_NO', sql.Int, data.CURRENCY || 1);
-    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || 1);
+    request.input('CURRENCY_RATE', sql.Real, data.CURRENCY_RATE || data.CRATE || 1);
     request.input('RETURN_INVOICE', sql.Bit, data.RETURN_INVOICE ? 1 : 0);
     request.input('USER_ID', sql.Int, data.USER_ID || 1);
     request.input('REF_NO', sql.VarChar(50), data.REF_NO || '');
@@ -829,6 +829,8 @@ app.post('/api/purchases/save', async (req, res) => {
     TAX_INCLUDED = true,
     CASH_PAID = 0,
     OTHER_PAID = 0,
+    TAXABLE_AMOUNT = 0,
+    FRN_AMOUNT = 0,
     USERNAME,
     WR_CODE = 1,
     CURRENCY,
@@ -888,13 +890,17 @@ app.post('/api/purchases/save', async (req, res) => {
           .input('trnType', sql.Int, trnType)
           .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
           .input('vatNumber', sql.VarChar, String(VAT_NUMBER || ''))
+          .input('taxableAmount', sql.Decimal(18, 2), TAXABLE_AMOUNT || 0)
+          .input('frnAmount', sql.Decimal(18, 2), FRN_AMOUNT || 0)
+          .input('crate', sql.Decimal(18, 4), CURRENCY_RATE || 1)
           .query(`
             UPDATE dbo.DATA_ENTRY_WEB SET
               ACCODE = @accode, ENAME = @ename, G_TOTAL = @gTotal, DISC_AMT = @discAmt,
               NET_AMOUNT = @netAmount, VAT_AMOUNT = @vatAmount, CASH_PAID = @cashPaid,
               OTHER_PAID = @otherPaid, CASH_ACC = @cashAcc, WR_CODE = @wrCode,
               CURRENCY = @currency, TRN_TYPE = @trnType, REF_NO = @refNo,
-              VAT_NUMBER = @vatNumber
+              VAT_NUMBER = @vatNumber, CRATE = @crate,
+              TAXABLE_AMOUNT = @taxableAmount, FRN_AMOUNT = @frnAmount
             WHERE REC_NO = @recNo;
 
             SELECT INVOICE_NO, REC_NO FROM dbo.DATA_ENTRY_WEB WHERE REC_NO = @recNo;
@@ -929,18 +935,23 @@ app.post('/api/purchases/save', async (req, res) => {
           .input('currency', sql.Int, CURRENCY || 1)
           .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
           .input('vatNumber', sql.VarChar, String(VAT_NUMBER || ''))
+          .input('taxableAmount', sql.Decimal(18, 2), TAXABLE_AMOUNT || 0)
+          .input('frnAmount', sql.Decimal(18, 2), FRN_AMOUNT || 0)
+          .input('crate', sql.Decimal(18, 4), CURRENCY_RATE || 1)
           .query(`
               INSERT INTO dbo.DATA_ENTRY_WEB (
                 ACCODE, ENAME, G_TOTAL, DISC_AMT, NET_AMOUNT, VAT_AMOUNT,
                 CASH_PAID, OTHER_PAID, CASH_ACC,
                 BRN_CODE, TRN_TYPE, ORG_DUP, WR_CODE, CURDATE,
-                CURRENCY, REF_NO, VAT_NUMBER
+                CURRENCY, REF_NO, VAT_NUMBER, CRATE,
+                TAXABLE_AMOUNT, FRN_AMOUNT
               )
               VALUES (
                 @accode, @ename, @gTotal, @discAmt, @netAmount, @vatAmount,
                 @cashPaid, @otherPaid, @cashAcc,
                 @brnCode, @trnType, @orgDup, @wrCode, GETDATE(),
-                @currency, @refNo, @vatNumber
+                @currency, @refNo, @vatNumber, @crate,
+                @taxableAmount, @frnAmount
               );
 
               DECLARE @NewRecNo INT = SCOPE_IDENTITY();
@@ -1077,7 +1088,7 @@ app.get('/api/purchases/history', async (req, res) => {
       SELECT TOP 100
         D.REC_NO, D.INVOICE_NO, D.ACCODE, D.ENAME, D.G_TOTAL, D.NET_AMOUNT, 
         D.VAT_AMOUNT, D.DISC_AMT, D.TRN_TYPE, D.CURDATE, D.CASH_PAID, 
-        D.OTHER_PAID, D.VAT_NUMBER, D.REF_NO, C.Currency_code AS CURRENCY_CODE
+        D.OTHER_PAID, D.VAT_NUMBER, D.REF_NO, D.CRATE, C.Currency_code AS CURRENCY_CODE
       FROM dbo.DATA_ENTRY_WEB D
       LEFT JOIN dbo.CURRENCY_MASTER C ON D.CURRENCY = C.Currency_No
       WHERE 1=1 ${trnFilter}
@@ -2042,12 +2053,17 @@ app.post('/api/sales/save', async (req, res) => {
     WR_CODE = 1,
     CURRENCY,
     CURRENCY_RATE,
+    CRATE,
     TRN_TYPE,
     REF_INV_NO,
     ADDRESS,
+    TAXABLE_AMOUNT = 0,
+    FRN_AMOUNT = 0,
     USER_ID,
-    PRICE_INCLUDE_VAT
+    PRICE_INCLUDE_VAT,
+    SOURCE_REC_NO
   } = req.body;
+  const effectiveRate = CURRENCY_RATE || CRATE || 1;
 
   const trnType = (req.body.TRN_TYPE !== undefined && req.body.TRN_TYPE !== null)
     ? req.body.TRN_TYPE
@@ -2105,6 +2121,9 @@ app.post('/api/sales/save', async (req, res) => {
           .input('userid', sql.VarChar, String(USER_ID || ''))
           .input('vatPercent', sql.Decimal(18, 2), vatPercent)
           .input('priceIncVat', sql.Bit, PRICE_INCLUDE_VAT ? 1 : 0)
+          .input('taxableAmount', sql.Decimal(18, 2), TAXABLE_AMOUNT || 0)
+          .input('frnAmount', sql.Decimal(18, 2), FRN_AMOUNT || 0)
+          .input('crate', sql.Decimal(18, 4), effectiveRate)
           .query(`
             UPDATE dbo.DATA_ENTRY_WEB SET
               ACCODE = @accode, ENAME = @ename, G_TOTAL = @gTotal, DISC_AMT = @discAmt,
@@ -2112,7 +2131,8 @@ app.post('/api/sales/save', async (req, res) => {
               OTHER_PAID = @otherPaid, CASH_ACC = @cashAcc, WR_CODE = @wrCode,
               CURRENCY = @currency, TRN_TYPE = @trnType, REF_NO = @refNo,
               VAT_NUMBER = @vatNumber, USER_ID = @userid,
-              VAT_PERCENT = @vatPercent, PRICE_INCLUDE_VAT = @priceIncVat
+              VAT_PERCENT = @vatPercent, PRICE_INCLUDE_VAT = @priceIncVat,
+              CRATE = @crate, TAXABLE_AMOUNT = @taxableAmount, FRN_AMOUNT = @frnAmount
             WHERE REC_NO = @recNo;
 
             SELECT INVOICE_NO, REC_NO FROM dbo.DATA_ENTRY_WEB WHERE REC_NO = @recNo;
@@ -2152,20 +2172,25 @@ app.post('/api/sales/save', async (req, res) => {
           .input('userid', sql.VarChar, String(USER_ID || ''))
           .input('vatPercent', sql.Decimal(18, 2), vatPercent)
           .input('priceIncVat', sql.Bit, PRICE_INCLUDE_VAT ? 1 : 0)
+          .input('taxableAmount', sql.Decimal(18, 2), TAXABLE_AMOUNT || 0)
+          .input('frnAmount', sql.Decimal(18, 2), FRN_AMOUNT || 0)
+          .input('crate', sql.Decimal(18, 4), effectiveRate)
           .query(`
               INSERT INTO dbo.DATA_ENTRY_WEB (
                 ACCODE, ENAME, G_TOTAL, DISC_AMT, NET_AMOUNT, VAT_AMOUNT,
                 CASH_PAID, OTHER_PAID, CASH_ACC,
                 BRN_CODE, TRN_TYPE, ORG_DUP, WR_CODE, CURDATE,
                 CURRENCY, REF_NO, VAT_NUMBER, USER_ID,
-                VAT_PERCENT, PRICE_INCLUDE_VAT
+                VAT_PERCENT, PRICE_INCLUDE_VAT, CRATE,
+                TAXABLE_AMOUNT, FRN_AMOUNT
               )
               VALUES (
                 @accode, @ename, @gTotal, @discAmt, @netAmount, @vatAmount,
                 @cashPaid, @otherPaid, @cashAcc,
                 @brnCode, @trnType, @orgDup, @wrCode, GETDATE(),
                 @currency, @refNo, @vatNumber, @userid,
-                @vatPercent, @priceIncVat
+                @vatPercent, @priceIncVat, @crate,
+                @taxableAmount, @frnAmount
               );
 
               DECLARE @NewRecNo INT = SCOPE_IDENTITY();
@@ -2300,6 +2325,16 @@ app.post('/api/sales/save', async (req, res) => {
         }
       }
 
+      // 4. Update Source Quotation if provided
+      if (SOURCE_REC_NO) {
+        console.log(`🔗 Linking Sales Invoice #${INVOICE_NO} to Source Quotation REC_NO: ${SOURCE_REC_NO}`);
+        const linkRequest = new sql.Request(transaction);
+        await linkRequest
+          .input('sourceRecNo', sql.Numeric(18, 0), SOURCE_REC_NO)
+          .input('salesInvoiceNo', sql.VarChar, String(INVOICE_NO))
+          .query('UPDATE dbo.DATA_ENTRY_WEB SET QOT_INV_NO = @salesInvoiceNo WHERE REC_NO = @sourceRecNo');
+      }
+
       await transaction.commit();
       console.log(`🎉 Sale ${isUpdate ? 'updated' : 'saved'} successfully: Invoice #${INVOICE_NO}`);
       res.json({ success: true, message: `Sale ${isUpdate ? 'updated' : 'saved'} successfully`, REC_NO, INVOICE_NO, debugTrnType: trnType });
@@ -2384,7 +2419,9 @@ app.get('/api/sales', async (req, res) => {
         D.OTHER_PAID,
         D.VAT_NUMBER,
         D.REF_NO,
-        C.Currency_code AS CURRENCY_CODE
+        D.CRATE,
+        C.Currency_code AS CURRENCY_CODE,
+        D.QOT_INV_NO
       FROM dbo.DATA_ENTRY_WEB D
       LEFT JOIN dbo.CURRENCY_MASTER C ON D.CURRENCY = C.Currency_No
       WHERE 1=1 ${trnFilter}

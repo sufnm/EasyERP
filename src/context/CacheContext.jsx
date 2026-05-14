@@ -20,6 +20,7 @@ export function CacheProvider({ children }) {
   const [pendingPurchases, setPendingPurchases] = useState([]);
   const [pendingReturns, setPendingReturns] = useState([]);
   const [pendingQuotations, setPendingQuotations] = useState([]);
+  const [appSetup, setAppSetup] = useState({});
 
   // Global App Settings (Preserved across page navigation)
   const [taxIncluded, setTaxIncluded] = useState(true);
@@ -54,7 +55,7 @@ export function CacheProvider({ children }) {
         }
       };
 
-      const [items, customers, suppliers, sales, purchases, accounts, currencyList, units] = await Promise.all([
+      const [items, customers, suppliers, sales, purchases, accounts, currencyList, units, setupData] = await Promise.all([
         fetchWithLog('Items', API_ENDPOINTS.ITEM_CACHE),
         fetchWithLog('Customers', API_ENDPOINTS.CUSTOMER_CACHE),
         fetchWithLog('Suppliers', API_ENDPOINTS.SUPPLIER_CACHE),
@@ -62,7 +63,8 @@ export function CacheProvider({ children }) {
         fetchWithLog('Purchases', API_ENDPOINTS.PURCHASE_HISTORY),
         fetchWithLog('Accounts', API_ENDPOINTS.ACCOUNT_CACHE),
         fetchWithLog('Currencies', API_ENDPOINTS.CURRENCY_LIST),
-        fetchWithLog('Units', API_ENDPOINTS.UNIT_MASTER)
+        fetchWithLog('Units', API_ENDPOINTS.UNIT_MASTER),
+        fetch(API_ENDPOINTS.APPLICATION_SETUP).then(r => r.json()).then(d => d.success ? d.data : {})
       ]);
 
       setCachedItems(items);
@@ -73,6 +75,7 @@ export function CacheProvider({ children }) {
       setCachedAccounts(accounts);
       setCurrencies(currencyList);
       setCachedUnits(units);
+      setAppSetup(setupData);
       
       // Set default currency if not already set (e.g., from localStorage)
       const savedCurrency = localStorage.getItem('defaultCurrency');
@@ -141,6 +144,7 @@ export function CacheProvider({ children }) {
       cachedSales,
       cachedAccounts,
       cachedUnits,
+      appSetup,
       isReady, 
       error, 
       searchItems, 

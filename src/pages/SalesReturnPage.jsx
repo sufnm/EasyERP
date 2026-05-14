@@ -67,8 +67,19 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
   const [editingRecNo, setEditingRecNo] = useState(null);
   const [currencies, setCurrencies] = useState([]);
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency.no);
+  const [selectedCurrencyRate, setSelectedCurrencyRate] = useState(1);
+  const prevRateRef = React.useRef(selectedCurrencyRate);
   const [isZatcaEnabled, setIsZatcaEnabled] = useState(false);
   const [isPrintEnabled, setIsPrintEnabled] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
+
+  // RETURN RESTRICTION STATE
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [invoiceItems, setInvoiceItems] = useState(null);
+  const [manualReferenceNo, setManualReferenceNo] = useState('');
+
   const loadUserOptions = async () => {
     if (!user?.userid) return;
     try {
@@ -128,18 +139,53 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
     loadUserOptions();
   }, [user]);
 
+  // Handle real-time currency conversion when rate changes
+  useEffect(() => {
+    if (prevRateRef.current !== selectedCurrencyRate) {
+      const oldRate = prevRateRef.current;
+      const newRate = selectedCurrencyRate;
+
+      // Convert rows
+      setRows(prevRows => prevRows.map(row => ({
+        ...row,
+        price: row.price ? (row.price * oldRate) / newRate : '',
+        purchasePrice: row.purchasePrice ? (row.purchasePrice * oldRate) / newRate : '',
+        salePrice: row.salePrice ? (row.salePrice * oldRate) / newRate : '',
+        retailPrice: row.retailPrice ? (row.retailPrice * oldRate) / newRate : '',
+      })));
+
+      // Convert paid amounts
+      setCashPaid(prev => (prev * oldRate) / newRate);
+      setOtherPaid(prev => (prev * oldRate) / newRate);
+
+      prevRateRef.current = newRate;
+    }
+  }, [selectedCurrencyRate]);
+
   useEffect(() => {
     if (user?.userid) {
       saveUserOptions();
     }
   }, [autoPrint, defaultPrintPaper, showInvoiceAfterSave, enterToQty, visibleColumns, crystalPrint]);
-  
-  const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
 
-  // RETURN RESTRICTION STATE
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [invoiceItems, setInvoiceItems] = useState(null);
-  const [manualReferenceNo, setManualReferenceNo] = useState('');
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        handleHoldAndNew();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        const hasItems = rows.some(r => r.itemCode && r.itemCode.trim() !== '');
+        if (!hasItems) {
+          alert("Please add at least one item before proceeding.");
+          return;
+        }
+        handleSave(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [rows, customer, totals, vatNumber, address, manualReferenceNo, paymentMethod, cashPaid, otherPaid, selectedWarehouse, selectedCurrency, selectedCurrencyRate, editingRecNo, isSaving, selectedInvoice, invoiceItems]);
 
   const handleHoldAndNew = () => {
     const hasItems = rows.some(r => r.itemCode.trim() !== '');
@@ -329,20 +375,22 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
     setIsSaving(true);
 
     try {
-      const finalPaymentMethod = isQuickSave ? 'Others' : paymentMethod;
-      const finalCashPaid = isQuickSave ? 0 : cashPaid;
+      const finalPaymentMethod = isQuickSave ? 'Cash' : paymentMethod;
+      const finalCashPaid = isQuickSave ? totals.net : cashPaid;
       const finalOtherPaid = isQuickSave ? 0 : otherPaid;
 
       const payload = {
         INVOICE_NO: String(invoiceNo),
         ACCODE: String(customer.id || ''),
         ENAME: String(customer.name || ''),
-        G_TOTAL: totals.gross,
-        DISC_AMT: totals.discount,
-        NET_AMOUNT: totals.net,
-        VAT_AMOUNT: totals.vat,
-        CASH_PAID: finalCashPaid,
-        OTHER_PAID: finalOtherPaid,
+        G_TOTAL: totals.gross * selectedCurrencyRate,
+        DISC_AMT: totals.discount * selectedCurrencyRate,
+        NET_AMOUNT: totals.net * selectedCurrencyRate,
+        VAT_AMOUNT: totals.vat * selectedCurrencyRate,
+        TAXABLE_AMOUNT: (totals.net - totals.vat) * selectedCurrencyRate,
+        FRN_AMOUNT: totals.net,
+        CASH_PAID: finalCashPaid * selectedCurrencyRate,
+        OTHER_PAID: finalOtherPaid * selectedCurrencyRate,
         VAT_NUMBER: String(vatNumber || ''),
         PAYMENT_METHOD: finalPaymentMethod,
         TAX_INCLUDED: taxIncluded,
@@ -353,7 +401,25 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
         TRN_TYPE: finalPaymentMethod === 'Cash' ? 3 : 4,
         REF_INV_NO: selectedInvoice?.INVOICE_NO || manualReferenceNo || null,
         ADDRESS: address,
-        ROWS: rows.filter(r => r.itemCode.trim() !== '')
+        CRATE: selectedCurrencyRate,
+        CURRENCY_RATE: selectedCurrencyRate,
+        ROWS: rows.filter(r => r.itemCode.trim() !== '').map(r => {
+          const rowQty = Number(r.qty || 0);
+          const rowPrice = Number(r.price || 0);
+          const vatRate = (Number(r.vatPercent || 0) / 100);
+          const lineTotalUI = taxIncluded ? (rowQty * rowPrice) : (rowQty * rowPrice * (1 + vatRate));
+          const lineVatUI = taxIncluded ? (rowQty * (rowPrice - (rowPrice / (1 + vatRate)))) : (rowQty * rowPrice * vatRate);
+          const lineTaxableUI = lineTotalUI - lineVatUI;
+          
+          return {
+            ...r,
+            price: rowPrice * selectedCurrencyRate,
+            vatAmt: lineVatUI * selectedCurrencyRate,
+            total: lineTotalUI * selectedCurrencyRate,
+            FRN_AMOUNT: lineTotalUI,
+            TAXABLE_AMOUNT: lineTaxableUI * selectedCurrencyRate
+          };
+        })
       };
 
       console.log('🔄 SALES_RETURN_PAGE: Sending payload:', payload);
@@ -367,12 +433,8 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
         const result = await res.json();
         
         refreshCache();
-        setIsZatcaEnabled(true);
-        setIsPrintEnabled(true);
-        setInvoiceNo(result.INVOICE_NO);
-        setEditingRecNo(result.REC_NO);
-
-        if (autoPrint || (showInvoiceAfterSave && !isQuickSave)) {
+        
+        if (autoPrint || showInvoiceAfterSave) {
           // Prepare invoice data for modal
           const invoiceData = {
             REC_NO: result.REC_NO,
@@ -380,21 +442,23 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
             CURDATE: new Date().toISOString(),
             ENAME: customer.name || 'Cash Customer',
             ACCODE: customer.id,
-            G_TOTAL: totals.gross,
-            DISC_AMT: totals.discount,
-            NET_AMOUNT: totals.net,
-            VAT_AMOUNT: totals.vat,
+            G_TOTAL: totals.gross * selectedCurrencyRate,
+            DISC_AMT: totals.discount * selectedCurrencyRate,
+            NET_AMOUNT: totals.net * selectedCurrencyRate,
+            VAT_AMOUNT: totals.vat * selectedCurrencyRate,
             VAT_NUMBER: vatNumber,
             TRN_TYPE: finalPaymentMethod === 'Cash' ? 3 : 4,
             REF_NO: selectedInvoice?.INVOICE_NO || manualReferenceNo || null,
-            CASH_PAID: finalCashPaid,
-            OTHER_PAID: finalOtherPaid,
+            CASH_PAID: finalCashPaid * selectedCurrencyRate,
+            OTHER_PAID: finalOtherPaid * selectedCurrencyRate,
+            CRATE: selectedCurrencyRate,
             CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
           };
           setSavedInvoice(invoiceData);
-
         } else {
           alert(`Return sale saved successfully! Invoice No: ${result.INVOICE_NO}`);
+          // Reset page for new transaction
+          resetPage();
         }
       } else {
         const err = await res.json();
@@ -416,15 +480,16 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
       CURDATE: new Date().toISOString(),
       ENAME: customer.name || 'Cash Customer',
       ACCODE: customer.id,
-      G_TOTAL: totals.gross,
-      DISC_AMT: totals.discount,
-      NET_AMOUNT: totals.net,
-      VAT_AMOUNT: totals.vat,
+      G_TOTAL: totals.gross * selectedCurrencyRate,
+      DISC_AMT: totals.discount * selectedCurrencyRate,
+      NET_AMOUNT: totals.net * selectedCurrencyRate,
+      VAT_AMOUNT: totals.vat * selectedCurrencyRate,
       VAT_NUMBER: vatNumber,
       TRN_TYPE: paymentMethod === 'Cash' ? 3 : 4,
       REF_NO: selectedInvoice?.INVOICE_NO || manualReferenceNo || null,
-      CASH_PAID: cashPaid,
-      OTHER_PAID: otherPaid,
+      CASH_PAID: cashPaid * selectedCurrencyRate,
+      OTHER_PAID: otherPaid * selectedCurrencyRate,
+      CRATE: selectedCurrencyRate,
       CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
     };
     setSavedInvoice(invoiceData);
@@ -432,6 +497,7 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
 
   const handleCloseInvoice = () => {
     setSavedInvoice(null);
+    resetPage();
   };
 
   useEffect(() => {
@@ -480,15 +546,11 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
   }, []);
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'F1') {
-        e.preventDefault();
-        handleHoldAndNew();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [rows, customer, vatNumber, address, totals, selectedWarehouse, selectedCurrency, paymentMethod, cashPaid, otherPaid]);
+    const curr = currencies.find(c => c.Currency_No === selectedCurrency);
+    if (curr) {
+      setSelectedCurrencyRate(curr.Currency_Rate || 1);
+    }
+  }, [selectedCurrency, currencies]);
 
   // Handle Edit Mode from Params
   useEffect(() => {
@@ -500,7 +562,9 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
       setInvoiceNo(sale.INVOICE_NO);
       setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
       setVatNumber(sale.VAT_NUMBER || '');
-      setPaymentMethod(sale.TRN_TYPE === 3 ? 'Cash' : 'Others');
+      setPaymentMethod(sale.TRN_TYPE === 8 ? 'Cash' : 'Others');
+      setManualReferenceNo(sale.REF_NO || '');
+      setSelectedCurrencyRate(sale.CRATE || 1);
       
       // Fetch Sale Items
       fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO))
@@ -512,10 +576,10 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
             description: item.DESCRIPTION,
             unit: item.UNIT,
             qty: item.QTY,
-            price: item.UNIT_PRICE,
+            price: item.UNIT_PRICE / (sale.CRATE || 1),
             vatPercent: item.VAT_PERCENT,
-            vatAmt: item.VAT_AMOUNT,
-            total: item.ITM_TOTAL,
+            vatAmt: item.VAT_AMOUNT / (sale.CRATE || 1),
+            total: item.ITM_TOTAL / (sale.CRATE || 1),
             aliasCode: '',
             stock: ''
           }));
@@ -558,21 +622,23 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
     }
   }, [cachedAccounts, selectedAccount]);
 
-  const handleZatcaSubmit = async () => {
+  const handleZatcaSubmit = async (invoiceData) => {
     try {
-      const trnType = paymentMethod === 'Cash' ? 3 : 4;
-      alert(`ZATCA: Submitting Return Sales Invoice #${invoiceNo} (Type: ${trnType === 3 ? 'Cash Return' : 'Credit Return'}) to ZATCA server...`);
+      const targetInvoiceNo = invoiceData?.INVOICE_NO || invoiceNo;
+      const targetTrnType = invoiceData?.TRN_TYPE || (paymentMethod === 'Cash' ? 3 : 4);
+
+      alert(`ZATCA: Submitting Return Sales Invoice #${targetInvoiceNo} (Type: ${targetTrnType === 3 ? 'Cash Return' : 'Credit Return'}) to ZATCA server...`);
       const res = await fetch(API_ENDPOINTS.ZATCA_SUBMIT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invoiceNo: String(invoiceNo),
-          trnType: trnType
+          invoiceNo: String(targetInvoiceNo),
+          trnType: targetTrnType
         })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(`✅ ZATCA SUCCESS: Return Invoice #${invoiceNo} processed and submitted successfully!\n${data.message || ''}`);
+        alert(`✅ ZATCA SUCCESS: Return Invoice #${targetInvoiceNo} processed and submitted successfully!\n${data.message || ''}`);
       } else {
         alert(`❌ ZATCA ERROR: ${data.error || 'Submission failed'}\n${data.details || ''}`);
       }
@@ -599,6 +665,8 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
               currencies={currencies}
               selectedCurrency={selectedCurrency}
               setSelectedCurrency={setSelectedCurrency}
+              selectedCurrencyRate={selectedCurrencyRate}
+              setSelectedCurrencyRate={setSelectedCurrencyRate}
               onNew={handleHoldAndNew}
               onPending={() => setIsPendingModalOpen(true)}
               onHistory={() => navigateTo?.('sales-history')}
@@ -663,6 +731,7 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
             enterToQty={enterToQty} 
             taxIncluded={taxIncluded} 
             restrictedItems={invoiceItems}
+            selectedCurrencyRate={selectedCurrencyRate}
           />
 
           <SummaryFooter
@@ -682,12 +751,9 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
             setSelectedAccount={setSelectedAccount}
             customerId={customer.id}
             currencyCode={currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'}
-            isZatcaEnabled={isZatcaEnabled}
-            onZatcaSubmit={handleZatcaSubmit}
-            isPrintEnabled={isPrintEnabled}
-            onPrint={handlePrint}
             autoPrint={autoPrint}
             setAutoPrint={setAutoPrint}
+            selectedCurrencyRate={selectedCurrencyRate}
           />
         </div>
       </div>
@@ -697,6 +763,7 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
         sale={savedInvoice} 
         onClose={handleCloseInvoice}
         address={address}
+        onZatcaSubmit={handleZatcaSubmit}
         historyInvoiceColumns={historyInvoiceColumns}
         autoPrint={autoPrint}
         crystalPrint={crystalPrint}

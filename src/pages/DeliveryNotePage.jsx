@@ -44,6 +44,7 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
     qty: true
   });
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency?.no || 1);
+  const [selectedCurrencyRate, setSelectedCurrencyRate] = useState(1);
 
   // Reference search states
   const [selectedRefSourceDoc, setSelectedRefSourceDoc] = useState(null);
@@ -195,6 +196,7 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
       setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
       setVatNumber(sale.VAT_NUMBER || '');
       setReferenceNo(sale.REF_NO || '');
+      setSelectedCurrencyRate(sale.CRATE || 1);
       
       // Fetch Sale Items
       fetch(API_ENDPOINTS.SALE_ITEMS(sale.REC_NO))
@@ -287,7 +289,8 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
         USERNAME: user?.username || '',
         WR_CODE: selectedWarehouse,
         REC_NO: editingRecNo,
-        CURRENCY: 1, // Default currency
+        CURRENCY: selectedCurrency, 
+        CRATE: selectedCurrencyRate,
         TRN_TYPE: 16, // Delivery Note
         ADDRESS: address,
         REF_INV_NO: referenceNo,
@@ -300,7 +303,9 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
           price: 0,
           vatPercent: 0,
           vatAmt: 0,
-          total: 0
+          total: 0,
+          FRN_AMOUNT: 0,
+          TAXABLE_AMOUNT: 0
         }))
       };
 
@@ -387,6 +392,13 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
       })
       .catch(err => console.error('Failed to fetch currencies:', err));
   }, []);
+
+  useEffect(() => {
+    const curr = currencies.find(c => c.Currency_No === selectedCurrency);
+    if (curr) {
+      setSelectedCurrencyRate(curr.Currency_Rate || 1);
+    }
+  }, [selectedCurrency, currencies]);
 
   // Handle Autocomplete searching
   const handleItemSearch = async (rowId, query, isSelection = false) => {
@@ -644,6 +656,8 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
               currencies={currencies}
               selectedCurrency={selectedCurrency}
               setSelectedCurrency={setSelectedCurrency}
+              selectedCurrencyRate={selectedCurrencyRate}
+              setSelectedCurrencyRate={setSelectedCurrencyRate}
               onNew={resetPage}
               onPending={null}
               onHistory={() => navigateTo?.('delivery-history')}

@@ -22,6 +22,7 @@ export default function Toolbar({
   enterToQty, setEnterToQty,
   showInvoiceAfterSave, setShowInvoiceAfterSave,
   currencies = [], selectedCurrency, setSelectedCurrency,
+  selectedCurrencyRate, setSelectedCurrencyRate,
   onNew, onPending, onHistory, onReturn, onClear, 
   pendingCount = 0, isReturn = false, isPurchase = false,
   isQuotation = false, isDelivery = false,
@@ -32,6 +33,7 @@ export default function Toolbar({
   crystalPrint, setCrystalPrint
 }) {
   const [showOptions, setShowOptions] = useState(false);
+  const [isCurrencyExpanded, setIsCurrencyExpanded] = useState(false);
   const toggleColumn = (key) => setVisibleColumns?.(prev => ({ ...prev, [key]: !prev[key] }));
   return (
     <div className="flex items-center gap-2 bg-card py-1.5 px-3 rounded-xl border border-border shadow-sm overflow-x-auto transition-colors duration-300">
@@ -121,25 +123,75 @@ export default function Toolbar({
                     </select>
                   </div>
                   
-                  {!isDelivery && (
-                    <div className="flex flex-col gap-2 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border rounded-xl transition-all shadow-sm">
-                      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Default Currency</span>
-                      <select 
-                        value={selectedCurrency} 
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          setSelectedCurrency?.(val);
-                        }}
-                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                      >
-                        {currencies.map(curr => (
-                          <option key={curr.Currency_No} value={curr.Currency_No}>
-                            {curr.Currency_code} - {curr.Currency_Name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  {!isDelivery && (() => {
+                    const selectedCurr = currencies.find(c => c.Currency_No === selectedCurrency);
+
+                    return (
+                      <div className="flex flex-col gap-2 p-3 bg-zinc-100/50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl transition-all shadow-sm">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Default Currency</span>
+                          <button 
+                            onClick={() => setIsCurrencyExpanded(!isCurrencyExpanded)}
+                            className="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"
+                          >
+                            {isCurrencyExpanded ? 'Collapse' : 'Change'}
+                          </button>
+                        </div>
+                        
+                        {/* Selected Currency Card - More Sophisticated Dark Indigo */}
+                        <div className="flex items-center justify-between p-3 rounded-xl border bg-indigo-950 border-indigo-500/50 text-white shadow-lg shadow-indigo-500/10 transition-all">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-black text-indigo-100">
+                              {selectedCurr?.Currency_code || 'SAR'}
+                            </span>
+                            <span className="text-[10px] text-indigo-300/80 font-medium">
+                              {selectedCurr?.Currency_Name || 'Saudi Riyal'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 bg-indigo-500/20 border border-indigo-500/30 rounded-lg px-2 py-1 focus-within:ring-2 focus-within:ring-indigo-400 transition-all">
+                            <span className="opacity-60 text-[9px] text-indigo-300 font-black uppercase">Rate</span>
+                            <input 
+                              type="number" 
+                              value={selectedCurrencyRate || 1} 
+                              onChange={(e) => setSelectedCurrencyRate?.(parseFloat(e.target.value) || 0)}
+                              step="0.0001"
+                              className="bg-transparent text-white text-xs font-black w-16 outline-none text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Dropdown for other currencies - Deeper Tones */}
+                        {isCurrencyExpanded && (
+                          <div className="mt-2 space-y-2 pt-2 border-t border-zinc-300 dark:border-zinc-800 animate-in slide-in-from-top-2 duration-200">
+                            <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-500 uppercase tracking-widest mb-1 px-1">Other Available Currencies</p>
+                            {currencies.filter(c => c.Currency_No !== selectedCurrency).map(curr => (
+                              <button
+                                key={curr.Currency_No}
+                                onClick={() => {
+                                  setSelectedCurrency?.(curr.Currency_No);
+                                  setIsCurrencyExpanded(false);
+                                }}
+                                className="w-full flex items-center justify-between p-2.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-400 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-zinc-900 transition-all text-left group"
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                    {curr.Currency_code}
+                                  </span>
+                                  <span className="text-[9px] text-zinc-500 dark:text-zinc-500">
+                                    {curr.Currency_Name}
+                                  </span>
+                                </div>
+                                <div className="px-2 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-[10px] font-bold text-zinc-600 dark:text-zinc-500 flex items-center gap-1 group-hover:bg-indigo-500/10 group-hover:text-indigo-600 transition-colors">
+                                  <span className="opacity-60 text-[8px]">Rate:</span>
+                                  {Number(curr.Currency_Rate || 0).toFixed(3)}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               

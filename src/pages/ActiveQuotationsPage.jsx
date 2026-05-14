@@ -13,6 +13,7 @@ export default function ActiveQuotationsPage({ setActivePage }) {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedQuotation, setSelectedQuotation] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, COMPLETED, PENDING
 
   useEffect(() => {
     setLoading(true);
@@ -32,7 +33,14 @@ export default function ActiveQuotationsPage({ setActivePage }) {
     const matchesSearch = 
       String(quote.INVOICE_NO).includes(searchQuery) || 
       String(quote.ENAME || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    
+    const isCompleted = quote.QOT_INV_NO && quote.QOT_INV_NO !== '0';
+    const matchesStatus = 
+      statusFilter === 'ALL' || 
+      (statusFilter === 'COMPLETED' && isCompleted) || 
+      (statusFilter === 'PENDING' && !isCompleted);
+
+    return matchesSearch && matchesStatus;
   });
 
   const handleEditQuotation = (quote) => {
@@ -48,10 +56,10 @@ export default function ActiveQuotationsPage({ setActivePage }) {
       : ['Quotation No', 'Date', 'Customer Name', 'Type', 'Amount'];
     const data = filteredQuotations.map(quote => [
       quote.INVOICE_NO,
-      new Date(quote.CURDATE).toLocaleDateString(),
+      quote.CURDATE ? new Date(quote.CURDATE).toLocaleDateString() : '',
       quote.ENAME || 'Cash Customer',
       language === 'ar' ? 'عرض سعر' : 'Quotation',
-      quote.NET_AMOUNT
+      ((Number(quote.NET_AMOUNT) || 0) / (quote.CRATE || 1)).toFixed(2)
     ]);
     
     let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
@@ -90,10 +98,10 @@ export default function ActiveQuotationsPage({ setActivePage }) {
       : ['Quotation No', 'Date', 'Customer Name', 'Type', 'Amount'];
     const data = filteredQuotations.map(quote => [
       quote.INVOICE_NO,
-      new Date(quote.CURDATE).toLocaleDateString(),
+      quote.CURDATE ? new Date(quote.CURDATE).toLocaleDateString() : '',
       quote.ENAME || 'Cash Customer',
       language === 'ar' ? 'عرض سعر' : 'Quotation',
-      quote.NET_AMOUNT
+      ((Number(quote.NET_AMOUNT) || 0) / (quote.CRATE || 1)).toFixed(2)
     ]);
 
     const printWindow = window.open('', '_blank');
@@ -197,9 +205,8 @@ export default function ActiveQuotationsPage({ setActivePage }) {
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="flex flex-col gap-4 mb-8">
-          <div className="relative">
+        <div className="flex flex-col md:flex-row items-center gap-4 mb-8">
+          <div className="relative flex-1 w-full">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
             <input 
               type="text" 
@@ -208,6 +215,26 @@ export default function ActiveQuotationsPage({ setActivePage }) {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all shadow-sm dark:text-zinc-200"
             />
+          </div>
+          
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-xl border border-zinc-200 dark:border-zinc-700 w-full md:w-auto">
+            {[
+              { id: 'ALL', label: language === 'ar' ? 'الكل' : 'All' },
+              { id: 'PENDING', label: language === 'ar' ? 'قيد الانتظار' : 'Pending' },
+              { id: 'COMPLETED', label: language === 'ar' ? 'مكتمل' : 'Completed' }
+            ].map((btn) => (
+              <button
+                key={btn.id}
+                onClick={() => setStatusFilter(btn.id)}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  statusFilter === btn.id 
+                    ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                {btn.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -228,6 +255,11 @@ export default function ActiveQuotationsPage({ setActivePage }) {
                 <th className="px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">
                   {language === 'ar' ? 'الحالة' : 'Type'}
                 </th>
+                {statusFilter === 'COMPLETED' && (
+                  <th className={`px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center`}>
+                    {language === 'ar' ? 'رقم فاتورة البيع' : 'Sale Invoice No.'}
+                  </th>
+                )}
                 <th className={`px-6 py-4 text-[10px] font-black text-zinc-400 uppercase tracking-widest ${language === 'ar' ? 'text-left' : 'text-right'}`}>
                   {language === 'ar' ? 'المبلغ' : 'Amount'}
                 </th>
@@ -238,12 +270,12 @@ export default function ActiveQuotationsPage({ setActivePage }) {
               {loading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    <td colSpan={6} className="px-6 py-6"><div className="h-4 bg-zinc-100 dark:bg-zinc-800 rounded w-full"></div></td>
+                    <td colSpan={statusFilter === 'COMPLETED' ? 7 : 6} className="px-6 py-6"><div className="h-4 bg-zinc-100 dark:bg-zinc-800 rounded w-full"></div></td>
                   </tr>
                 ))
               ) : filteredQuotations.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-zinc-400 italic">
+                  <td colSpan={statusFilter === 'COMPLETED' ? 7 : 6} className="px-6 py-12 text-center text-zinc-400 italic">
                     {language === 'ar' ? 'لم يتم العثور على عروض أسعار نشطة' : 'No active quotations found'}
                   </td>
                 </tr>
@@ -287,9 +319,16 @@ export default function ActiveQuotationsPage({ setActivePage }) {
                         </span>
                       </div>
                     </td>
+                    {statusFilter === 'COMPLETED' && (
+                      <td className="px-6 py-4 text-center">
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                          #{quote.QOT_INV_NO}
+                        </span>
+                      </td>
+                    )}
                     <td className={`px-6 py-4 ${language === 'ar' ? 'text-left' : 'text-right'}`}>
                       <span className="font-black text-zinc-800 dark:text-zinc-100">
-                        {quote.CURRENCY_CODE || 'SAR'} {(Number(quote.NET_AMOUNT) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        {quote.CURRENCY_CODE || 'SAR'} {((Number(quote.NET_AMOUNT) || 0) / (quote.CRATE || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
                     </td>
                     <td className={`px-6 py-4 ${language === 'ar' ? 'text-left' : 'text-right'}`}>
