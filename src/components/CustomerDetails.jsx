@@ -3,7 +3,6 @@ import { API_ENDPOINTS } from '../config';
 import { createPortal } from 'react-dom';
 import { User, ChevronDown, MapPin, Trash2 } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
-
 export default function CustomerDetails({ 
   customer, 
   setCustomer, 
@@ -12,7 +11,8 @@ export default function CustomerDetails({
   setAddress,
   address,
   handleAddressChange,
-  validationErrors = []
+  validationErrors = [],
+  setSelectedCurrency
 }) {
   const { isReady, searchCustomers, getAddressFromCache, updateAddressCache } = useCache();
   const [searchResults, setSearchResults] = useState([]);
@@ -38,11 +38,24 @@ export default function CustomerDetails({
           const data = await res.json();
           if (data.length > 0) {
             setCustomer({ id: data[0].ACC_NO, name: data[0].ACC_NAME });
+            // Also fetch info for default customer to set correct default currency!
+            try {
+              const infoRes = await fetch(API_ENDPOINTS.CUSTOMER_INFO(data[0].ACC_NO));
+              if (infoRes.ok) {
+                const info = await infoRes.json();
+                if (info && setSelectedCurrency) {
+                  setSelectedCurrency(info.currency ? Number(info.currency) : 1);
+                }
+              }
+            } catch (err) {
+              console.error("Failed to fetch default customer info:", err);
+            }
           }
         }
       } catch (err) {
         console.error("Failed to fetch default customer:", err);
         setCustomer({ id: '6000', name: 'CASH SALE' }); 
+        if (setSelectedCurrency) setSelectedCurrency(1);
       }
     };
     fetchDefault();
@@ -63,7 +76,6 @@ export default function CustomerDetails({
         const res = await fetch(`${API_ENDPOINTS.CUSTOMER_SEARCH}?q=${encodeURIComponent(query || '')}`);
         if (res.ok) {
           const apiData = await res.json();
-          // Extra safety: Filter API results again on the frontend to match exactly what is typed
           const q = (query || '').toLowerCase();
           results = apiData.filter(c => 
             (c.ACC_NO && String(c.ACC_NO).toLowerCase().includes(q)) || 
@@ -74,8 +86,7 @@ export default function CustomerDetails({
         console.error("Customer API search failed:", err);
       }
     }
-    
-    // Add 999 option if it matches query or if query is empty
+
     const queryLower = (query || '').toLowerCase();
     if (queryLower === '' || '999'.includes(queryLower) || 'new customer'.includes(queryLower)) {
       if (!results.find(r => String(r.ACC_NO) === '999')) {
@@ -183,6 +194,9 @@ export default function CustomerDetails({
           building: cachedInfo.building_no || '',
           pincode: cachedInfo.postal_zone || ''
         });
+        if (setSelectedCurrency) {
+          setSelectedCurrency(cachedInfo.currency ? Number(cachedInfo.currency) : 1);
+        }
         return;
       }
 
@@ -200,8 +214,14 @@ export default function CustomerDetails({
               building: info.building_no || '',
               pincode: info.postal_zone || ''
             });
+            if (setSelectedCurrency) {
+              setSelectedCurrency(info.currency ? Number(info.currency) : 1);
+            }
           } else {
             setAddress({ street: '', city: '', district: '', building: '', pincode: '' });
+            if (setSelectedCurrency) {
+              setSelectedCurrency(1);
+            }
           }
         }
       } catch (err) {

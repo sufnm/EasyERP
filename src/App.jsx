@@ -34,6 +34,8 @@ import ItemCreationPage from './pages/ItemCreationPage';
 import OpeningStockPage from './pages/OpeningStockPage';
 import DeliveryNotePage from './pages/DeliveryNotePage';
 import DeliveryHistoryPage from './pages/DeliveryHistoryPage';
+import ApplicationSetupPage from './pages/ApplicationSetupPage';
+import ZatcaSubmissionPage from './pages/ZatcaSubmissionPage';
 import { CacheProvider } from './context/CacheContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Menu, AlertCircle, CheckCircle, X } from 'lucide-react';
@@ -135,8 +137,10 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
           {activePage === 'active-quotations' && <ActiveQuotationsPage setActivePage={navigateTo} />}
           {activePage === 'delivery-note' && <DeliveryNotePage user={user} params={activePageParams} navigateTo={navigateTo} />}
           {activePage === 'delivery-history' && <DeliveryHistoryPage setActivePage={navigateTo} />}
+          {activePage === 'application-setup' && <ApplicationSetupPage />}
+          {activePage === 'zatca-submission-sales' && <ZatcaSubmissionPage />}
           {activePage === 'translation-manager' && <TranslationManagerPage />}
-          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager', 'item-creation', 'opening-stock', 'quotation-entry', 'active-quotations', 'delivery-note', 'delivery-history'].includes(activePage) ? null : (
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager', 'item-creation', 'opening-stock', 'quotation-entry', 'active-quotations', 'delivery-note', 'delivery-history', 'application-setup', 'zatca-submission-sales'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
               <p className="text-zinc-400 text-lg font-medium text-center w-full">{t('comingSoon')}</p>
             </div>

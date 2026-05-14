@@ -11,12 +11,100 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
   vatPercent: true,
   vatAmt: true,
   total: true
-}, isPurchase = false }) {
+}, isPurchase = false, autoPrint = false, crystalPrint = false, defaultPrintPaper = 'Thermal' }) {
   const [saleItems, setSaleItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [customerAddress, setCustomerAddress] = useState(null);
   const [masterTerms, setMasterTerms] = useState([]);
   const [savedTerms, setSavedTerms] = useState([]);
+  const [qrCodeImage, setQrCodeImage] = useState(null);
+  const [isCrystalPrinting, setIsCrystalPrinting] = useState(false);
+  const [crystalPrintResult, setCrystalPrintResult] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+
+  const handlePrint = async () => {
+    if (crystalPrint) {
+      setIsCrystalPrinting(true);
+      setCrystalPrintResult(null);
+      try {
+        const brnCode = sale?.BRN_CODE || '1';
+        const res = await fetch(API_ENDPOINTS.PRINT_CRYSTAL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            invoiceNo: sale?.INVOICE_NO,
+            trnType: sale?.TRN_TYPE,
+            brnCode: brnCode,
+            netAmount: sale?.NET_AMOUNT || 0,
+            printPaper: defaultPrintPaper
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (data.pdfBase64) {
+            const byteCharacters = atob(data.pdfBase64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const file = new Blob([byteArray], { type: 'application/pdf' });
+            const fileURL = URL.createObjectURL(file);
+            setPdfUrl(fileURL);
+            
+            setCrystalPrintResult({ success: true, message: 'PDF generated successfully!' });
+            
+            // Try to open it directly. Browsers might block it if triggered by autoPrint.
+            window.open(fileURL, '_blank');
+          } else {
+            setCrystalPrintResult({ success: true, message: 'Printed successfully via Crystal Reports!' });
+            alert('Printed successfully via Crystal Reports!');
+          }
+        } else {
+          setCrystalPrintResult({ success: false, message: data.error || 'Printing failed' });
+          alert(`Crystal Printing Failed: ${data.error || 'Unknown error'}\n${data.details || ''}`);
+        }
+      } catch (err) {
+        console.error("Crystal printing error:", err);
+        setCrystalPrintResult({ success: false, message: 'Failed to contact printing server' });
+        alert('Failed to contact printing server');
+      } finally {
+        setIsCrystalPrinting(false);
+      }
+    } else {
+      window.print();
+    }
+  };
+
+  useEffect(() => {
+    if (sale && autoPrint && !loadingItems) {
+      const timer = setTimeout(() => {
+        handlePrint();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [sale, autoPrint, loadingItems]);
+
+  useEffect(() => {
+    if (sale && sale.INVOICE_NO && !crystalPrint) {
+      const brnCode = sale.BRN_CODE || '1';
+      fetch(`${API_ENDPOINTS.INVOICE_QRCODE}?invoiceNo=${sale.INVOICE_NO}&trnType=${sale.TRN_TYPE}&brnCode=${brnCode}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.qrCode) {
+            setQrCodeImage(data.qrCode);
+          } else {
+            setQrCodeImage(null);
+          }
+        })
+        .catch(err => {
+          console.error("Failed to fetch invoice QR code:", err);
+          setQrCodeImage(null);
+        });
+    } else {
+      setQrCodeImage(null);
+    }
+  }, [sale, crystalPrint]);
 
   useEffect(() => {
     if (sale && sale.REC_NO) {
@@ -131,9 +219,6 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
     return null;
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
 
   const getInvoiceTitles = () => {
     let modalTitle = 'Invoice';
@@ -233,13 +318,18 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                         {printSub}
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end">
                       <p className="text-lg font-black text-zinc-900">#{sale.INVOICE_NO}</p>
                       <p className="text-xs text-zinc-500 font-bold">{sale.CURDATE ? new Date(sale.CURDATE).toLocaleDateString() : new Date().toLocaleDateString()}</p>
                       {sale.REF_NO && (
                         <p className={"text-[10px] font-bold mt-1 uppercase tracking-wider " + (isPurchase ? "text-rose-600" : "text-indigo-600")}>
                           Ref: #{sale.REF_NO}
                         </p>
+                      )}
+                      {qrCodeImage && (
+                        <div className="mt-3">
+                          <img src={qrCodeImage} alt="ZATCA QR Code" className="w-24 h-24 object-contain rounded-md border border-zinc-200 p-1" />
+                        </div>
                       )}
                     </div>
                   </div>
@@ -297,6 +387,12 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
                         <div className="flex justify-between items-center pt-2 border-t border-zinc-200/60 dark:border-zinc-700/60">
                           <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">Reference #</span>
                           <span className={"text-sm font-mono font-black " + (isPurchase ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-600 dark:text-indigo-400')}>#{sale.REF_NO}</span>
+                        </div>
+                      )}
+                      {qrCodeImage && (
+                        <div className="flex justify-between items-start pt-3 mt-3 border-t border-zinc-200/60 dark:border-zinc-700/60">
+                          <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold mt-1">ZATCA QR</span>
+                          <img src={qrCodeImage} alt="ZATCA QR Code" className="w-16 h-16 object-contain rounded-md bg-white border border-zinc-200 p-0.5 shadow-sm" />
                         </div>
                       )}
                     </div>
@@ -439,30 +535,55 @@ export default function InvoiceModal({ sale, onClose, onEdit, address: passedAdd
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex justify-end gap-3 print:hidden">
-           <button 
-            onClick={onClose}
-            className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:bg-zinc-100 transition-all"
-           >
-            Close
-           </button>
-           <button 
-            onClick={handlePrint}
-            className="px-6 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all flex items-center gap-2"
-           >
-             <Printer size={14} /> Print
-           </button>
-           {onEdit && (
-            <button 
-              onClick={() => {
-                onEdit(sale);
-                onClose();
-              }}
-              className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
-            >
-              <FileText size={14} /> {sale.TRN_TYPE === 19 ? 'Edit Quotation' : 'Edit Invoice'}
-            </button>
-           )}
+        <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex justify-between items-center print:hidden rounded-b-3xl">
+           <div>
+             {crystalPrintResult && (
+               <p className={`text-xs font-bold ${crystalPrintResult.success ? 'text-emerald-500' : 'text-rose-500'}`}>
+                 {crystalPrintResult.message}
+               </p>
+             )}
+           </div>
+           <div className="flex justify-end gap-3">
+             <button 
+              onClick={onClose}
+              className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:bg-zinc-100 transition-all"
+             >
+              Close
+             </button>
+             {pdfUrl && (
+               <a 
+                 href={pdfUrl} 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+                 className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+               >
+                 <FileText size={14} /> Open PDF
+               </a>
+             )}
+             <button 
+              onClick={handlePrint}
+              disabled={isCrystalPrinting}
+              className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${isCrystalPrinting ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+             >
+               {isCrystalPrinting ? (
+                 <div className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></div>
+               ) : (
+                 <Printer size={14} />
+               )}
+               {isCrystalPrinting ? 'Printing...' : 'Print'}
+             </button>
+             {onEdit && (
+              <button 
+                onClick={() => {
+                  onEdit(sale);
+                  onClose();
+                }}
+                className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+              >
+                <FileText size={14} /> {sale.TRN_TYPE === 19 ? 'Edit Quotation' : 'Edit Invoice'}
+              </button>
+             )}
+           </div>
         </div>
       </div>
     </div>

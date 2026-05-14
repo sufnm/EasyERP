@@ -1,9 +1,17 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { execFile } from 'child_process';
 import { sql, getPool } from './db.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 dotenv.config();
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const app = express();
 app.use(cors());
@@ -1155,7 +1163,7 @@ app.get('/api/items/cache', async (req, res) => {
     const result = await pool.request().query(`
       SELECT 
         B.BARCODE, 
-        B.SALE_PRICE, 
+        B.RETAIL_PRICE as SALE_PRICE, 
         B.DESCRIPTION, 
         B.UNIT,
         ISNULL(H.VAT_PERCENT, 0) as VAT_PERCENT 
@@ -2036,7 +2044,9 @@ app.post('/api/sales/save', async (req, res) => {
     CURRENCY_RATE,
     TRN_TYPE,
     REF_INV_NO,
-    ADDRESS
+    ADDRESS,
+    USER_ID,
+    PRICE_INCLUDE_VAT
   } = req.body;
 
   const trnType = (req.body.TRN_TYPE !== undefined && req.body.TRN_TYPE !== null)
@@ -2059,9 +2069,10 @@ app.post('/api/sales/save', async (req, res) => {
       cashAcc = userRes.recordset[0]?.SALE_CASH_AC;
     }
 
+    const optRes = await pool.request().query('SELECT DEF_CASH_AC, VAT_PERCENT FROM dbo.AC_OPTIONS WHERE ID = 1');
+    const vatPercent = optRes.recordset[0]?.VAT_PERCENT || 0;
+
     if (!cashAcc) {
-      const optRes = await pool.request()
-        .query('SELECT DEF_CASH_AC FROM dbo.AC_OPTIONS WHERE ID = 1');
       cashAcc = optRes.recordset[0]?.DEF_CASH_AC;
     }
 
@@ -2091,13 +2102,17 @@ app.post('/api/sales/save', async (req, res) => {
           .input('trnType', sql.Int, trnType)
           .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
           .input('vatNumber', sql.VarChar, String(VAT_NUMBER || ''))
+          .input('userid', sql.VarChar, String(USER_ID || ''))
+          .input('vatPercent', sql.Decimal(18, 2), vatPercent)
+          .input('priceIncVat', sql.Bit, PRICE_INCLUDE_VAT ? 1 : 0)
           .query(`
             UPDATE dbo.DATA_ENTRY_WEB SET
               ACCODE = @accode, ENAME = @ename, G_TOTAL = @gTotal, DISC_AMT = @discAmt,
               NET_AMOUNT = @netAmount, VAT_AMOUNT = @vatAmount, CASH_PAID = @cashPaid,
               OTHER_PAID = @otherPaid, CASH_ACC = @cashAcc, WR_CODE = @wrCode,
               CURRENCY = @currency, TRN_TYPE = @trnType, REF_NO = @refNo,
-              VAT_NUMBER = @vatNumber
+              VAT_NUMBER = @vatNumber, USER_ID = @userid,
+              VAT_PERCENT = @vatPercent, PRICE_INCLUDE_VAT = @priceIncVat
             WHERE REC_NO = @recNo;
 
             SELECT INVOICE_NO, REC_NO FROM dbo.DATA_ENTRY_WEB WHERE REC_NO = @recNo;
@@ -2134,18 +2149,23 @@ app.post('/api/sales/save', async (req, res) => {
           .input('currency', sql.Int, CURRENCY || 1)
           .input('refNo', sql.VarChar, String(REF_INV_NO || ''))
           .input('vatNumber', sql.VarChar, String(VAT_NUMBER || ''))
+          .input('userid', sql.VarChar, String(USER_ID || ''))
+          .input('vatPercent', sql.Decimal(18, 2), vatPercent)
+          .input('priceIncVat', sql.Bit, PRICE_INCLUDE_VAT ? 1 : 0)
           .query(`
               INSERT INTO dbo.DATA_ENTRY_WEB (
                 ACCODE, ENAME, G_TOTAL, DISC_AMT, NET_AMOUNT, VAT_AMOUNT,
                 CASH_PAID, OTHER_PAID, CASH_ACC,
                 BRN_CODE, TRN_TYPE, ORG_DUP, WR_CODE, CURDATE,
-                CURRENCY, REF_NO, VAT_NUMBER
+                CURRENCY, REF_NO, VAT_NUMBER, USER_ID,
+                VAT_PERCENT, PRICE_INCLUDE_VAT
               )
               VALUES (
                 @accode, @ename, @gTotal, @discAmt, @netAmount, @vatAmount,
                 @cashPaid, @otherPaid, @cashAcc,
                 @brnCode, @trnType, @orgDup, @wrCode, GETDATE(),
-                @currency, @refNo, @vatNumber
+                @currency, @refNo, @vatNumber, @userid,
+                @vatPercent, @priceIncVat
               );
 
               DECLARE @NewRecNo INT = SCOPE_IDENTITY();
@@ -2255,18 +2275,18 @@ app.post('/api/sales/save', async (req, res) => {
       const quotTerms = req.body.QUOT_TERMS;
       if (Array.isArray(quotTerms)) {
         console.log(`📝 Saving ${quotTerms.length} terms for invoice ${INVOICE_NO}...`);
-        
+
         // Delete existing terms
         const deleteTermsRequest = new sql.Request(transaction);
         await deleteTermsRequest
           .input('invoiceNo', sql.VarChar, String(INVOICE_NO))
           .input('trnType', sql.Int, trnType)
           .query('DELETE FROM dbo.QUOT_TERM_DET WHERE INVOICE_NO = @invoiceNo AND TRN_TYPE = @trnType');
-          
+
         // Insert new terms
         for (const term of quotTerms) {
           if (!term.QUOT_TERM_ID || !term.QUOT_DESCRIPTION?.trim()) continue;
-          
+
           const insertTermRequest = new sql.Request(transaction);
           await insertTermRequest
             .input('invoiceNo', sql.VarChar, String(INVOICE_NO))
@@ -2942,7 +2962,7 @@ app.get('/api/user-privileges/grid', async (req, res) => {
   try {
     const pool = await getPool();
     const request = pool.request();
-    
+
     let whereClause = "WHERE M.Menu_Name IS NOT NULL AND M.Menu_Name <> '' AND M.Menu_type = 2";
     if (menuHead && menuHead !== 'All') {
       request.input('menuHead', sql.VarChar, menuHead);
@@ -2982,7 +3002,7 @@ app.post('/api/user-privileges/bulk-save', async (req, res) => {
   }
   try {
     const pool = await getPool();
-    
+
     for (const priv of privileges) {
       const request = pool.request();
       request.input('GROUP_NAME', sql.VarChar(50), group);
@@ -3003,7 +3023,7 @@ app.post('/api/user-privileges/bulk-save', async (req, res) => {
           VALUES (@GROUP_NAME, @form_id, @ins, @upd, @qry, @del, @dsp, @Menu_Name)
       `);
     }
-    
+
     console.log('✅ Bulk saved ' + privileges.length + ' privileges for group "' + group + '"');
     res.json({ success: true });
   } catch (err) {
@@ -3020,14 +3040,14 @@ app.post('/api/user-privileges/sync', async (req, res) => {
   try {
     const pool = await getPool();
     let insertedCount = 0;
-    
+
     for (const menu of menus) {
       if (!menu.Menu_Code) continue;
-      
+
       const check = await pool.request()
         .input('code', sql.NVarChar(100), menu.Menu_Code)
         .query('SELECT 1 FROM dbo.Menu_Master_Web WHERE Menu_Code = @code');
-        
+
       if (check.recordset.length === 0) {
         await pool.request()
           .input('head', sql.NVarChar(100), menu.Head || '')
@@ -3083,7 +3103,7 @@ app.post('/api/user-info', async (req, res) => {
   try {
     const pool = await getPool();
     const request = pool.request();
-    
+
     // Bind all inputs with correct DB data types
     request.input('UserName', sql.VarChar(50), String(data.UserName));
     request.input('MOBILE_NO', sql.NVarChar(50), String(data.MOBILE_NO || ''));
@@ -3191,7 +3211,7 @@ app.get('/api/items/:itemCode/detail', async (req, res) => {
   const { itemCode } = req.params;
   try {
     const pool = await getPool();
-    
+
     // Query General Item Master
     const mainRes = await pool.request()
       .input('itemCode', sql.VarChar(50), itemCode)
@@ -3305,7 +3325,7 @@ app.post('/api/items/save', async (req, res) => {
     const checkItem = await new sql.Request(transaction)
       .input('itemCode', sql.VarChar(50), itemCode)
       .query('SELECT 1 FROM dbo.HD_ITEMMASTER WHERE ITEM_CODE = @itemCode');
-    
+
     if (checkItem.recordset.length > 0) {
       await itemReq.query(`
         UPDATE dbo.HD_ITEMMASTER SET
@@ -3496,7 +3516,7 @@ app.get('/api/opening-stock/item/:itemCode', async (req, res) => {
   const { itemCode } = req.params;
   try {
     const pool = await getPool();
-    
+
     // 1. Get Main Item Row matching the user-defined SQL
     const mainRes = await pool.request()
       .input('itemCode', sql.VarChar(50), itemCode)
@@ -3662,6 +3682,699 @@ app.post('/api/opening-stock/save', async (req, res) => {
   }
 });
 
+app.get('/api/user-entry-options', async (req, res) => {
+  const { userId, trnType } = req.query;
+  if (!userId || !trnType) {
+    return res.status(400).json({ error: 'userId and trnType are required' });
+  }
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('userId', sql.Int, parseInt(userId))
+      .input('trnType', sql.Int, parseInt(trnType))
+      .query(`
+        SELECT 
+          User_id as user_id, 
+          Trn_type as Trn_Type, 
+          Auto_Print as Auto_print, 
+          Default_Print_Paper as Default_Print_paper, 
+          Show_Invoice as Show_Invoce, 
+          Auto_Next_line as Auto_next_Line, 
+          grid_columns as grid_coolums, 
+          Crystal_Print
+        FROM dbo.User_Entry_Options
+        WHERE User_id = @userId AND Trn_type = @trnType
+      `);
+    if (result.recordset.length > 0) {
+      res.json({ success: true, options: result.recordset[0] });
+    } else {
+      res.json({
+        success: true,
+        options: {
+          user_id: userId,
+          Trn_Type: parseInt(trnType),
+          Auto_print: 0,
+          Default_Print_paper: 'Thermal',
+          Show_Invoce: 1,
+          Auto_next_Line: 0,
+          grid_coolums: '1111111111',
+          Crystal_Print: 0
+        }
+      });
+    }
+  } catch (err) {
+    console.error("Failed to fetch user entry options:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/user-entry-options', async (req, res) => {
+  const { userId, trnType, autoPrint, defaultPrintPaper, showInvoce, autoNextLine, gridCoolums, crystalPrint } = req.body;
+  if (!userId || !trnType) {
+    return res.status(400).json({ error: 'userId and trnType are required' });
+  }
+  try {
+    const pool = await getPool();
+    await pool.request()
+      .input('userId', sql.Int, parseInt(userId))
+      .input('trnType', sql.Int, parseInt(trnType))
+      .input('autoPrint', sql.Bit, autoPrint ? 1 : 0)
+      .input('defaultPrintPaper', sql.NVarChar(50), String(defaultPrintPaper || 'Thermal'))
+      .input('showInvoice', sql.Bit, showInvoce ? 1 : 0)
+      .input('autoNextLine', sql.Bit, autoNextLine ? 1 : 0)
+      .input('gridColumns', sql.NVarChar(50), String(gridCoolums || '1111111111'))
+      .input('crystalPrint', sql.Bit, crystalPrint ? 1 : 0)
+      .query(`
+        MERGE dbo.User_Entry_Options AS target
+        USING (SELECT @userId AS User_id, @trnType AS Trn_type) AS source
+        ON (target.User_id = source.User_id AND target.Trn_type = source.Trn_type)
+        WHEN MATCHED THEN
+          UPDATE SET 
+            Auto_Print = @autoPrint,
+            Default_Print_Paper = @defaultPrintPaper,
+            Show_Invoice = @showInvoice,
+            Auto_Next_line = @autoNextLine,
+            grid_columns = @gridColumns,
+            Crystal_Print = @crystalPrint
+        WHEN NOT MATCHED THEN
+          INSERT (User_id, Trn_type, Auto_Print, Default_Print_Paper, Show_Invoice, Auto_Next_line, grid_columns, Crystal_Print)
+          VALUES (@userId, @trnType, @autoPrint, @defaultPrintPaper, @showInvoice, @autoNextLine, @gridColumns, @crystalPrint);
+      `);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Failed to save user entry options:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/invoice-qrcode', async (req, res) => {
+  const { invoiceNo, trnType, brnCode } = req.query;
+  if (!invoiceNo) {
+    return res.status(400).json({ error: 'invoiceNo is required' });
+  }
+  try {
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+      .input('trnType', sql.Int, parseInt(trnType) || 6)
+      .input('brnCode', sql.Int, parseInt(brnCode) || 1)
+      .query(`
+        SELECT ISNULL(qr_coe, image) AS qrcode_image
+        FROM dbo.Innv_image1
+        WHERE cmp_id = 1
+          AND brn_code = @brnCode
+          AND Invoice_no = @invoiceNo
+          AND trn_type = @trnType
+      `);
+
+    if (result.recordset && result.recordset.length > 0 && result.recordset[0].qrcode_image) {
+      const qrcodeBuffer = result.recordset[0].qrcode_image;
+      const base64 = qrcodeBuffer.toString('base64');
+      return res.json({ success: true, qrCode: `data:image/png;base64,${base64}` });
+    } else {
+      return res.json({ success: true, qrCode: null });
+    }
+  } catch (err) {
+    console.error("Failed to fetch invoice QR code:", err);
+    return res.json({ success: true, qrCode: null, warning: 'Database error or table missing' });
+  }
+});
+
+app.post('/api/print-crystal', async (req, res) => {
+  const { invoiceNo, trnType, brnCode, netAmount, printPaper } = req.body;
+  if (!invoiceNo) {
+    return res.status(400).json({ error: 'invoiceNo is required' });
+  }
+
+  // Match the frontend <select> index: Thermal = 0, A4 = 1
+  const reportIndex = printPaper === 'A4' ? 1 : 0;
+  const reportName = `Invoice_${reportIndex}.rpt`;
+  const reportPath = path.join(__dirname, 'Reports', reportName);
+
+  if (!fs.existsSync(reportPath)) {
+    return res.status(400).json({ error: `Report template not found at ${reportPath}` });
+  }
+
+  const dbServer = process.env.DB_SERVER || process.env.DB_HOST || 'localhost';
+  const dbName = process.env.DB_NAME;
+  const dbUser = process.env.DB_USER;
+  const dbPassword = process.env.DB_PASSWORD;
+
+  const exePath = path.join(__dirname, 'Reports', 'CrystalPrinter.exe');
+
+  if (!fs.existsSync(exePath)) {
+    return res.status(500).json({ error: 'CrystalPrinter utility not found. Please compile it.' });
+  }
+
+  // Create a unique temporary PDF path
+  const pdfFileName = `Invoice_${invoiceNo}_${Date.now()}.pdf`;
+  const pdfPath = path.join(__dirname, 'Reports', pdfFileName);
+
+  const args = [
+    '--report', reportPath,
+    '--server', dbServer,
+    '--database', dbName,
+    '--user', dbUser,
+    '--password', dbPassword,
+    '--brn', String(brnCode || '1'),
+    '--invoice', String(invoiceNo),
+    '--type', String(trnType || 6),
+    '--amount', String(netAmount || 0),
+    '--pdf', pdfPath
+  ];
+
+  console.log(`Executing CrystalPrinter.exe for invoice ${invoiceNo} (PDF: ${pdfFileName})...`);
+
+  execFile(exePath, args, (error, stdout, stderr) => {
+    if (error) {
+      console.error(`Crystal Reports Printing failed:`, error);
+      return res.status(500).json({ error: 'Printing failed', details: error.message, stderr, stdout });
+    }
+
+    if (fs.existsSync(pdfPath)) {
+      try {
+        const pdfBuffer = fs.readFileSync(pdfPath);
+        const base64 = pdfBuffer.toString('base64');
+        fs.unlinkSync(pdfPath); // Cleanup
+        return res.json({ success: true, pdfBase64: base64, output: stdout });
+      } catch (err) {
+        console.error("Failed to read generated PDF:", err);
+        return res.status(500).json({ error: 'Failed to read generated PDF', details: err.message });
+      }
+    } else {
+      return res.status(500).json({ error: 'PDF was not generated by CrystalPrinter.exe', stdout });
+    }
+  });
+});
+
+app.get('/api/application-setup', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query('SELECT * FROM dbo.AC_OPTIONS WHERE ID = 1');
+    res.json({ success: true, data: result.recordset[0] || {} });
+  } catch (err) {
+    console.error('Failed to get application setup:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/application-setup', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const data = req.body;
+
+    const cleanData = {};
+    Object.keys(data).forEach(k => {
+      // Force empty strings to null for better DB compatibility
+      cleanData[k] = data[k] === '' ? null : data[k];
+    });
+
+    const existing = await pool.request().query('SELECT ID FROM dbo.AC_OPTIONS WHERE ID = 1');
+
+    if (existing.recordset.length > 0) {
+      // UPDATE existing row
+      let setClause = Object.keys(cleanData).filter(k => k !== 'ID').map(k => `[${k}] = @${k}`).join(', ');
+      if (!setClause) return res.json({ success: true });
+
+      let q = pool.request();
+      Object.keys(cleanData).forEach(k => {
+        if (k !== 'ID') q.input(k, cleanData[k]);
+      });
+      q.input('ID', 1);
+      await q.query(`UPDATE dbo.AC_OPTIONS SET ${setClause} WHERE ID = @ID`);
+
+    } else {
+      // INSERT new row with ID = 1
+      let cols = Object.keys(cleanData).filter(k => k !== 'ID').map(k => `[${k}]`).join(', ');
+      let vals = Object.keys(cleanData).filter(k => k !== 'ID').map(k => `@${k}`).join(', ');
+
+      if (!cols) {
+        cols = '[ID]';
+        vals = '1';
+      } else {
+        cols = '[ID], ' + cols;
+        vals = '1, ' + vals;
+      }
+
+      let q = pool.request();
+      Object.keys(cleanData).forEach(k => {
+        if (k !== 'ID') q.input(k, cleanData[k]);
+      });
+      await q.query(`INSERT INTO dbo.AC_OPTIONS (${cols}) VALUES (${vals})`);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to save application setup:', err);
+    res.status(500).json({ error: err.message, details: err.originalError?.info?.message || '' });
+  }
+});
+
+app.get('/api/zatca/invoices', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT TOP 100
+        e.REC_NO,
+        e.invoice_no as INVOICE_NO,
+        e.TRN_TYPE,
+        e.CURDATE,
+        e.ENAME,
+        e.NET_AMOUNT,
+        e.CURRENCY_CODE,
+        e.QR_CODE,
+        e.ZATCA_SEND
+      FROM dbo.DATA_ENTRY e
+      WHERE e.TRN_TYPE IN (6, 7, 3, 4)
+      ORDER BY e.CURDATE DESC, e.invoice_no DESC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Failed to fetch ZATCA invoices:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/zatca/submit', async (req, res) => {
+  const { invoiceNo, trnType } = req.body;
+  if (!invoiceNo || !trnType) {
+    return res.status(400).json({ error: 'invoiceNo and trnType are required' });
+  }
+
+  try {
+    const pool = await getPool();
+
+    // 1. Fetch options
+    const optionsResult = await pool.request().query('SELECT TOP 1 * FROM dbo.AC_OPTIONS WHERE ID = 1');
+    const options = optionsResult.recordset[0] || {};
+    const envId = options.ZATCA_ENV_ID || options.zatca_env_id || 1;
+    const envType = options.ZATCA_ENV_TYPE || options.zatca_env_type || 'TEST';
+    const apiUrlXml = options.API_URL_XML;
+    const apiUrlSubmit = options.API_URL_SUBMIT;
+    const cashSaleAc = options.CASH_SALE_AC;
+    const cashPurAc = options.CASH_PUR_AC;
+
+    if (!apiUrlXml || !apiUrlSubmit) {
+      return res.status(400).json({ error: 'ZATCA API URLs are not configured in Application Setup' });
+    }
+
+    // 2. Fetch company and ZATCA credentials
+    const cmpResult = await pool.request()
+      .input('envId', sql.Int, envId)
+      .query(`
+        SELECT TOP 1
+          C.CR_NO AS cr_number,
+          C.CompanyName,
+          C.CompanyAName,
+          C.Vat_RegName,
+          C.Vat_ARegName,
+          C.Address1,
+          C.Address2,
+          C.Address3,
+          C.Building_No,
+          C.Ecity AS ecity,
+          C.Acity AS acity,
+          C.Address1_Ar,
+          C.Address2_Ar,
+          C.Address3_Ar,
+          C.Postal_Zone AS postal_zone,
+          C.esubcity,
+          C.asubcity,
+          a.pih,
+          A.UID as uid,
+          A.private_key,
+          A.x509_certificate as certificate,
+          A.x509_secret,
+          A.CSID as csid,
+          A.secret_csid,
+          A.Vat_number AS vat_Tinno,
+          C.ID as cmp_id,
+          A.ENV_ID as env_id,
+          1 as brn_code
+        FROM dbo.COMPANY as c 
+        LEFT JOIN dbo.ZATCA_CREDENTIAL as A on a.cmp_id=c.id 
+        WHERE A.ENV_ID = @envId
+      `);
+    const cmpRaw = cmpResult.recordset[0];
+    if (!cmpRaw) {
+      return res.status(400).json({ error: 'ZATCA Credentials or Company info not found for the configured environment' });
+    }
+
+    const cmp = {
+      uid: String(cmpRaw.uid || ''),
+      cr_number: String(cmpRaw.cr_number || ''),
+      CompanyName: String(cmpRaw.CompanyName || ''),
+      CompanyAName: String(cmpRaw.CompanyAName || ''),
+      Vat_RegName: String(cmpRaw.Vat_RegName || ''),
+      Vat_ARegName: String(cmpRaw.Vat_ARegName || ''),
+      vat_Tinno: String(cmpRaw.vat_Tinno || ''),
+      Address1: String(cmpRaw.Address1 || ''),
+      Address2: String(cmpRaw.Address2 || ''),
+      Address3: String(cmpRaw.Address3 || ''),
+      Building_No: String(cmpRaw.Building_No || ''),
+      Ecity: String(cmpRaw.ecity || ''),
+      Acity: String(cmpRaw.acity || ''),
+      Address1_Ar: String(cmpRaw.Address1_Ar || ''),
+      Address2_Ar: String(cmpRaw.Address2_Ar || ''),
+      Address3_Ar: String(cmpRaw.Address3_Ar || ''),
+      Postal_Zone: String(cmpRaw.postal_zone || ''),
+      esubcity: String(cmpRaw.esubcity || ''),
+      asubcity: String(cmpRaw.asubcity || ''),
+      pih: String(cmpRaw.pih || ''),
+      private_key: String(cmpRaw.private_key || ''),
+      certificate: String(cmpRaw.certificate || ''),
+      x509_secret: String(cmpRaw.x509_secret || ''),
+      csid: String(cmpRaw.csid || ''),
+      secret_csid: String(cmpRaw.secret_csid || ''),
+      brn_code: String(cmpRaw.brn_code || '1'),
+      cmp_id: String(cmpRaw.cmp_id || '1'),
+      env_id: String(cmpRaw.env_id || '1')
+    };
+
+    // 3. Fetch invoice summary (inv) and ACCODE/VAT_AMOUNT for customer logic
+    const invResult = await pool.request()
+      .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+      .input('trnType', sql.Int, parseInt(trnType))
+      .query(`
+        SELECT 
+          e.invoice_no as inv_number, 
+          CONVERT(VARCHAR(19), CURDATE, 120) as inv_date, 
+          G_TOTAL as tot_amount, 
+          DISC_PRCNT as Disc_prcnt, 
+          DISC_AMT as Disc_amount, 
+          NET_AMOUNT as net_amount, 
+          vat_amount as vat_amount, 
+          e.TRN_TYPE as trn_type, 
+          isnull(CASH_PAID,0) + isnull(other_paid,0) as cash_paid,
+          VAT_number as cus_vatnumber, 
+          VAT_PERCENT as vat_percent,  
+          cast(PRICE_INCLUDE_VAT as varchar) as price_include_vat, 
+          TAXABLE_AMOUNT as taxabale_amount, 
+          CONVERT(VARCHAR(19), REF_DELIVERY_DATE, 120) as delivery_date,
+          i.pih,
+          ref_no as inv_refno,
+          e.ACCODE as customer_acc,
+          e.vat_amount as raw_vat_amount
+        FROM dbo.DATA_ENTRY E 
+        LEFT JOIN dbo.inv_image1 as i on e.trn_type=i.trn_type and e.invoice_no=i.invoice_no 
+        WHERE e.trn_type = @trnType and e.invoice_no = @invoiceNo
+      `);
+    const invRaw = invResult.recordset[0];
+    if (!invRaw) {
+      return res.status(400).json({ error: `Invoice #${invoiceNo} not found` });
+    }
+
+    // Format fields to string matching C# types as requested
+    const inv = {
+      trn_type: String(invRaw.trn_type),
+      cus_vatnumber: invRaw.cus_vatnumber ? String(invRaw.cus_vatnumber) : null,
+      inv_date: String(invRaw.inv_date),
+      inv_number: String(invRaw.inv_number),
+      tot_amount: String(invRaw.tot_amount || 0),
+      net_amount: String(invRaw.net_amount || 0),
+      taxabale_amount: String(invRaw.taxabale_amount || 0),
+      vat_amount: String(invRaw.vat_amount || 0),
+      delivery_date: invRaw.delivery_date ? String(invRaw.delivery_date) : null,
+      pih: invRaw.pih ? String(invRaw.pih) : null,
+      inv_refno: invRaw.inv_refno ? String(invRaw.inv_refno) : null,
+      amount_paid: String(invRaw.cash_paid || 0),
+      price_include_vat: String(invRaw.price_include_vat || '0'),
+      vat_percent: String(invRaw.vat_percent || 0),
+      disc_prcnt: String(invRaw.Disc_prcnt || 0),
+      disc_amount: String(invRaw.Disc_amount || 0),
+      xml_path: '',
+      xml_Spath: '',
+      error: '',
+      qrcode: '',
+      qrimg: null,
+      Incoded64Invoice: '',
+      inv_hash: '',
+      inv_xml_status: false,
+      save_qrImg: 0,
+      create_P2qr: 0,
+      success: false,
+      summary: ''
+    };
+
+    // 4. Fetch invoice details (items)
+    const itemsResult = await pool.request()
+      .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+      .input('trnType', sql.Int, parseInt(trnType))
+      .query(`
+        SELECT 
+          item_code, 
+          DESCRIPTION as item_name, 
+          isnull('', '') as item_aname, 
+          G.qty as item_qty, 
+          fprice as item_price,
+          VAT_PERCENT as item_vat_percent, 
+          VAT_AMOUNT as item_vat_amount, 
+          TAXABLE_AMOUNT as item_taxable_price, 
+          DISC as item_discount,
+          isnull(Unit_name, 'Piece') as item_unit_name 
+        FROM dbo.data_entry_grid as g 
+        LEFT JOIN dbo.unitmaster as u on g.unit=u.unit_id 
+        WHERE trn_type = @trnType and invoice_no = @invoiceNo
+      `);
+    const items = itemsResult.recordset.map(it => ({
+      item_code: String(it.item_code),
+      item_name: String(it.item_name || ''),
+      item_aname: String(it.item_aname || ''),
+      item_qty: String(it.item_qty || 0),
+      item_price: String(it.item_price || 0),
+      item_vat_percent: String(it.item_vat_percent || 0),
+      item_vat_amount: String(it.item_vat_amount || 0),
+      item_net_amount: String((Number(it.item_qty) * Number(it.item_price)) || 0),
+      item_taxable_price: String(it.item_taxable_price || 0),
+      item_discount: String(it.item_discount || 0),
+      item_unit_name: String(it.item_unit_name || 'Piece'),
+      error: ''
+    }));
+
+    // 5. Fetch customer info (cus)
+    const customerAcc = invRaw.customer_acc;
+    const rawVatAmt = invRaw.raw_vat_amount;
+    let cusResult;
+    const isCashSale = (customerAcc === cashSaleAc || customerAcc === cashPurAc) && rawVatAmt !== null && rawVatAmt !== undefined;
+
+    if (isCashSale) {
+      cusResult = await pool.request()
+        .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+        .input('trnType', sql.Int, parseInt(trnType))
+        .input('customerAcc', sql.NVarChar(50), String(customerAcc))
+        .query(`
+          SELECT 
+            a.ACCODE AS acc_no,
+            a.Ename AS acc_name,
+            '' AS acc_aname, 
+            isnull(street_name,'') as street_name,
+            '' as street_aname,  
+            isnull(city_name,'') as city_name,
+            '' as city_aname,
+            isnull(city_subdivision_name,'') as city_subdivision_name,
+            '' as city_subdivision_aname,  
+            isnull(building_no,'1000') as cus_building_no,  
+            isnull(postal_zone,'12345') as postal_zone,
+            '' as regsitered_name  
+          FROM dbo.DATA_ENTRY AS A  
+          LEFT JOIN dbo.cash_acc_info as c ON a.accode=c.acc_no and a.invoice_no=c.invoice_no  
+          WHERE A.invoice_no = @invoiceNo and A.trn_type = @trnType and a.ACCODE = @customerAcc
+        `);
+    } else {
+      cusResult = await pool.request()
+        .input('customerAcc', sql.NVarChar(50), String(customerAcc))
+        .query(`
+          SELECT 
+            b.ACC_NO as acc_no, 
+            b.ACC_NAME as acc_name, 
+            b.ACC_ANAME as acc_aname,  
+            isnull(street_name,'') as street_name,
+            '' as street_aname,  
+            isnull(city_name,'') as city_name, 
+            isnull(city_aname,'') as city_aname,
+            isnull(city_subdivision_name,'') as city_subdivision_name,
+            '' as city_subdivision_aname, 
+            isnull(building_no,'1000') as cus_building_no, 
+            isnull(postal_zone,'11111') as postal_zone,
+            '' as regsitered_name 
+          FROM dbo.ACCOUNTS_INFO as b 
+          WHERE b.ACC_NO = @customerAcc
+        `);
+    }
+
+    const cusRaw = cusResult.recordset[0] || {};
+    const cus = {
+      ACC_NO: String(cusRaw.acc_no || ''),
+      ACC_NAME: String(cusRaw.acc_name || ''),
+      ACC_ANAME: String(cusRaw.acc_aname || ''),
+      VAT_Tinno: String(cusRaw.vat_Tinno || ''),
+      street_name: String(cusRaw.street_name || ''),
+      street_aname: String(cusRaw.street_aname || ''),
+      city_subdivision_name: String(cusRaw.city_subdivision_name || ''),
+      city_subdivision_aname: String(cusRaw.city_subdivision_aname || ''),
+      city_name: String(cusRaw.city_name || ''),
+      city_aname: String(cusRaw.city_aname || ''),
+      postal_zone: String(cusRaw.postal_zone || ''),
+      cus_building_no: String(cusRaw.cus_building_no || ''),
+      regsitered_name: String(cusRaw.regsitered_name || '')
+    };
+
+    // 6. Call the XML API
+    console.log(`Sending to XML API URL: ${apiUrlXml}`);
+    const xmlResponse = await fetch(apiUrlXml, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cus, cmp, inv, items })
+    });
+
+    if (!xmlResponse.ok) {
+      const errorText = await xmlResponse.text();
+      // Update qr_code = 2 on XML API error
+      await pool.request()
+        .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+        .input('trnType', sql.Int, parseInt(trnType))
+        .query('UPDATE dbo.DATA_ENTRY SET QR_CODE = 2 WHERE invoice_no = @invoiceNo and trn_type = @trnType');
+      return res.status(500).json({ success: false, error: 'XML API Call failed', details: errorText });
+    }
+
+    let xmlResult = await xmlResponse.json();
+    console.log('XML Response Result:', xmlResult);
+
+    // Some versions of the API wrap the payload in a 'result' object
+    if (xmlResult && xmlResult.result) {
+      xmlResult = xmlResult.result;
+    }
+
+    // If XML creation succeeded
+    if (xmlResult.success || xmlResult.Incoded64Invoice || xmlResult.incoded64Invoice) {
+      // Update qr_code = 1
+      await pool.request()
+        .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+        .input('trnType', sql.Int, parseInt(trnType))
+        .query('UPDATE dbo.DATA_ENTRY SET QR_CODE = 1 WHERE invoice_no = @invoiceNo and trn_type = @trnType');
+
+      // 7. Call the Submit API
+      let submitUsername = '';
+      let submitPassword = '';
+
+      if (envType === 'TEST') {
+        submitUsername = cmp.csid || '';
+        submitPassword = cmp.secret_csid || '';
+      } else if (envType === 'PROD') {
+        submitUsername = cmp.certificate || '';
+        submitPassword = cmp.x509_secret || '';
+      } else {
+        submitUsername = cmp.csid || cmp.certificate || '';
+        submitPassword = cmp.secret_csid || '';
+      }
+
+      // Fetch the generated Inv_hash and Inv_base64 directly from the database table (Inv_Image1) as required
+      const submitInfoResult = await pool.request()
+        .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+        .input('trnType', sql.Int, parseInt(trnType))
+        .input('cmpId', sql.Int, parseInt(cmp.cmp_id) || 0)
+        .input('brnCode', sql.NVarChar(50), String(cmp.brn_code || '1'))
+        .query('SELECT TOP 1 Inv_hash, Inv_base64 FROM dbo.Inv_Image1 WHERE invoice_no = @invoiceNo AND trn_type = @trnType AND cmp_id = @cmpId AND brn_code = @brnCode');
+      
+      const submitInfo = submitInfoResult.recordset[0] || {};
+      const finalInvHash = submitInfo.Inv_hash || xmlResult.inv_hash || xmlResult.Inv_hash || '';
+      const finalInvBase64 = submitInfo.Inv_base64 || xmlResult.Incoded64Invoice || xmlResult.incoded64Invoice || '';
+
+      // Calculate dynamic ZATCA Fatoora Portal URL ID based on environment and VAT number
+      let url_id = 6;
+      const envIdStr = String(envId);
+      const cusVatLength = String(cus.vat_Tinno || '').length;
+
+      if (envIdStr === "0") {
+        url_id = 4;
+      } else if (envIdStr === "1") {
+        if (envType === "TEST") {
+          url_id = 2;
+        } else if (envType === "PROD") {
+          url_id = cusVatLength < 15 ? 12 : 14;
+        }
+      } else if (envIdStr === "2") {
+        if (envType === "TEST") {
+          url_id = 6;
+        } else if (envType === "PROD") {
+          url_id = cusVatLength < 15 ? 17 : 15;
+        }
+      } else if (envIdStr === "3") {
+        if (envType === "TEST") {
+          url_id = 11;
+        } else if (envType === "PROD") {
+          url_id = cusVatLength < 15 ? 13 : 16;
+        }
+      }
+
+      // Fetch the actual URL from Zatca_weburls table
+      const urlResult = await pool.request()
+        .input('urlId', sql.Int, url_id)
+        .query('SELECT TOP 1 url FROM dbo.Zatca_weburls WHERE ID = @urlId');
+      
+      const targetPortalUrl = urlResult.recordset[0]?.url || '';
+
+      const submitPayload = {
+        url: targetPortalUrl,
+        Inv_hash: finalInvHash,
+        uid: cmp.uid || '',
+        Inv_base64: finalInvBase64,
+        username: submitUsername,
+        password: submitPassword,
+        invno: String(invoiceNo)
+      };
+
+      console.log(`Sending to Submit API URL: ${apiUrlSubmit}`);
+      const submitResponse = await fetch(apiUrlSubmit, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitPayload)
+      });
+
+      if (!submitResponse.ok) {
+        const errorText = await submitResponse.text();
+        // Update zatca_send = 2 on error
+        await pool.request()
+          .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+          .input('trnType', sql.Int, parseInt(trnType))
+          .query('UPDATE dbo.DATA_ENTRY SET ZATCA_SEND = 2 WHERE invoice_no = @invoiceNo and trn_type = @trnType');
+        return res.json({ success: false, error: 'Submission API Call failed', details: errorText, xmlResult });
+      }
+
+      const submitResult = await submitResponse.json();
+      console.log('Submit Response Result:', submitResult);
+
+      if (submitResult.success || submitResult.reportingStatus === 'REPORTED' || submitResult.clearanceStatus === 'CLEARED') {
+        // Update zatca_send = 1
+        await pool.request()
+          .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+          .input('trnType', sql.Int, parseInt(trnType))
+          .query('UPDATE dbo.DATA_ENTRY SET ZATCA_SEND = 1 WHERE invoice_no = @invoiceNo and trn_type = @trnType');
+        return res.json({ success: true, message: 'ZATCA Invoice Submitted Successfully', xmlResult, submitResult });
+      } else {
+        // Update zatca_send = 2
+        await pool.request()
+          .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+          .input('trnType', sql.Int, parseInt(trnType))
+          .query('UPDATE dbo.DATA_ENTRY SET ZATCA_SEND = 2 WHERE invoice_no = @invoiceNo and trn_type = @trnType');
+        return res.json({ success: false, error: 'ZATCA Submission rejected/warned', xmlResult, submitResult });
+      }
+    } else {
+      // XML failed
+      await pool.request()
+        .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+        .input('trnType', sql.Int, parseInt(trnType))
+        .query('UPDATE dbo.DATA_ENTRY SET QR_CODE = 2 WHERE invoice_no = @invoiceNo and trn_type = @trnType');
+      return res.json({ success: false, error: 'ZATCA XML Generation failed, Error1:' + xmlResult.success + ':' + xmlResult.Incoded64Invoice, xmlResult });
+    }
+
+  } catch (err) {
+    console.error('ZATCA submit endpoint failed:', err);
+
+    res.status(500).json({ error: err.message, details: err.stack });
+  }
+});
+
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
   try {
@@ -3678,6 +4391,36 @@ app.listen(PORT, async () => {
       )
     `);
     console.log('✅ WEB_TRANSLATIONS table initialized');
+
+    // Initialize options table (check/add Crystal_Print column safely)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='User_Entry_Options' AND xtype='U')
+      BEGIN
+        CREATE TABLE User_Entry_Options (
+          User_id INT NOT NULL,
+          Trn_type INT NOT NULL,
+          Auto_Print BIT NOT NULL DEFAULT 0,
+          Default_Print_Paper NVARCHAR(50) NOT NULL DEFAULT 'Thermal',
+          Show_Invoice BIT NOT NULL DEFAULT 1,
+          Auto_Next_line BIT NOT NULL DEFAULT 0,
+          grid_columns VARCHAR(50) NOT NULL DEFAULT '1111111111',
+          Crystal_Print BIT NOT NULL DEFAULT 0,
+          PRIMARY KEY (User_id, Trn_type)
+        )
+      END
+      ELSE
+      BEGIN
+        IF NOT EXISTS (
+          SELECT * FROM sys.columns 
+          WHERE object_id = OBJECT_ID(N'[dbo].[User_Entry_Options]') 
+          AND name = 'Crystal_Print'
+        )
+        BEGIN
+          ALTER TABLE dbo.User_Entry_Options ADD Crystal_Print BIT NOT NULL DEFAULT 0;
+        END
+      END
+    `);
+    console.log('✅ User_entry_Option table initialized');
   } catch (error) {
     console.error('❌ Failed to connect to the database or initialize table:', error.message);
   }

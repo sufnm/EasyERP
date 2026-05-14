@@ -25,7 +25,11 @@ export default function Toolbar({
   onNew, onPending, onHistory, onReturn, onClear, 
   pendingCount = 0, isReturn = false, isPurchase = false,
   isQuotation = false, isDelivery = false,
-  allTerms = [], selectedTermIds = [], setSelectedTermIds
+  allTerms = [], selectedTermIds = [], setSelectedTermIds,
+  autoPrint, setAutoPrint,
+  defaultPrintPaper, setDefaultPrintPaper,
+  onSaveOptions,
+  crystalPrint, setCrystalPrint
 }) {
   const [showOptions, setShowOptions] = useState(false);
   const toggleColumn = (key) => setVisibleColumns?.(prev => ({ ...prev, [key]: !prev[key] }));
@@ -83,12 +87,10 @@ export default function Toolbar({
                       <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Unit Price includes VAT</span>
                     </label>
                   )}
-                  {!isPurchase && (
-                    <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
-                      <input type="checkbox" checked={enterToQty} onChange={() => setEnterToQty?.(!enterToQty)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
-                      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Enter Adds and Moves to QTY</span>
-                    </label>
-                  )}
+                  <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
+                     <input type="checkbox" checked={!enterToQty} onChange={() => setEnterToQty?.(!enterToQty)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
+                     <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Auto_Next line</span>
+                  </label>
                   <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
                     <input type="checkbox" checked={showInvoiceAfterSave} onChange={() => setShowInvoiceAfterSave?.(!showInvoiceAfterSave)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
                     <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">
@@ -99,6 +101,25 @@ export default function Toolbar({
                           : `Show Invoice after ${isPurchase ? 'Purchase' : 'Sale'}`}
                     </span>
                   </label>
+                  <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
+                    <input type="checkbox" checked={autoPrint} onChange={() => setAutoPrint?.(!autoPrint)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Auto Print</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer group p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border hover:border-zinc-300 dark:hover:border-zinc-700 rounded-xl transition-all shadow-sm">
+                    <input type="checkbox" checked={crystalPrint} onChange={() => setCrystalPrint?.(!crystalPrint)} className="w-5 h-5 rounded text-primary focus:ring-primary border-zinc-300 dark:border-zinc-700" />
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white">Crystal Print</span>
+                  </label>
+                  <div className="flex flex-col gap-2 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border rounded-xl transition-all shadow-sm">
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Default Print Paper</span>
+                    <select 
+                      value={defaultPrintPaper || 'Thermal'} 
+                      onChange={(e) => setDefaultPrintPaper?.(e.target.value)}
+                      className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-primary outline-none text-zinc-800 dark:text-zinc-200"
+                    >
+                      <option value="Thermal">Thermal / Roll</option>
+                      <option value="A4">A4 / Standard</option>
+                    </select>
+                  </div>
                   
                   {!isDelivery && (
                     <div className="flex flex-col gap-2 p-3 bg-zinc-50 dark:bg-zinc-900/50 border border-border rounded-xl transition-all shadow-sm">
@@ -166,7 +187,13 @@ export default function Toolbar({
             </div>
             
             <div className="bg-zinc-50 dark:bg-zinc-900/30 p-5 border-t border-border flex justify-end shrink-0">
-              <button onClick={() => setShowOptions(false)} className="px-6 py-2.5 bg-zinc-800 dark:bg-zinc-950 text-white text-sm font-bold rounded-lg hover:bg-primary transition-colors shadow-md">
+              <button 
+                onClick={() => {
+                  setShowOptions(false);
+                  onSaveOptions?.();
+                }} 
+                className="px-6 py-2.5 bg-zinc-800 dark:bg-zinc-950 text-white text-sm font-bold rounded-lg hover:bg-primary transition-colors shadow-md"
+              >
                 Save & Close
               </button>
             </div>

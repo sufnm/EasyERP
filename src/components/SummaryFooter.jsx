@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileCheck, ChevronRight, Calendar, CreditCard, ArrowLeft, X } from 'lucide-react';
+import { FileCheck, ChevronRight, Calendar, CreditCard, ArrowLeft, X, CloudUpload, Printer } from 'lucide-react';
 
 export default function SummaryFooter({ 
   rows = [], 
@@ -19,7 +19,11 @@ export default function SummaryFooter({
   currencyCode = 'SAR',
   isReturn = false,
   isPurchase = false,
-  isSaving = false
+  isSaving = false,
+  isZatcaEnabled = false,
+  onZatcaSubmit,
+  isPrintEnabled = false,
+  onPrint
 }) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -125,10 +129,6 @@ export default function SummaryFooter({
       alert("Please add at least one item before proceeding.");
       return;
     }
-    if (String(customerId) === '6000') {
-      alert("Payment is mandatory for walkthrough customers.");
-      return;
-    }
     onSave(true);
   };
 
@@ -177,17 +177,48 @@ export default function SummaryFooter({
           {/* Action Buttons Group */}
           <div className="flex items-center gap-3 shrink-0 self-center">
             <button 
-              onClick={handleQuickSave}
-              disabled={String(customerId) === '6000'}
-              title={String(customerId) === '6000' ? "Payment is mandatory for walkthrough customers" : "Save without payment"}
+              type="button"
+              onClick={onPrint}
+              disabled={!isPrintEnabled}
+              title={!isPrintEnabled ? "Save or Edit the invoice to enable printing" : "Print Invoice"}
               className={`text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg flex items-center gap-2 group shrink-0 ${
-                String(customerId) === '6000' 
-                ? 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed border border-zinc-800/50' 
+                !isPrintEnabled 
+                ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-not-allowed shadow-none opacity-65' 
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white font-black border border-indigo-500 shadow-indigo-950/30'
+              }`}
+            >
+              Print
+              <Printer size={18} className={isPrintEnabled ? "group-hover:scale-110 transition-transform" : "opacity-65"} />
+            </button>
+
+            <button 
+              type="button"
+              onClick={onZatcaSubmit}
+              disabled={!isZatcaEnabled}
+              title={!isZatcaEnabled ? "Save or Edit the invoice to enable ZATCA submission" : "Submit invoice to ZATCA"}
+              className={`text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg flex items-center gap-2 group shrink-0 ${
+                !isZatcaEnabled 
+                ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-not-allowed shadow-none opacity-65' 
+                : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black border border-amber-400 shadow-amber-950/30'
+              }`}
+            >
+              Zatca Submit
+              <CloudUpload size={18} className={isZatcaEnabled ? "group-hover:scale-110 transition-transform text-zinc-950" : "text-zinc-400 opacity-65"} />
+            </button>
+
+            <button 
+              type="button"
+              onClick={handleQuickSave}
+              disabled={netAmount <= 0}
+              title={netAmount <= 0 ? "Add items to enable saving" : "Save Invoice"}
+              className={`text-xs font-black uppercase tracking-widest px-6 py-4 rounded-xl transition-all transform active:scale-95 shadow-lg flex items-center gap-2 group shrink-0 ${
+                netAmount <= 0 
+                ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/50 cursor-not-allowed shadow-none opacity-65' 
                 : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 shadow-zinc-950/50'
               }`}
             >
               Save Invoice
-              <FileCheck size={18} className={String(customerId) !== '6000' ? "group-hover:scale-110 transition-transform" : ""} />
+              <FileCheck size={18} className={netAmount > 0 ? "group-hover:scale-110 transition-transform" : "opacity-65"} />
             </button>
 
             <button 

@@ -17,13 +17,21 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     refreshCache,
     cachedAccounts,
     taxIncluded, setTaxIncluded,
-    enterToQty, setEnterToQty,
-    visibleColumns, setVisibleColumns,
     historyInvoiceColumns,
-    showInvoiceAfterSave, setShowInvoiceAfterSave,
     defaultCurrency,
     pendingSales, addPendingSale, removePendingSale, clearPendingSales
   } = useCache();
+
+  // Database-synced User Entry Options States
+  const [autoPrint, setAutoPrint] = useState(false);
+  const [defaultPrintPaper, setDefaultPrintPaper] = useState('Thermal');
+  const [showInvoiceAfterSave, setShowInvoiceAfterSave] = useState(true);
+  const [enterToQty, setEnterToQty] = useState(false);
+  const [crystalPrint, setCrystalPrint] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    itemCode: true, description: true, unit: true, qty: true, 
+    price: true, aliasCode: true, vatAmt: true, total: true, stock: true
+  });
 
   const [salesData, setSalesData] = useState([]);
   const [rows, setRows] = useState([
@@ -61,6 +69,74 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
   const [currencies, setCurrencies] = useState([]);
   const [selectedCurrency, setSelectedCurrency] = useState(defaultCurrency.no);
   const [isSaving, setIsSaving] = useState(false);
+  const [isZatcaEnabled, setIsZatcaEnabled] = useState(false);
+  const [isPrintEnabled, setIsPrintEnabled] = useState(false);
+  const loadUserOptions = async () => {
+    if (!user?.userid) return;
+    try {
+      const res = await fetch(`${API_ENDPOINTS.USER_ENTRY_OPTIONS}?userId=${user.userid}&trnType=6`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.options) {
+          const opts = data.options;
+          setAutoPrint(opts.Auto_print === true || opts.Auto_print === 1);
+          setDefaultPrintPaper(opts.Default_Print_paper || 'Thermal');
+          setShowInvoiceAfterSave(opts.Show_Invoce === true || opts.Show_Invoce === 1);
+          setEnterToQty(opts.Auto_next_Line === true || opts.Auto_next_Line === 1 ? false : true);
+          setCrystalPrint(opts.Crystal_Print === true || opts.Crystal_Print === 1);
+          
+          if (opts.grid_coolums) {
+            const keys = ['itemCode', 'description', 'unit', 'qty', 'price', 'aliasCode', 'vatAmt', 'total', 'stock'];
+            const newCols = {};
+            keys.forEach((k, idx) => {
+              newCols[k] = opts.grid_coolums[idx] === '1';
+            });
+            setVisibleColumns(newCols);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load user entry options:", err);
+    }
+  };
+
+  const saveUserOptions = async () => {
+    if (!user?.userid) return;
+    
+    // We get latest states from closure directly since this runs on Save click
+    const keys = ['itemCode', 'description', 'unit', 'qty', 'price', 'aliasCode', 'vatAmt', 'total', 'stock'];
+    const gridStr = keys.map(k => (visibleColumns[k] ? '1' : '0')).join('').padEnd(10, '1');
+
+    try {
+      await fetch(API_ENDPOINTS.USER_ENTRY_OPTIONS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.userid,
+          trnType: 6,
+          autoPrint: autoPrint,
+          defaultPrintPaper: defaultPrintPaper,
+          showInvoce: showInvoiceAfterSave,
+          autoNextLine: !enterToQty,
+          gridCoolums: gridStr,
+          crystalPrint: crystalPrint
+        })
+      });
+    } catch (err) {
+      console.error("Failed to save user entry options:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadUserOptions();
+  }, [user]);
+
+  // Sync when local settings are manipulated, ensuring instant backend sync on click of options
+  useEffect(() => {
+    if (user?.userid) {
+      saveUserOptions();
+    }
+  }, [autoPrint, defaultPrintPaper, showInvoiceAfterSave, enterToQty, visibleColumns, crystalPrint]);
   
   const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
 
@@ -122,6 +198,8 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
 
   const resetPage = () => {
     setEditingRecNo(null);
+    setIsZatcaEnabled(false);
+    setIsPrintEnabled(false);
     fetchInvoiceNo();
     // Complete Reset
     setVatNumber('');
@@ -154,12 +232,6 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
 
     if (!customer.id || customer.id === '6000') {
       if (!isQuickSave && false) return; // Removed confirmation prompt
-      // If quick save is attempted for 6000, it should have been blocked in UI, 
-      // but let's double check here just in case.
-      if (isQuickSave) {
-        alert('Payment is mandatory for walkthrough customers.');
-        return;
-      }
     }
 
     // MANDATORY VALIDATION: If VAT Number is added, address fields are mandatory
@@ -221,30 +293,31 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
         const result = await res.json();
         
         refreshCache();
+        setIsZatcaEnabled(true);
+        setIsPrintEnabled(true);
+        setInvoiceNo(result.INVOICE_NO);
+        setEditingRecNo(result.REC_NO);
 
-        if (showInvoiceAfterSave && !isQuickSave) {
-          // Prepare invoice data for modal
-          const invoiceData = {
-            REC_NO: result.REC_NO,
-            INVOICE_NO: result.INVOICE_NO,
-            CURDATE: new Date().toISOString(),
-            ENAME: customer.name || 'Cash Customer',
-            ACCODE: customer.id,
-            G_TOTAL: totals.gross,
-            DISC_AMT: totals.discount,
-            NET_AMOUNT: totals.net,
-            VAT_AMOUNT: totals.vat,
-            VAT_NUMBER: vatNumber,
-            TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7,
-            REF_NO: referenceNo
-          };
-          setSavedInvoice({
-              ...invoiceData,
-              CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
-            });
+        const invoiceData = {
+          REC_NO: result.REC_NO,
+          INVOICE_NO: result.INVOICE_NO,
+          CURDATE: new Date().toISOString(),
+          ENAME: customer.name || 'Cash Customer',
+          ACCODE: customer.id,
+          G_TOTAL: totals.gross,
+          DISC_AMT: totals.discount,
+          NET_AMOUNT: totals.net,
+          VAT_AMOUNT: totals.vat,
+          VAT_NUMBER: vatNumber,
+          TRN_TYPE: finalPaymentMethod === 'Cash' ? 6 : 7,
+          REF_NO: referenceNo,
+          CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
+        };
+
+        if (autoPrint || (showInvoiceAfterSave && !isQuickSave)) {
+          setSavedInvoice(invoiceData);
         } else {
-          alert('Sale saved successfully!');
-          resetPage();
+          alert(`Sale saved successfully! Invoice No: ${result.INVOICE_NO}`);
         }
       } else {
         const err = await res.json();
@@ -258,9 +331,28 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     }
   };
 
+  const handlePrint = () => {
+    if (!invoiceNo || invoiceNo === 'Loading...') return;
+    const invoiceData = {
+      REC_NO: editingRecNo || 0,
+      INVOICE_NO: invoiceNo,
+      CURDATE: new Date().toISOString(),
+      ENAME: customer.name || 'Cash Customer',
+      ACCODE: customer.id,
+      G_TOTAL: totals.gross,
+      DISC_AMT: totals.discount,
+      NET_AMOUNT: totals.net,
+      VAT_AMOUNT: totals.vat,
+      VAT_NUMBER: vatNumber,
+      TRN_TYPE: paymentMethod === 'Cash' ? 6 : 7,
+      REF_NO: referenceNo,
+      CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
+    };
+    setSavedInvoice(invoiceData);
+  };
+
   const handleCloseInvoice = () => {
     setSavedInvoice(null);
-    resetPage();
   };
 
   useEffect(() => {
@@ -324,6 +416,8 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     if (params && params.editSale) {
       const sale = params.editSale;
       setEditingRecNo(sale.REC_NO);
+      setIsZatcaEnabled(true);
+      setIsPrintEnabled(true);
       setInvoiceNo(sale.INVOICE_NO);
       setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
       setVatNumber(sale.VAT_NUMBER || '');
@@ -386,6 +480,30 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     }
   }, [cachedAccounts, selectedAccount]);
 
+  const handleZatcaSubmit = async () => {
+    try {
+      const trnType = paymentMethod === 'Cash' ? 6 : 7;
+      alert(`ZATCA: Submitting Sales Invoice #${invoiceNo} (Type: ${trnType === 6 ? 'Cash Sale' : 'Credit Sale'}) to ZATCA server...`);
+      const res = await fetch(API_ENDPOINTS.ZATCA_SUBMIT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceNo: String(invoiceNo),
+          trnType: trnType
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`✅ ZATCA SUCCESS: Invoice #${invoiceNo} processed and submitted successfully!\n${data.message || ''}`);
+      } else {
+        alert(`❌ ZATCA ERROR: ${data.error || 'Submission failed'}\n${data.details || ''}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('❌ ZATCA Request Failed: ' + err.message);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full p-6 animate-in fade-in zoom-in-95 duration-300">
       <div className="max-w-7xl mx-auto w-full flex flex-col flex-1 h-full relative">
@@ -409,6 +527,13 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
               onReturn={() => navigateTo?.('sales-return')}
               onClear={resetPage}
               pendingCount={pendingSales.length}
+              autoPrint={autoPrint}
+              setAutoPrint={setAutoPrint}
+              defaultPrintPaper={defaultPrintPaper}
+              setDefaultPrintPaper={setDefaultPrintPaper}
+              onSaveOptions={saveUserOptions}
+              crystalPrint={crystalPrint}
+              setCrystalPrint={setCrystalPrint}
             />
           </div>
 
@@ -445,6 +570,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
               address={address}
               handleAddressChange={handleAddressChange}
               validationErrors={validationErrors}
+              setSelectedCurrency={setSelectedCurrency}
             />
           </div>
 
@@ -467,6 +593,12 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
             customerId={customer.id}
             isSaving={isSaving}
             currencyCode={currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'}
+            isZatcaEnabled={isZatcaEnabled}
+            onZatcaSubmit={handleZatcaSubmit}
+            isPrintEnabled={isPrintEnabled}
+            onPrint={handlePrint}
+            autoPrint={autoPrint}
+            setAutoPrint={setAutoPrint}
           />
         </div>
       </div>
@@ -477,6 +609,9 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
         onClose={handleCloseInvoice}
         address={address}
         historyInvoiceColumns={historyInvoiceColumns}
+        autoPrint={autoPrint}
+        crystalPrint={crystalPrint}
+        defaultPrintPaper={defaultPrintPaper}
       />
 
       <PendingSalesModal

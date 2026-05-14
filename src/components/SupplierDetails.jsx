@@ -3,7 +3,6 @@ import { API_ENDPOINTS } from '../config';
 import { createPortal } from 'react-dom';
 import { Truck, ChevronDown, MapPin, Trash2 } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
-
 export default function SupplierDetails({ 
   supplier, 
   setSupplier, 
@@ -12,7 +11,8 @@ export default function SupplierDetails({
   setAddress,
   address,
   handleAddressChange,
-  validationErrors = []
+  validationErrors = [],
+  setSelectedCurrency
 }) {
   const { isReady, searchSuppliers, getAddressFromCache, updateAddressCache } = useCache();
   const [searchResults, setSearchResults] = useState([]);
@@ -38,11 +38,24 @@ export default function SupplierDetails({
           const data = await res.json();
           if (data.length > 0) {
             setSupplier({ id: data[0].ACC_NO, name: data[0].ACC_NAME });
+            // Also fetch info for default supplier to set correct default currency!
+            try {
+              const infoRes = await fetch(API_ENDPOINTS.SUPPLIER_INFO(data[0].ACC_NO));
+              if (infoRes.ok) {
+                const info = await infoRes.json();
+                if (info && setSelectedCurrency) {
+                  setSelectedCurrency(info.currency ? Number(info.currency) : 1);
+                }
+              }
+            } catch (err) {
+              console.error("Failed to fetch default supplier info:", err);
+            }
           }
         }
       } catch (err) {
         console.error("Failed to fetch default supplier:", err);
         setSupplier({ id: '', name: 'CASH PURCHASE' }); 
+        if (setSelectedCurrency) setSelectedCurrency(1);
       }
     };
     fetchDefault();
@@ -180,6 +193,9 @@ export default function SupplierDetails({
           building: cachedInfo.building_no || '',
           pincode: cachedInfo.postal_zone || ''
         });
+        if (setSelectedCurrency) {
+          setSelectedCurrency(cachedInfo.currency ? Number(cachedInfo.currency) : 1);
+        }
         return;
       }
 
@@ -196,8 +212,14 @@ export default function SupplierDetails({
               building: info.building_no || '',
               pincode: info.postal_zone || ''
             });
+            if (setSelectedCurrency) {
+              setSelectedCurrency(info.currency ? Number(info.currency) : 1);
+            }
           } else {
             setAddress({ street: '', city: '', district: '', building: '', pincode: '' });
+            if (setSelectedCurrency) {
+              setSelectedCurrency(1);
+            }
           }
         }
       } catch (err) {

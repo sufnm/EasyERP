@@ -155,6 +155,7 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
       label: t('adminSetup'),
       icon: ShieldCheck,
       subItems: [
+        { id: 'application-setup', label: t('Application Setup') },
         { id: 'transaction-types', label: t('transactionTypes') },
         { id: 'user-privileges', label: t('userPrivileges') },
         { id: 'user-info', label: t('userInfo') },

@@ -92,6 +92,12 @@ export const API_ENDPOINTS = {
   OPENING_STOCK_SAVE: `${API_BASE_URL}/api/opening-stock/save`,
   QUOTATION_TERMS: `${API_BASE_URL}/api/quotations/terms`,
   QUOTATION_SAVED_TERMS: (invoiceNo, trnType = 19) => `${API_BASE_URL}/api/sales/${invoiceNo}/terms?trnType=${trnType}`,
+  USER_ENTRY_OPTIONS: `${API_BASE_URL}/api/user-entry-options`,
+  INVOICE_QRCODE: `${API_BASE_URL}/api/invoice-qrcode`,
+  PRINT_CRYSTAL: `${API_BASE_URL}/api/print-crystal`,
+  APPLICATION_SETUP: `${API_BASE_URL}/api/application-setup`,
+  ZATCA_INVOICES: `${API_BASE_URL}/api/zatca/invoices`,
+  ZATCA_SUBMIT: `${API_BASE_URL}/api/zatca/submit`,
 };
 
 export default API_BASE_URL;

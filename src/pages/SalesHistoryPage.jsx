@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { Search, FileText, User, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Search, FileText, User, ChevronRight, ArrowLeft, Download } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 import InvoiceModal from '../components/InvoiceModal';
 
@@ -49,6 +49,82 @@ export default function SalesHistoryPage({ setActivePage }) {
     }
   };
 
+  const handleExportExcel = () => {
+    const headers = ['Invoice No', 'Date', 'Customer Name', 'Type', 'Amount'];
+    const data = filteredSales.map(sale => [
+      sale.INVOICE_NO,
+      new Date(sale.CURDATE).toLocaleDateString(),
+      sale.ENAME || 'Cash Customer',
+      sale.TRN_TYPE === 6 ? 'Cash' : sale.TRN_TYPE === 3 ? 'Return Cash' : sale.TRN_TYPE === 4 ? 'Return Credit' : 'Others',
+      sale.NET_AMOUNT
+    ]);
+    
+    let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+    html += '<head>';
+    html += '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Sales History</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+    html += '<style>table { border-collapse: collapse; } th { background-color: #4F46E5; color: white; font-weight: bold; padding: 8px; border: 1px solid #D1D5DB; font-family: sans-serif; font-size: 13px; } td { padding: 8px; border: 1px solid #D1D5DB; font-family: sans-serif; font-size: 12px; }</style>';
+    html += '</head><body>';
+    html += '<h3>Sales Transactions List / قائمة مبيعات</h3>';
+    html += '<table><thead><tr>';
+    headers.forEach(h => {
+      html += '<th>' + h + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    data.forEach(row => {
+      html += '<tr>';
+      row.forEach(cell => {
+        html += '<td>' + (cell !== null && cell !== undefined ? cell : '') + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></body></html>';
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'sales_history_' + new Date().toISOString().slice(0,10) + '.xls';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportPDF = () => {
+    const headers = ['Invoice No', 'Date', 'Customer Name', 'Type', 'Amount'];
+    const data = filteredSales.map(sale => [
+      sale.INVOICE_NO,
+      new Date(sale.CURDATE).toLocaleDateString(),
+      sale.ENAME || 'Cash Customer',
+      sale.TRN_TYPE === 6 ? 'Cash' : sale.TRN_TYPE === 3 ? 'Return Cash' : sale.TRN_TYPE === 4 ? 'Return Credit' : 'Others',
+      sale.NET_AMOUNT
+    ]);
+
+    const printWindow = window.open('', '_blank');
+    let html = '<html><head><title>Sales History</title>';
+    html += '<style>body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; color: #1F2937; } h1 { color: #4F46E5; font-size: 20px; margin-bottom: 5px; } p { font-size: 11px; color: #6B7280; margin-bottom: 20px; } table { width: 100%; border-collapse: collapse; margin-top: 10px; } th { background-color: #F3F4F6; text-align: left; padding: 8px; border-bottom: 2px solid #E5E7EB; font-size: 11px; font-weight: bold; text-transform: uppercase; } td { padding: 8px; border-bottom: 1px solid #E5E7EB; font-size: 11px; } tr:nth-child(even) { background-color: #F9FAFB; } @media print { body { padding: 0; } }</style>';
+    html += '</head><body>';
+    html += '<h1>Sales Transactions List / قائمة مبيعات</h1>';
+    html += '<p>Generated on: ' + new Date().toLocaleString() + '</p>';
+    html += '<table><thead><tr>';
+    headers.forEach(h => {
+      html += '<th>' + h + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    data.forEach(row => {
+      html += '<tr>';
+      row.forEach(cell => {
+        html += '<td>' + (cell !== null && cell !== undefined ? cell : '') + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '<script>window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 500); };</script>';
+    html += '</body></html>';
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   return (
     <div className="flex flex-col h-full p-6 animate-in fade-in duration-500 relative">
       <div className="max-w-7xl mx-auto w-full">
@@ -92,6 +168,24 @@ export default function SalesHistoryPage({ setActivePage }) {
                       : '0'}
                   </p>
                 </div>
+             </div>
+             <div className="flex items-center gap-2">
+               <button
+                 onClick={handleExportExcel}
+                 className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs transition-all uppercase tracking-wider shadow-sm h-[46px]"
+                 title="Download Excel / تحميل اكسل"
+               >
+                 <Download size={14} />
+                 Excel
+               </button>
+               <button
+                 onClick={handleExportPDF}
+                 className="flex items-center gap-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs transition-all uppercase tracking-wider shadow-sm h-[46px]"
+                 title="Download PDF / تحميل PDF"
+               >
+                 <Download size={14} />
+                 PDF
+               </button>
              </div>
           </div>
         </div>

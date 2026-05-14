@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '../config';
-import { Search, FileText, Truck, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Search, FileText, Truck, ChevronRight, ArrowLeft, Download } from 'lucide-react';
 import { useCache } from '../context/CacheContext';
 import InvoiceModal from '../components/InvoiceModal';
 
@@ -37,6 +37,82 @@ export default function PurchaseHistoryPage({ setActivePage }) {
     return matchesSearch && matchesType && matchesCategory;
   });
 
+  const handleExportExcel = () => {
+    const headers = ['Invoice No', 'Date', 'Supplier Name', 'Type', 'Amount'];
+    const data = filteredPurchases.map(p => [
+      p.INVOICE_NO,
+      new Date(p.CURDATE).toLocaleDateString(),
+      p.ENAME || 'Cash Supplier',
+      p.TRN_TYPE === 1 ? 'Cash' : p.TRN_TYPE === 2 ? 'Credit' : p.TRN_TYPE === 8 ? 'Cash Return' : 'Credit Return',
+      p.NET_AMOUNT
+    ]);
+    
+    let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+    html += '<head>';
+    html += '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Purchase History</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+    html += '<style>table { border-collapse: collapse; } th { background-color: #4F46E5; color: white; font-weight: bold; padding: 8px; border: 1px solid #D1D5DB; font-family: sans-serif; font-size: 13px; } td { padding: 8px; border: 1px solid #D1D5DB; font-family: sans-serif; font-size: 12px; }</style>';
+    html += '</head><body>';
+    html += '<h3>Purchase Transactions List / قائمة مشتريات</h3>';
+    html += '<table><thead><tr>';
+    headers.forEach(h => {
+      html += '<th>' + h + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    data.forEach(row => {
+      html += '<tr>';
+      row.forEach(cell => {
+        html += '<td>' + (cell !== null && cell !== undefined ? cell : '') + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></body></html>';
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'purchase_history_' + new Date().toISOString().slice(0,10) + '.xls';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportPDF = () => {
+    const headers = ['Invoice No', 'Date', 'Supplier Name', 'Type', 'Amount'];
+    const data = filteredPurchases.map(p => [
+      p.INVOICE_NO,
+      new Date(p.CURDATE).toLocaleDateString(),
+      p.ENAME || 'Cash Supplier',
+      p.TRN_TYPE === 1 ? 'Cash' : p.TRN_TYPE === 2 ? 'Credit' : p.TRN_TYPE === 8 ? 'Cash Return' : 'Credit Return',
+      p.NET_AMOUNT
+    ]);
+
+    const printWindow = window.open('', '_blank');
+    let html = '<html><head><title>Purchase History</title>';
+    html += '<style>body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; color: #1F2937; } h1 { color: #4F46E5; font-size: 20px; margin-bottom: 5px; } p { font-size: 11px; color: #6B7280; margin-bottom: 20px; } table { width: 100%; border-collapse: collapse; margin-top: 10px; } th { background-color: #F3F4F6; text-align: left; padding: 8px; border-bottom: 2px solid #E5E7EB; font-size: 11px; font-weight: bold; text-transform: uppercase; } td { padding: 8px; border-bottom: 1px solid #E5E7EB; font-size: 11px; } tr:nth-child(even) { background-color: #F9FAFB; } @media print { body { padding: 0; } }</style>';
+    html += '</head><body>';
+    html += '<h1>Purchase Transactions List / قائمة مشتريات</h1>';
+    html += '<p>Generated on: ' + new Date().toLocaleString() + '</p>';
+    html += '<table><thead><tr>';
+    headers.forEach(h => {
+      html += '<th>' + h + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    data.forEach(row => {
+      html += '<tr>';
+      row.forEach(cell => {
+        html += '<td>' + (cell !== null && cell !== undefined ? cell : '') + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '<script>window.onload = function() { window.print(); setTimeout(function() { window.close(); }, 500); };</script>';
+    html += '</body></html>';
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   return (
     <div className="flex flex-col h-full p-6 animate-in fade-in duration-500 relative bg-zinc-50 dark:bg-zinc-950">
       <div className="max-w-7xl mx-auto w-full">
@@ -53,27 +129,46 @@ export default function PurchaseHistoryPage({ setActivePage }) {
               <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">Manage your inventory inflows</p>
             </div>
           </div>
-          
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm">
-            <div>
-              <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Total Purchases</p>
-              <p className="text-xl font-black text-emerald-600 leading-none">
-                {defaultCurrency.code} {filteredPurchases.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 flex items-center gap-4 shadow-sm">
+              <div>
+                <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Total Purchases</p>
+                <p className="text-xl font-black text-emerald-600 leading-none">
+                  {defaultCurrency.code} {filteredPurchases.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
+              <div>
+                <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Orders</p>
+                <p className="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{filteredPurchases.length}</p>
+              </div>
+              <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
+              <div>
+                <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Avg. Value</p>
+                <p className="text-xl font-black text-amber-500 leading-none">
+                  {defaultCurrency.code} {filteredPurchases.length > 0 
+                    ? (filteredPurchases.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0) / filteredPurchases.length).toLocaleString(undefined, { maximumFractionDigits: 0 }) 
+                    : '0'}
+                </p>
+              </div>
             </div>
-            <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
-            <div>
-              <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Orders</p>
-              <p className="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{filteredPurchases.length}</p>
-            </div>
-            <div className="h-10 w-px bg-zinc-100 dark:bg-zinc-800"></div>
-            <div>
-              <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-0.5">Avg. Value</p>
-              <p className="text-xl font-black text-amber-500 leading-none">
-                {defaultCurrency.code} {filteredPurchases.length > 0 
-                  ? (filteredPurchases.reduce((acc, curr) => acc + (Number(curr.NET_AMOUNT) || 0), 0) / filteredPurchases.length).toLocaleString(undefined, { maximumFractionDigits: 0 }) 
-                  : '0'}
-              </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs transition-all uppercase tracking-wider shadow-sm h-[46px]"
+                title="Download Excel / تحميل اكسل"
+              >
+                <Download size={14} />
+                Excel
+              </button>
+              <button
+                onClick={handleExportPDF}
+                className="flex items-center gap-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-600 hover:text-white px-4 py-2.5 rounded-xl font-black text-xs transition-all uppercase tracking-wider shadow-sm h-[46px]"
+                title="Download PDF / تحميل PDF"
+              >
+                <Download size={14} />
+                PDF
+              </button>
             </div>
           </div>
         </div>
