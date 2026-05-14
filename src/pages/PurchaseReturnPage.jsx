@@ -265,7 +265,9 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
           VAT_NUMBER: vatNumber,
           TRN_TYPE: payload.TRN_TYPE,
           REF_NO: referenceNo,
-          CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
+          CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR',
+          CASH_PAID: cashPaid,
+          OTHER_PAID: otherPaid
         };
         
         if (autoPrint || showInvoiceAfterSave) {

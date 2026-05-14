@@ -232,7 +232,9 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
           VAT_NUMBER: vatNumber,
           TRN_TYPE: paymentMethod === 'Cash' ? 1 : 2,
           REF_NO: referenceNo,
-          CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
+          CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR',
+          CASH_PAID: cashPaid,
+          OTHER_PAID: otherPaid
         };
         
         if (autoPrint || showInvoiceAfterSave) {

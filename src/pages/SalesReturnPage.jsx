@@ -372,24 +372,27 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
         setInvoiceNo(result.INVOICE_NO);
         setEditingRecNo(result.REC_NO);
 
-        const invoiceData = {
-          REC_NO: result.REC_NO,
-          INVOICE_NO: result.INVOICE_NO,
-          CURDATE: new Date().toISOString(),
-          ENAME: customer.name || 'Cash Customer',
-          ACCODE: customer.id,
-          G_TOTAL: totals.gross,
-          DISC_AMT: totals.discount,
-          NET_AMOUNT: totals.net,
-          VAT_AMOUNT: totals.vat,
-          VAT_NUMBER: vatNumber,
-          TRN_TYPE: finalPaymentMethod === 'Cash' ? 3 : 4,
-          REF_NO: selectedInvoice?.INVOICE_NO || manualReferenceNo || null,
-          CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
-        };
-
         if (autoPrint || (showInvoiceAfterSave && !isQuickSave)) {
+          // Prepare invoice data for modal
+          const invoiceData = {
+            REC_NO: result.REC_NO,
+            INVOICE_NO: result.INVOICE_NO,
+            CURDATE: new Date().toISOString(),
+            ENAME: customer.name || 'Cash Customer',
+            ACCODE: customer.id,
+            G_TOTAL: totals.gross,
+            DISC_AMT: totals.discount,
+            NET_AMOUNT: totals.net,
+            VAT_AMOUNT: totals.vat,
+            VAT_NUMBER: vatNumber,
+            TRN_TYPE: finalPaymentMethod === 'Cash' ? 3 : 4,
+            REF_NO: selectedInvoice?.INVOICE_NO || manualReferenceNo || null,
+            CASH_PAID: finalCashPaid,
+            OTHER_PAID: finalOtherPaid,
+            CURRENCY_CODE: currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'
+          };
           setSavedInvoice(invoiceData);
+
         } else {
           alert(`Return sale saved successfully! Invoice No: ${result.INVOICE_NO}`);
         }
