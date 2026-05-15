@@ -347,6 +347,119 @@ app.post('/api/scan-pdf', upload.single('pdf'), async (req, res) => {
 });
 
 
+// Dashboard Statistics Endpoint
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    const pool = await getPool();
+    
+    // 1. Total Sales Today (TRN_TYPE 6 & 7)
+    const salesToday = await pool.request().query(`
+      SELECT ISNULL(SUM(NET_AMOUNT), 0) as total
+      FROM dbo.DATA_ENTRY_WEB
+      WHERE CONVERT(DATE, CURDATE) = CONVERT(DATE, GETDATE())
+      AND TRN_TYPE IN (6, 7)
+    `);
+
+    // 2. Pending Invoices (Sales Only - TRN_TYPE 6 & 7)
+    const pendingInvoices = await pool.request().query(`
+      SELECT COUNT(*) as count
+      FROM dbo.DATA_ENTRY_WEB
+      WHERE TRN_TYPE IN (6, 7)
+      AND (NET_AMOUNT - (CASH_PAID + OTHER_PAID) > 0.01)
+    `);
+
+    // 3. Active Customers (ACC_TYPE 1)
+    const activeCustomers = await pool.request().query(`
+      SELECT COUNT(*) as count
+      FROM dbo.ACCOUNTS_INFO
+      WHERE ACC_TYPE = 1
+    `);
+
+    console.log(`📊 Dashboard Stats: Sales Today=${salesToday.recordset[0].total}, Pending=${pendingInvoices.recordset[0].count}, Customers=${activeCustomers.recordset[0].count}`);
+    
+    res.json({
+      totalSalesToday: salesToday.recordset[0].total,
+      pendingInvoices: pendingInvoices.recordset[0].count,
+      activeCustomers: activeCustomers.recordset[0].count,
+      growth: '+0%' // Placeholder for now
+    });
+
+  } catch (error) {
+    console.error("Dashboard stats failed:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+
+// Dashboard Sales History (for Chart)
+app.get('/api/dashboard/sales-history', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const period = req.query.period || 'daily';
+    let result;
+    const history = [];
+
+    if (period === 'monthly') {
+      result = await pool.request().query(`
+        SELECT 
+          CONVERT(VARCHAR(7), CURDATE, 126) as date,
+          ISNULL(SUM(NET_AMOUNT), 0) as totalSales
+        FROM dbo.DATA_ENTRY_WEB
+        WHERE CURDATE >= DATEADD(month, -11, GETDATE())
+        AND TRN_TYPE IN (6, 7)
+        GROUP BY CONVERT(VARCHAR(7), CURDATE, 126)
+        ORDER BY date ASC
+      `);
+
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const monthStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        const match = result.recordset.find(r => r.date === monthStr);
+        history.push({
+          name: d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }),
+          sales: match ? match.totalSales : 0
+        });
+      }
+    } else {
+      // Default: Daily (7 days)
+      result = await pool.request().query(`
+        SELECT 
+          CAST(CURDATE AS DATE) as date,
+          ISNULL(SUM(NET_AMOUNT), 0) as totalSales
+        FROM dbo.DATA_ENTRY_WEB
+        WHERE CURDATE >= DATEADD(day, -6, GETDATE())
+        AND TRN_TYPE IN (6, 7)
+        GROUP BY CAST(CURDATE AS DATE)
+        ORDER BY date ASC
+      `);
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.getFullYear() + '-' + 
+                        String(d.getMonth() + 1).padStart(2, '0') + '-' + 
+                        String(d.getDate()).padStart(2, '0');
+        
+        const match = result.recordset.find(r => {
+          const rDate = r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0];
+          return rDate === dateStr;
+        });
+        history.push({
+          name: `${d.getDate()}/${d.getMonth() + 1} (${d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()})`,
+          sales: match ? match.totalSales : 0
+        });
+      }
+    }
+
+    res.json(history);
+  } catch (error) {
+    console.error("Dashboard history failed:", error);
+    res.status(500).json({ error: 'Database error', details: error.message });
+  }
+});
+
+
 // Test connection endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'Backend is running' });
@@ -2578,7 +2691,7 @@ app.get('/api/sales', async (req, res) => {
         D.VAT_AMOUNT,
         D.DISC_AMT,
         D.TRN_TYPE,
-        D.CURDATE,
+        CONVERT(VARCHAR, D.CURDATE, 121) AS CURDATE,
         D.CASH_PAID,
         D.OTHER_PAID,
         D.VAT_NUMBER,

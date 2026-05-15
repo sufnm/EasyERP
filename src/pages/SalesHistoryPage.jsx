@@ -4,13 +4,13 @@ import { Search, FileText, User, ChevronRight, ArrowLeft, Download } from 'lucid
 import { useCache } from '../context/CacheContext';
 import InvoiceModal from '../components/InvoiceModal';
 
-export default function SalesHistoryPage({ setActivePage }) {
+export default function SalesHistoryPage({ setActivePage, params }) {
   const { cachedSales, isReady, currencies, defaultCurrency, refreshCache, historyInvoiceColumns } = useCache();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(!isReady);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all'); // all, sales, returns
+  const [filterType, setFilterType] = useState(params?.filter || 'all');
+  const [categoryFilter, setCategoryFilter] = useState(params?.category || 'all'); // all, sales, returns
   const [selectedSale, setSelectedSale] = useState(null);
   const currentDefaultRate = currencies.find(c => c.Currency_No === defaultCurrency.no)?.Currency_Rate || 1;
 
@@ -327,9 +327,17 @@ export default function SalesHistoryPage({ setActivePage }) {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-zinc-500 dark:text-zinc-400">
-                      {new Date(sale.CURDATE).toLocaleDateString(undefined, { 
-                        year: 'numeric', month: 'short', day: 'numeric' 
-                      })}
+                      {(() => {
+                        if (!sale.CURDATE) return '-';
+                        // Since we converted to string in SQL (YYYY-MM-DD HH:MM:SS), we can split it
+                        const datePart = String(sale.CURDATE).split(' ')[0] || String(sale.CURDATE).split('T')[0];
+                        if (datePart.includes('-')) {
+                          const [y, m, d] = datePart.split('-');
+                          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                          return `${parseInt(d)} ${monthNames[parseInt(m) - 1]} ${y}`;
+                        }
+                        return datePart;
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

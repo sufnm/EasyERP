@@ -101,12 +101,12 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          {activePage === 'home' && <HomePage />}
+          {activePage === 'home' && <HomePage navigateTo={navigateTo} />}
           {activePage === 'sales' && <SalesPage user={user} params={activePageParams} navigateTo={navigateTo} />}
           {activePage === 'sales-return' && <SalesReturnPage user={user} params={activePageParams} navigateTo={navigateTo} />}
           {activePage === 'edit-sale' && <SalesPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('sales-history')} />}
           {activePage === 'edit-sales-return' && <SalesReturnPage user={user} params={activePageParams} navigateTo={navigateTo} onBack={() => navigateTo('sales-history')} />}
-          {activePage === 'sales-history' && <SalesHistoryPage setActivePage={navigateTo} />}
+          {activePage === 'sales-history' && <SalesHistoryPage setActivePage={navigateTo} params={activePageParams} />}
           {activePage === 'accounts' && <AccountsPage setActivePage={navigateTo} />}
           {activePage === 'expense-accounts' && <ExpenseAccountsPage setActivePage={navigateTo} />}
           {activePage === 'customers-account' && <CustomersAccountPage setActivePage={navigateTo} />}
