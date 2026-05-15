@@ -344,18 +344,43 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
       const data = await res.json();
       console.log('📄 Scanned Data:', data);
 
-      // Auto-fill Customer if matched (simple name check or just set name)
+      // Auto-fill Customer if matched
       if (data.customer) {
-        setCustomer(prev => ({ ...prev, name: data.customer.name }));
-        if (data.customer.vatNumber) setVatNumber(data.customer.vatNumber);
+        if (data.customer.accNo) {
+          console.log(`✅ Applying matched customer: ${data.customer.officialName} (${data.customer.accNo})`);
+          // Only update ID, not name
+          setCustomer(prev => ({ ...prev, id: data.customer.accNo }));
+          if (data.customer.vatNumber) setVatNumber(data.customer.vatNumber);
+          
+          // Fetch full customer info for address
+          fetch(API_ENDPOINTS.CUSTOMER_INFO(data.customer.accNo))
+            .then(res => res.json())
+            .then(info => {
+              if (info) {
+                setAddress({
+                  building: info.building_no || '',
+                  street: info.street_name || '',
+                  district: info.city_subdivision_name || '',
+                  city: info.city_name || '',
+                  pincode: info.postal_zone || ''
+                });
+                if (info.VAT_Tinno) setVatNumber(info.VAT_Tinno);
+              }
+            })
+            .catch(err => console.error("Failed to fetch matched customer info:", err));
+        } else {
+          // If no match found, treat as a New Customer (999) but do NOT update the name
+          setCustomer(prev => ({ ...prev, id: '999' }));
+          if (data.customer.vatNumber) setVatNumber(data.customer.vatNumber);
+        }
       }
 
       // Auto-fill Items
       if (data.items && Array.isArray(data.items)) {
         const newRows = data.items.map((item, idx) => ({
           id: Date.now() + idx,
-          itemCode: item.itemCode || '999', 
-          description: item.description || '',
+          itemCode: item.itemCode || '999',
+          description: item.officialDescription || item.description || '',
           unit: item.unit || 'Pcs',
           qty: item.qty || 1,
           price: item.price || 0,
@@ -364,15 +389,15 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
           total: 0,
           aliasCode: '',
           stock: '',
-          unitId: ''
+          unitId: item.unitId || ''
         }));
-
+        
         // Fill up to 5 rows
         while (newRows.length < 5) {
           newRows.push({ 
             id: Date.now() + newRows.length, 
             itemCode: '', description: '', unit: '', qty: '', price: '', 
-            aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '', unitId: '' 
+            aliasCode: '', vatAmt: '', vatPercent: 15, total: '', stock: '', unitId: '' 
           });
         }
         setRows(newRows);

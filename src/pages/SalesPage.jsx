@@ -508,7 +508,6 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
   }, [selectedCurrency, currencies]);
 
   
-
   // Handle Edit Mode from Params
   useEffect(() => {
     if (params && params.editSale) {

@@ -245,21 +245,59 @@ app.post('/api/scan-pdf', upload.single('pdf'), async (req, res) => {
     // Clean up potential markdown formatting in response
     jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    try {
+      try {
       const data = JSON.parse(jsonText);
-      
-      // Attempt to match items in database
+      const pool = await getPool();
+
+      // --- MATCH CUSTOMER ---
+      if (data.customer) {
+        const cleanCustName = (data.customer.name || '').trim();
+        const custVat = (data.customer.vatNumber || '').trim();
+        
+        console.log(`👤 Searching for customer match: "${cleanCustName}" (VAT: ${custVat})`);
+        
+        try {
+          // Search by name or VAT_Tinno in ACCOUNTS_INFO (Searching all account types for maximum matching)
+          let custQuery = `
+            SELECT TOP 1 ACC_NO as accNo, ACC_NAME as officialName, VAT_Tinno as vatNumber
+            FROM dbo.ACCOUNTS_INFO
+            WHERE (ACC_NAME = @name OR ACC_ANAME = @name)
+          `;
+          const custReq = pool.request().input('name', sql.VarChar, cleanCustName);
+          
+          if (custVat) {
+            custQuery += ` OR VAT_Tinno = @vat`;
+            custReq.input('vat', sql.VarChar, custVat);
+          }
+          
+          const custRes = await custReq.query(custQuery);
+          
+          if (custRes.recordset.length > 0) {
+            const matchedCust = custRes.recordset[0];
+            console.log(`✅ Matched Customer: ${matchedCust.officialName} (${matchedCust.accNo})`);
+            data.customer.accNo = String(matchedCust.accNo);
+            data.customer.officialName = matchedCust.officialName;
+            data.customer.vatNumber = matchedCust.vatNumber || data.customer.vatNumber;
+          }
+        } catch (custError) {
+          console.error('Error matching customer:', custError.message);
+        }
+      }
+
+      // --- MATCH ITEMS ---
       if (data.items && Array.isArray(data.items)) {
         console.log(`🔍 Matching ${data.items.length} items against database...`);
-        const pool = await getPool();
         
         for (let i = 0; i < data.items.length; i++) {
           const item = data.items[i];
           const cleanDesc = (item.description || '').trim();
-          console.log(`🔎 Searching for perfect match: "${cleanDesc}"`);
+          const cleanCode = (item.itemCode || '').trim();
+          
+          console.log(`🔎 Searching for item match: "${cleanDesc}" / Code: "${cleanCode}"`);
           try {
             const searchResult = await pool.request()
               .input('desc', sql.VarChar, cleanDesc)
+              .input('code', sql.VarChar, cleanCode)
               .query(`
                 SELECT TOP 1 
                   B.BARCODE as itemCode, 
@@ -270,15 +308,21 @@ app.post('/api/scan-pdf', upload.single('pdf'), async (req, res) => {
                 FROM dbo.HD_ITEMMASTER H
                 LEFT JOIN dbo.BARCODE B ON H.ITEM_CODE = B.ITEM_CODE
                 LEFT JOIN dbo.STOCK_MASTER S ON H.ITEM_CODE = S.ITEM_CODE
-                WHERE H.DESCRIPTION = @desc OR H.ITEM_CODE = @desc
+                WHERE H.DESCRIPTION = @desc 
+                OR H.ITEM_CODE = @desc 
+                OR B.BARCODE = @desc
+                OR (LEN(@code) > 0 AND (B.BARCODE = @code OR H.ITEM_CODE = @code))
               `);
             
             if (searchResult.recordset.length > 0) {
               const matched = searchResult.recordset[0];
-              console.log(`✅ Matched "${item.description}" -> ${matched.itemCode}`);
+              console.log(`✅ Matched Item "${item.description}" -> ${matched.itemCode}`);
               data.items[i].itemCode = matched.itemCode;
-              // Keep AI qty/price if relevant, or update with DB price if preferred
-              // Usually for quotations, we might want to keep the scanned price
+              data.items[i].officialDescription = matched.description;
+              data.items[i].unit = matched.unit || item.unit;
+              data.items[i].vatPercent = matched.vatPercent;
+              // We keep the scanned price but can flag it if it differs significantly
+              // data.items[i].dbPrice = matched.price; 
             } else {
               console.log(`❓ No match for "${item.description}", using 999`);
               data.items[i].itemCode = '999';
