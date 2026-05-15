@@ -45,7 +45,7 @@ export default function Toolbar({
           icon={FileSearch} 
           label="Scan PDF" 
           onClick={onScanPdf} 
-          colorClass="text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20" 
+          colorClass="text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800" 
         />
       )}
       {/* Pending and History/Active Quotations buttons */}

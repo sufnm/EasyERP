@@ -255,10 +255,11 @@ app.post('/api/scan-pdf', upload.single('pdf'), async (req, res) => {
         
         for (let i = 0; i < data.items.length; i++) {
           const item = data.items[i];
-          console.log(`🔎 Searching for item: "${item.description}"`);
+          const cleanDesc = (item.description || '').trim();
+          console.log(`🔎 Searching for perfect match: "${cleanDesc}"`);
           try {
             const searchResult = await pool.request()
-              .input('desc', sql.VarChar, `${item.description}`)
+              .input('desc', sql.VarChar, cleanDesc)
               .query(`
                 SELECT TOP 1 
                   B.BARCODE as itemCode, 
@@ -269,7 +270,7 @@ app.post('/api/scan-pdf', upload.single('pdf'), async (req, res) => {
                 FROM dbo.HD_ITEMMASTER H
                 LEFT JOIN dbo.BARCODE B ON H.ITEM_CODE = B.ITEM_CODE
                 LEFT JOIN dbo.STOCK_MASTER S ON H.ITEM_CODE = S.ITEM_CODE
-                WHERE H.DESCRIPTION LIKE '%' + @desc + '%' OR H.ITEM_CODE = @desc
+                WHERE H.DESCRIPTION = @desc OR H.ITEM_CODE = @desc
               `);
             
             if (searchResult.recordset.length > 0) {
