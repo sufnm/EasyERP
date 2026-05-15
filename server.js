@@ -4,8 +4,14 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import { execFile } from 'child_process';
+import { PDFParse } from 'pdf-parse';
 import { sql, getPool } from './db.js';
+import multer from 'multer';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -182,6 +188,119 @@ app.get('/api/privileges/:trnCode', async (req, res) => {
     res.status(500).json({ error: 'Database error', details: error.message });
   }
 });
+
+app.post('/api/scan-pdf', upload.single('pdf'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No PDF file uploaded' });
+  }
+
+  try {
+    console.log(`📄 Received PDF for scanning: ${req.file.originalname} (${req.file.size} bytes)`);
+    const dataBuffer = req.file.buffer;
+    
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'your_gemini_api_key_here' || !apiKey.trim()) {
+      console.error('❌ Gemini API Key is missing or invalid in .env');
+      return res.status(500).json({ error: 'Gemini API key not configured' });
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+
+    console.log('🤖 Sending PDF directly to Gemini AI for OCR and parsing...');
+    const prompt = `
+      Extract quotation details from the attached PDF and return ONLY a valid JSON object.
+      The JSON should have this structure:
+      {
+        "customer": { "name": "Name", "vatNumber": "VAT" },
+        "items": [
+          { "description": "Item Name", "qty": 1, "unit": "Pcs", "price": 100, "vatPercent": 15 }
+        ]
+      }
+
+      Return ONLY the JSON. No conversational text.
+    `;
+
+    let result;
+    try {
+      result = await model.generateContent([
+        {
+          inlineData: {
+            data: dataBuffer.toString('base64'),
+            mimeType: "application/pdf"
+          }
+        },
+        { text: prompt }
+      ]);
+    } catch (apiError) {
+      console.error('❌ Gemini API Error:', apiError);
+      return res.status(500).json({ error: 'AI Processing failed: ' + apiError.message });
+    }
+
+    const response = await result.response;
+    let jsonText = response.text();
+    
+    console.log('📩 Gemini response received.');
+    
+    // Clean up potential markdown formatting in response
+    jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    try {
+      const data = JSON.parse(jsonText);
+      
+      // Attempt to match items in database
+      if (data.items && Array.isArray(data.items)) {
+        console.log(`🔍 Matching ${data.items.length} items against database...`);
+        const pool = await getPool();
+        
+        for (let i = 0; i < data.items.length; i++) {
+          const item = data.items[i];
+          console.log(`🔎 Searching for item: "${item.description}"`);
+          try {
+            const searchResult = await pool.request()
+              .input('desc', sql.VarChar, `${item.description}`)
+              .query(`
+                SELECT TOP 1 
+                  B.BARCODE as itemCode, 
+                  H.DESCRIPTION as description, 
+                  B.UNIT as unit,
+                  ISNULL(S.SALE_PRICE, B.SALE_PRICE) as price,
+                  ISNULL(H.VAT_PERCENT, 0) as vatPercent
+                FROM dbo.HD_ITEMMASTER H
+                LEFT JOIN dbo.BARCODE B ON H.ITEM_CODE = B.ITEM_CODE
+                LEFT JOIN dbo.STOCK_MASTER S ON H.ITEM_CODE = S.ITEM_CODE
+                WHERE H.DESCRIPTION LIKE '%' + @desc + '%' OR H.ITEM_CODE = @desc
+              `);
+            
+            if (searchResult.recordset.length > 0) {
+              const matched = searchResult.recordset[0];
+              console.log(`✅ Matched "${item.description}" -> ${matched.itemCode}`);
+              data.items[i].itemCode = matched.itemCode;
+              // Keep AI qty/price if relevant, or update with DB price if preferred
+              // Usually for quotations, we might want to keep the scanned price
+            } else {
+              console.log(`❓ No match for "${item.description}", using 999`);
+              data.items[i].itemCode = '999';
+            }
+          } catch (itemError) {
+            console.error('Error matching item:', itemError.message);
+            data.items[i].itemCode = '999';
+          }
+        }
+      }
+      
+      res.json(data);
+    } catch (parseError) {
+      console.error('❌ JSON Parse Error:', parseError);
+      console.log('Original Text:', jsonText);
+      res.status(500).json({ error: 'Failed to parse AI response' });
+    }
+  } catch (error) {
+    console.error('❌ PDF Scan error:', error);
+    res.status(500).json({ error: 'Failed to scan PDF', details: error.message });
+  }
+});
+
 
 // Test connection endpoint
 app.get('/api/health', (req, res) => {

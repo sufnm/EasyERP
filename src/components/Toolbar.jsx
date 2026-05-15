@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Save, Printer, Search, Trash2, Clock, LogOut, Settings, X, History, Undo2, ShoppingCart, ShoppingBag } from 'lucide-react';
+import { Plus, Save, Printer, Search, Trash2, Clock, LogOut, Settings, X, History, Undo2, ShoppingCart, ShoppingBag, FileSearch } from 'lucide-react';
 
 const ToolbarButton = ({ icon: Icon, label, shortcut, onClick, colorClass = "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800" }) => (
   <button 
@@ -23,7 +23,7 @@ export default function Toolbar({
   showInvoiceAfterSave, setShowInvoiceAfterSave,
   currencies = [], selectedCurrency, setSelectedCurrency,
   selectedCurrencyRate, setSelectedCurrencyRate,
-  onNew, onPending, onHistory, onReturn, onClear, 
+  onNew, onPending, onHistory, onReturn, onClear, onScanPdf,
   pendingCount = 0, isReturn = false, isPurchase = false,
   isQuotation = false, isDelivery = false,
   allTerms = [], selectedTermIds = [], setSelectedTermIds,
@@ -39,6 +39,15 @@ export default function Toolbar({
     <div className="flex items-center gap-2 bg-card py-1.5 px-3 rounded-xl border border-border shadow-sm overflow-x-auto transition-colors duration-300">
       <ToolbarButton icon={Plus} label="New" shortcut="F1" onClick={onNew} colorClass="text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" />
       <ToolbarButton icon={Trash2} label="Clear" onClick={onClear} colorClass="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" />
+      
+      {isQuotation && (
+        <ToolbarButton 
+          icon={FileSearch} 
+          label="Scan PDF" 
+          onClick={onScanPdf} 
+          colorClass="text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20" 
+        />
+      )}
       {/* Pending and History/Active Quotations buttons */}
       {(isQuotation || true) && (
         <>

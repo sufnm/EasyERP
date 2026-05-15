@@ -138,6 +138,21 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
     { id: 5, itemCode: '', description: '', qty: '', unit: '', unitId: '' },
   ]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        resetPage();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        handleConfirmDelivery();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [rows, customer, vatNumber, address, referenceNo, selectedWarehouse, editingRecNo, isSaving]);
+
   // Click outside to close search dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {

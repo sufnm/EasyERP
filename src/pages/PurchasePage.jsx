@@ -179,20 +179,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
       .then(res => res.json())
       .then(data => setWarehouses(data))
       .catch(err => console.error("Failed to fetch warehouses:", err));
-
-    // Shortcut listener
-    const handleKeyDown = (e) => {
-      if (e.key === 'F1') {
-        e.preventDefault();
-        handleHold();
-      } else if (e.key === 'F3') {
-        e.preventDefault();
-        handleSave(true);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [supplier, rows, totals, referenceNo, vatNumber, paymentMethod, cashPaid, otherPaid, selectedWarehouse, selectedCurrency, selectedCurrencyRate, editingRecNo, isSaving]);
+  }, []);
 
   useEffect(() => {
     const curr = currencies.find(c => c.Currency_No === selectedCurrency);
@@ -332,7 +319,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
       DISC_AMT: totals.discount * selectedCurrencyRate,
       NET_AMOUNT: totals.net * selectedCurrencyRate,
       VAT_AMOUNT: totals.vat * selectedCurrencyRate,
-      TAXABLE_AMOUNT: (totals.net - totals.vat) * selectedCurrencyRate,
+      TAXABLE_AMOUNT: (totals.gross - totals.discount) * selectedCurrencyRate,
       FRN_AMOUNT: totals.net,
       VAT_NUMBER: vatNumber,
       ROWS: rows.filter(r => r.itemCode.trim() !== '').map(r => {
@@ -476,6 +463,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
     setTotals(draft.totals);
     setSelectedWarehouse(draft.selectedWarehouse);
     setSelectedCurrency(draft.selectedCurrency);
+    setSelectedCurrencyRate(draft.selectedCurrencyRate || 1);
     setPaymentMethod(draft.paymentMethod);
     setCashPaid(draft.cashPaid);
     setOtherPaid(draft.otherPaid);
@@ -635,7 +623,7 @@ export default function PurchasePage({ user, params = {}, navigateTo, onBack }) 
             selectedAccount={selectedAccount}
             setSelectedAccount={setSelectedAccount}
             customerId={supplier.id}
-            currencyCode="SAR"
+            currencyCode={currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'}
             isPurchase={true}
             isSaving={isSaving}
             autoPrint={autoPrint}

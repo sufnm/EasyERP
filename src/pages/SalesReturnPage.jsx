@@ -218,6 +218,7 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
     setTotals(sale.totals);
     setSelectedWarehouse(sale.selectedWarehouse);
     setSelectedCurrency(sale.selectedCurrency);
+    setSelectedCurrencyRate(sale.selectedCurrencyRate || 1);
     setPaymentMethod(sale.paymentMethod);
     setCashPaid(sale.cashPaid);
     setOtherPaid(sale.otherPaid);
@@ -387,7 +388,7 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
         DISC_AMT: totals.discount * selectedCurrencyRate,
         NET_AMOUNT: totals.net * selectedCurrencyRate,
         VAT_AMOUNT: totals.vat * selectedCurrencyRate,
-        TAXABLE_AMOUNT: (totals.net - totals.vat) * selectedCurrencyRate,
+        TAXABLE_AMOUNT: (totals.gross - totals.discount) * selectedCurrencyRate,
         FRN_AMOUNT: totals.net,
         CASH_PAID: finalCashPaid * selectedCurrencyRate,
         OTHER_PAID: finalOtherPaid * selectedCurrencyRate,
@@ -562,7 +563,7 @@ export default function SalesReturnPage({ user, params = {}, navigateTo, onBack 
       setInvoiceNo(sale.INVOICE_NO);
       setCustomer({ id: String(sale.ACCODE || ''), name: sale.ENAME || '' });
       setVatNumber(sale.VAT_NUMBER || '');
-      setPaymentMethod(sale.TRN_TYPE === 8 ? 'Cash' : 'Others');
+      setPaymentMethod(sale.TRN_TYPE === 3 ? 'Cash' : 'Others');
       setManualReferenceNo(sale.REF_NO || '');
       setSelectedCurrencyRate(sale.CRATE || 1);
       

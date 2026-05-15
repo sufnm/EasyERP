@@ -220,6 +220,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
     setTotals(sale.totals);
     setSelectedWarehouse(sale.selectedWarehouse);
     setSelectedCurrency(sale.selectedCurrency);
+    setSelectedCurrencyRate(sale.selectedCurrencyRate || 1);
     setPaymentMethod(sale.paymentMethod);
     setCashPaid(sale.cashPaid);
     setOtherPaid(sale.otherPaid);
@@ -333,7 +334,7 @@ export default function SalesPage({ user, params = {}, navigateTo, onBack }) {
         DISC_AMT: totals.discount * selectedCurrencyRate,
         NET_AMOUNT: totals.net * selectedCurrencyRate,
         VAT_AMOUNT: totals.vat * selectedCurrencyRate,
-        TAXABLE_AMOUNT: (totals.net - totals.vat) * selectedCurrencyRate,
+        TAXABLE_AMOUNT: (totals.gross - totals.discount) * selectedCurrencyRate,
         FRN_AMOUNT: totals.net,
         CASH_PAID: finalCashPaid * selectedCurrencyRate,
         OTHER_PAID: finalOtherPaid * selectedCurrencyRate,

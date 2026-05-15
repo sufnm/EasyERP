@@ -70,6 +70,11 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
   const [editingRecNo, setEditingRecNo] = useState(null);
   const [selectedAccount, setSelectedAccount] = useState('120101');
   const [isSaving, setIsSaving] = useState(false);
+  const [isZatcaEnabled, setIsZatcaEnabled] = useState(false);
+  const [isPrintEnabled, setIsPrintEnabled] = useState(false);
+  const [selectedPurchase, setSelectedPurchase] = useState(null);
+  const [purchaseItems, setPurchaseItems] = useState(null);
+  const [showPendingModal, setShowPendingModal] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -89,8 +94,7 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [supplier, rows, totals, referenceNo, vatNumber, paymentMethod, cashPaid, otherPaid, selectedWarehouse, selectedCurrency, selectedCurrencyRate, editingRecNo, isSaving, selectedPurchase, purchaseItems]);
-  const [isZatcaEnabled, setIsZatcaEnabled] = useState(false);
-  const [isPrintEnabled, setIsPrintEnabled] = useState(false);
+
   const loadUserOptions = async () => {
     if (!user?.userid) return;
     try {
@@ -155,9 +159,6 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
       saveUserOptions();
     }
   }, [autoPrint, defaultPrintPaper, showInvoiceAfterSave, enterToQty, pVisibleColumns, crystalPrint]);
-  const [selectedPurchase, setSelectedPurchase] = useState(null);
-  const [purchaseItems, setPurchaseItems] = useState(null);
-  const [showPendingModal, setShowPendingModal] = useState(false);
 
   const fetchNextInvoice = async () => {
     try {
@@ -210,8 +211,6 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
       prevRateRef.current = newRate;
     }
   }, [selectedCurrencyRate]);
-
-  
 
   // Handle Edit Mode from Params
   useEffect(() => {
@@ -336,7 +335,7 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
       DISC_AMT: totals.discount * selectedCurrencyRate,
       NET_AMOUNT: totals.net * selectedCurrencyRate,
       VAT_AMOUNT: totals.vat * selectedCurrencyRate,
-      TAXABLE_AMOUNT: (totals.net - totals.vat) * selectedCurrencyRate,
+      TAXABLE_AMOUNT: (totals.gross - totals.discount) * selectedCurrencyRate,
       FRN_AMOUNT: totals.net,
       VAT_NUMBER: vatNumber,
       ROWS: rows.filter(r => r.itemCode.trim() !== '').map(r => {
@@ -363,7 +362,7 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
       TAX_INCLUDED: taxIncluded,
       CASH_PAID: finalCashPaid * selectedCurrencyRate,
       OTHER_PAID: finalOtherPaid * selectedCurrencyRate,
-      USERNAME: user.username,
+      USERNAME: user?.username || '',
       WR_CODE: selectedWarehouse,
       CURRENCY: selectedCurrency,
       CRATE: selectedCurrencyRate,
@@ -489,6 +488,7 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
     setTotals(draft.totals);
     setSelectedWarehouse(draft.selectedWarehouse);
     setSelectedCurrency(draft.selectedCurrency);
+    setSelectedCurrencyRate(draft.selectedCurrencyRate || 1);
     setPaymentMethod(draft.paymentMethod);
     setCashPaid(draft.cashPaid);
     setOtherPaid(draft.otherPaid);
@@ -657,7 +657,7 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
             selectedAccount={selectedAccount}
             setSelectedAccount={setSelectedAccount}
             customerId={supplier.id}
-            currencyCode="SAR"
+            currencyCode={currencies.find(c => c.Currency_No === selectedCurrency)?.Currency_code || 'SAR'}
             isPurchase={true}
             isSaving={isSaving}
             autoPrint={autoPrint}

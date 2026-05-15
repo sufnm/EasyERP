@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ScrollText } from 'lucide-react';
+import { ChevronRight, ScrollText, FileSearch } from 'lucide-react';
 import { API_ENDPOINTS } from '../config';
 import { useCache } from '../context/CacheContext';
 import Toolbar from '../components/Toolbar';
@@ -66,10 +66,31 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
   const [isSaving, setIsSaving] = useState(false);
   const [allTerms, setAllTerms] = useState([]);
   const [isPendingModalOpen, setIsPendingModalOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const fileInputRef = React.useRef(null);
 
   const handleTermDetailChange = (id, value) => {
     setTermDetails(prev => ({ ...prev, [id]: value }));
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        handleHoldAndNew();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        const hasItems = rows.some(r => r.itemCode && r.itemCode.trim() !== '');
+        if (!hasItems) {
+          alert("Please add at least one item before proceeding.");
+          return;
+        }
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [rows, customer, totals, vatNumber, address, referenceNo, selectedWarehouse, selectedCurrency, selectedCurrencyRate, editingRecNo, isSaving, selectedTermIds, termDetails]);
 
   const handleAddressChange = (field, value) => {
     setAddress(prev => ({ ...prev, [field]: value }));
@@ -104,6 +125,7 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
     setTotals(quote.totals || { gross: 0, discount: 0, vat: 0, net: 0 });
     setSelectedWarehouse(quote.selectedWarehouse || '1');
     setSelectedCurrency(quote.selectedCurrency || 1);
+    setSelectedCurrencyRate(quote.selectedCurrencyRate || 1);
     setReferenceNo(quote.referenceNo || '');
     setSelectedTermIds(quote.selectedTermIds || []);
     setTermDetails(quote.termDetails || {});
@@ -216,6 +238,7 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
         DISC_AMT: totals.discount * selectedCurrencyRate,
         NET_AMOUNT: totals.net * selectedCurrencyRate,
         VAT_AMOUNT: totals.vat * selectedCurrencyRate,
+        TAXABLE_AMOUNT: (totals.gross - totals.discount) * selectedCurrencyRate,
         CASH_PAID: 0,
         OTHER_PAID: 0,
         VAT_NUMBER: String(vatNumber || ''),
@@ -296,6 +319,71 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
       alert('Error saving quotation');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePdfScan = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    const formData = new FormData();
+    formData.append('pdf', file);
+
+    try {
+      const res = await fetch(`${API_ENDPOINTS.BASE_URL}/api/scan-pdf`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to scan PDF');
+      }
+
+      const data = await res.json();
+      console.log('📄 Scanned Data:', data);
+
+      // Auto-fill Customer if matched (simple name check or just set name)
+      if (data.customer) {
+        setCustomer(prev => ({ ...prev, name: data.customer.name }));
+        if (data.customer.vatNumber) setVatNumber(data.customer.vatNumber);
+      }
+
+      // Auto-fill Items
+      if (data.items && Array.isArray(data.items)) {
+        const newRows = data.items.map((item, idx) => ({
+          id: Date.now() + idx,
+          itemCode: item.itemCode || '999', 
+          description: item.description || '',
+          unit: item.unit || 'Pcs',
+          qty: item.qty || 1,
+          price: item.price || 0,
+          vatPercent: item.vatPercent || 15,
+          vatAmt: 0,
+          total: 0,
+          aliasCode: '',
+          stock: '',
+          unitId: ''
+        }));
+
+        // Fill up to 5 rows
+        while (newRows.length < 5) {
+          newRows.push({ 
+            id: Date.now() + newRows.length, 
+            itemCode: '', description: '', unit: '', qty: '', price: '', 
+            aliasCode: '', vatAmt: '', vatPercent: 0, total: '', stock: '', unitId: '' 
+          });
+        }
+        setRows(newRows);
+      }
+      alert('Quotation details extracted successfully!');
+    } catch (err) {
+      console.error("Scan error:", err);
+      alert(`Scan failed: ${err.message}`);
+    } finally {
+      setIsScanning(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -454,7 +542,9 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
               onNew={handleHoldAndNew}
               onPending={() => setIsPendingModalOpen(true)}
               onHistory={() => navigateTo?.('active-quotations')}
+              onScanPdf={() => fileInputRef.current?.click()}
               onClear={resetPage}
+              isScanning={isScanning}
               pendingCount={pendingQuotations.length}
               isQuotation={true}
               allTerms={allTerms}
@@ -560,6 +650,33 @@ export default function QuotationPage({ user, params = {}, navigateTo, onBack })
         onClearAll={clearPendingQuotations}
         language={language}
       />
-    </div>
+
+      {/* Hidden File Input for PDF Scanning */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handlePdfScan} 
+        accept=".pdf" 
+        className="hidden" 
+      />
+
+      {/* Scanning Overlay */}
+      {isScanning && (
+        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-zinc-900/40 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-card p-8 rounded-3xl shadow-2xl border border-border flex flex-col items-center gap-6 max-w-sm w-full mx-4">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <FileSearch className="text-indigo-500 animate-pulse" size={32} />
+              </div>
+            </div>
+            <div className="text-center">
+              <h3 className="text-xl font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-widest mb-2">Scanning PDF</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Extracting quotation details using AI...</p>
+            </div>
+          </div>
+        </div>
+      )}
+     </div>
   );
 }
