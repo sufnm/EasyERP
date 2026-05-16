@@ -85,7 +85,7 @@ export const API_ENDPOINTS = {
   ITEMS_LIST: `${API_BASE_URL}/api/items/list`,
   ITEMS_DETAIL: (itemCode) => `${API_BASE_URL}/api/items/${itemCode}/detail`,
   ITEMS_SAVE: `${API_BASE_URL}/api/items/save`,
-  
+
   // Opening Stock & Price Update
   OPENING_STOCK_SEARCH: `${API_BASE_URL}/api/opening-stock/search`,
   OPENING_STOCK_ITEM: (itemCode) => `${API_BASE_URL}/api/opening-stock/item/${itemCode}`,

@@ -23,6 +23,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const PORT = process.env.PORT || 3000;
+
+// Serve static files from the React app (Production)
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    console.log(`📂 Request: ${req.method} ${req.path}`);
+  }
+  next();
+});
+app.use(express.static(path.join(__dirname, 'dist')));
+
+
+
 // --- LANGUAGE MIDDLEWARE ---
 app.use((req, res, next) => {
   const lang = req.headers['accept-language'] || 'en';
@@ -2818,9 +2831,6 @@ app.use((err, req, res, next) => {
     details: process.env.NODE_ENV === 'development' ? err : undefined
   });
 });
-
-const PORT = process.env.PORT || 3001;
-
 // --- EXPENSE ENTRY ENDPOINTS ---
 
 app.get('/api/expense-entry/types', async (req, res) => {
@@ -4589,7 +4599,7 @@ app.post('/api/zatca/submit', async (req, res) => {
         .input('cmpId', sql.Int, parseInt(cmp.cmp_id) || 0)
         .input('brnCode', sql.NVarChar(50), String(cmp.brn_code || '1'))
         .query('SELECT TOP 1 Inv_hash, Inv_base64 FROM dbo.Inv_Image1 WHERE invoice_no = @invoiceNo AND trn_type = @trnType AND cmp_id = @cmpId AND brn_code = @brnCode');
-      
+
       const submitInfo = submitInfoResult.recordset[0] || {};
       const finalInvHash = submitInfo.Inv_hash || xmlResult.inv_hash || xmlResult.Inv_hash || '';
       const finalInvBase64 = submitInfo.Inv_base64 || xmlResult.Incoded64Invoice || xmlResult.incoded64Invoice || '';
@@ -4625,7 +4635,7 @@ app.post('/api/zatca/submit', async (req, res) => {
       const urlResult = await pool.request()
         .input('urlId', sql.Int, url_id)
         .query('SELECT TOP 1 url FROM dbo.Zatca_weburls WHERE ID = @urlId');
-      
+
       const targetPortalUrl = urlResult.recordset[0]?.url || '';
 
       const submitPayload = {
@@ -4689,10 +4699,515 @@ app.post('/api/zatca/submit', async (req, res) => {
   }
 });
 
+// --- REPORT APIs ---
+
+
+// =============================================
+// STOCK REPORT APIs
+// =============================================
+
+// GET Item Categories for dropdown
+app.get('/api/reports/item-categories', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ITM_CAT_CODE, ITM_CAT_NAME, ITM_CAT_ANAME, VAT_PERCENT
+      FROM dbo.ITEM_CAT
+      ORDER BY ITM_CAT_NAME
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Item categories fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET Stock Report Data
+app.get('/api/reports/stock', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { fromDate, toDate, categoryCode, dateFilter } = req.query;
+
+    const request = pool.request();
+    let catWhere = '';
+
+    if (categoryCode && categoryCode !== '0') {
+      catWhere = 'AND H.ITM_CAT_CODE = @catCode';
+      request.input('catCode', sql.VarChar(50), categoryCode);
+    }
+
+    let result;
+
+    if (dateFilter === 'custom' && fromDate && toDate) {
+      // Date-range query: stock movement from DATA_ENTRY_GRID within the period
+      request.input('dt1', sql.VarChar(20), fromDate);
+      request.input('dt2', sql.VarChar(20), toDate);
+
+      result = await request.query(`
+        SELECT
+          H.ITEM_CODE,
+          H.DESCRIPTION AS ITEM_NAME,
+          H.AR_DESC AS ITEM_ANAME,
+          C.ITM_CAT_NAME AS GROUP_NAME,
+          C.ITM_CAT_ANAME AS GROUP_ANAME,
+          U.Unit_Name,
+          U.Unit_AName,
+          g.STOCK,
+          S.AVG_PUR_PRICE AS COST,
+          S.RETAIL_PRICE AS SALE_PRICE,
+          g.STOCK * S.AVG_PUR_PRICE AS TOTAL_COST,
+          g.STOCK * S.RETAIL_PRICE AS TOTAL_AMOUNT
+        FROM dbo.HD_ITEMMASTER AS H
+        INNER JOIN dbo.ITEM_CAT AS C ON C.ITM_CAT_CODE = H.ITM_CAT_CODE
+        INNER JOIN dbo.UnitMaster AS U ON H.UNIT = U.Unit_id
+        INNER JOIN dbo.STOCK_MASTER AS S ON H.ITEM_CODE = S.ITEM_CODE
+        INNER JOIN (
+          SELECT g2.ITEM_CODE,
+            SUM(CASE WHEN d2.TRN_TYPE < 6 THEN g2.QTY ELSE g2.QTY * -1 END) AS STOCK
+          FROM dbo.DATA_ENTRY_GRID AS g2
+          INNER JOIN dbo.DATA_ENTRY AS d2 ON g2.REC_NO = d2.REC_NO
+          WHERE CONVERT(DATE, d2.CURDATE) BETWEEN CONVERT(DATE, @dt1) AND CONVERT(DATE, @dt2)
+          GROUP BY g2.ITEM_CODE
+        ) AS g ON H.ITEM_CODE = g.ITEM_CODE
+        WHERE 1=1 ${catWhere}
+        ORDER BY H.DESCRIPTION
+      `);
+    } else {
+      // All-time query: use STOCK_MASTER current stock
+      result = await request.query(`
+        SELECT
+          H.ITEM_CODE,
+          H.DESCRIPTION AS ITEM_NAME,
+          H.AR_DESC AS ITEM_ANAME,
+          C.ITM_CAT_NAME AS GROUP_NAME,
+          C.ITM_CAT_ANAME AS GROUP_ANAME,
+          U.Unit_Name,
+          U.Unit_AName,
+          S.STOCK,
+          S.AVG_PUR_PRICE AS COST,
+          S.RETAIL_PRICE AS SALE_PRICE,
+          S.STOCK * S.AVG_PUR_PRICE AS TOTAL_COST,
+          S.STOCK * S.RETAIL_PRICE AS TOTAL_AMOUNT
+        FROM dbo.HD_ITEMMASTER AS H
+        INNER JOIN dbo.ITEM_CAT AS C ON C.ITM_CAT_CODE = H.ITM_CAT_CODE
+        INNER JOIN dbo.UnitMaster AS U ON H.UNIT = U.Unit_id
+        INNER JOIN dbo.STOCK_MASTER AS S ON H.ITEM_CODE = S.ITEM_CODE
+        WHERE 1=1 ${catWhere}
+        ORDER BY H.DESCRIPTION
+      `);
+    }
+
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Stock report fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// =============================================
+// STOCK REPORT BY WAREHOUSE APIs
+// =============================================
+
+// GET Warehouse list for dropdown
+app.get('/api/reports/warehouses', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT WR_CODE, WR_NAME, WR_ANAME FROM dbo.WRHOUSE_MASTER ORDER BY WR_NAME
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Warehouses fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET Warehouse Stock Report Data
+app.get('/api/reports/stock-warehouse', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { fromDate, toDate, categoryCode, dateFilter, wrCode } = req.query;
+
+    const request = pool.request();
+    let catWhere = '';
+    let wrWhere = '';
+
+    if (categoryCode && categoryCode !== '0') {
+      catWhere = 'AND H.ITM_CAT_CODE = @catCode';
+      request.input('catCode', sql.VarChar(50), categoryCode);
+    }
+    if (wrCode && wrCode !== '0') {
+      wrWhere = 'AND W.WR_CODE = @wrCode';
+      request.input('wrCode', sql.VarChar(50), wrCode);
+    }
+
+    let result;
+
+    if (dateFilter === 'custom' && fromDate && toDate) {
+      request.input('dt1', sql.VarChar(20), fromDate);
+      request.input('dt2', sql.VarChar(20), toDate);
+
+      result = await request.query(`
+        SELECT
+          WH.WR_NAME, WH.WR_ANAME,
+          H.ITEM_CODE,
+          H.DESCRIPTION AS ITEM_NAME,
+          H.AR_DESC AS ITEM_ANAME,
+          C.ITM_CAT_NAME AS GROUP_NAME,
+          C.ITM_CAT_ANAME AS GROUP_ANAME,
+          U.Unit_Name,
+          U.Unit_AName,
+          g.STOCK,
+          S.STOCK AS TOT_STOCK,
+          S.AVG_PUR_PRICE AS COST,
+          S.RETAIL_PRICE AS SALE_PRICE,
+          S.STOCK * S.AVG_PUR_PRICE AS TOTAL_COST,
+          g.STOCK * S.RETAIL_PRICE AS TOTAL_AMOUNT
+        FROM dbo.HD_ITEMMASTER AS H
+        INNER JOIN dbo.ITEM_CAT AS C ON C.ITM_CAT_CODE = H.ITM_CAT_CODE
+        INNER JOIN dbo.UnitMaster AS U ON H.UNIT = U.Unit_id
+        INNER JOIN dbo.STOCK_MASTER AS S ON H.ITEM_CODE = S.ITEM_CODE
+        INNER JOIN dbo.wr_stock_master AS W ON W.ITEM_CODE = H.ITEM_CODE
+        INNER JOIN dbo.WRHOUSE_MASTER AS WH ON W.WR_CODE = WH.WR_CODE
+        INNER JOIN (
+          SELECT g2.ITEM_CODE, g2.WR_CODE,
+            SUM(CASE WHEN d2.TRN_TYPE < 6 THEN g2.QTY ELSE g2.QTY * -1 END) AS STOCK
+          FROM dbo.DATA_ENTRY_GRID AS g2
+          INNER JOIN dbo.DATA_ENTRY AS d2 ON g2.REC_NO = d2.REC_NO
+          WHERE CONVERT(DATE, d2.CURDATE) BETWEEN CONVERT(DATE, @dt1) AND CONVERT(DATE, @dt2)
+          GROUP BY g2.ITEM_CODE, g2.WR_CODE
+        ) AS g ON H.ITEM_CODE = g.ITEM_CODE AND g.WR_CODE = WH.WR_CODE
+        WHERE 1=1 ${catWhere} ${wrWhere}
+        ORDER BY WH.WR_NAME, H.DESCRIPTION
+      `);
+    } else {
+      result = await request.query(`
+        SELECT
+          WH.WR_NAME, WH.WR_ANAME,
+          H.ITEM_CODE,
+          H.DESCRIPTION AS ITEM_NAME,
+          H.AR_DESC AS ITEM_ANAME,
+          C.ITM_CAT_NAME AS GROUP_NAME,
+          C.ITM_CAT_ANAME AS GROUP_ANAME,
+          U.Unit_Name,
+          U.Unit_AName,
+          W.STOCK,
+          S.STOCK AS TOT_STOCK,
+          S.AVG_PUR_PRICE AS COST,
+          S.RETAIL_PRICE AS SALE_PRICE,
+          S.STOCK * S.AVG_PUR_PRICE AS TOTAL_COST,
+          W.STOCK * S.RETAIL_PRICE AS TOTAL_AMOUNT
+        FROM dbo.HD_ITEMMASTER AS H
+        INNER JOIN dbo.ITEM_CAT AS C ON C.ITM_CAT_CODE = H.ITM_CAT_CODE
+        INNER JOIN dbo.UnitMaster AS U ON H.UNIT = U.Unit_id
+        INNER JOIN dbo.STOCK_MASTER AS S ON H.ITEM_CODE = S.ITEM_CODE
+        INNER JOIN dbo.wr_stock_master AS W ON W.ITEM_CODE = H.ITEM_CODE
+        INNER JOIN dbo.WRHOUSE_MASTER AS WH ON W.WR_CODE = WH.WR_CODE
+        WHERE 1=1 ${catWhere} ${wrWhere}
+        ORDER BY WH.WR_NAME, H.DESCRIPTION
+      `);
+    }
+
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Warehouse stock report fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================
+// INVOICE REPORT APIs
+// =============================================
+
+// GET Transaction Types for dropdown
+app.get('/api/reports/trn-types', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT TRN_CODE, TRN_NAME, TRN_ANAME
+      FROM dbo.TRN_TYPE_REP
+      WHERE REP_CAT = 1
+      ORDER BY TRN_CODE
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('TRN types fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET Users list for invoice report dropdown
+app.get('/api/reports/users-list', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT UserId, UserName FROM dbo.UserInfo ORDER BY UserName
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET Invoice Report Data
+app.get('/api/reports/invoice', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { fromDate, toDate, trnCode, accNo, userId, dateFilter } = req.query;
+
+    const selectedTrn = parseInt(trnCode || '0', 10);
+
+    const request = pool.request();
+    request.input('selectedTrn', sql.Int, selectedTrn);
+
+    let extraWhere = '';
+    if (dateFilter !== 'all' && fromDate && toDate) {
+      request.input('fromDate', sql.VarChar(20), fromDate);
+      request.input('toDate', sql.VarChar(20), toDate);
+      extraWhere += ' AND CAST(D.CURDATE AS DATE) >= CAST(@fromDate AS DATE) AND CAST(D.CURDATE AS DATE) <= CAST(@toDate AS DATE)';
+    }
+    if (accNo && accNo !== '0') {
+      extraWhere += ' AND D.ACCODE = @accNo';
+      request.input('accNo', sql.VarChar(50), accNo);
+    }
+    if (userId && userId !== '0') {
+      extraWhere += ' AND D.USER_ID = @userId';
+      request.input('userId', sql.VarChar(50), userId);
+    }
+
+    console.log('Invoice report params:', { dateFilter, fromDate, toDate, trnCode, accNo, userId });
+
+    const result = await request.query(`
+      SELECT DISTINCT
+        D.CURDATE, D.INVOICE_NO, D.ACCODE, D.ENAME, D.REF_NO,
+        D.VAT_Number AS VAT_NUMBER, UI.UserName,
+        C.Currency_Name, D.G_TOTAL, D.DISC_AMT, D.NET_AMOUNT, D.FRN_AMOUNT,
+        D.CASH_PAID, D.OTHER_PAID, ISNULL(D.ZATCA_SEND, 0) AS ZATCA_SEND,
+        TT.TRN_NAME, TT.TRN_ANAME, D.TRN_TYPE, WH.WR_NAME,
+        D.VAT_AMOUNT AS INV_VAT_AMOUNT,
+        G.ITEM_CODE, G.DESCRIPTION, G.QTY, G.PRICE,
+        G.SALE_PUR_AMT, G.ITM_TOTAL, G.VAT_AMOUNT, G.VAT_PERCENT,
+        U.Unit_Name, U.Unit_AName, D.REC_NO
+      FROM dbo.DATA_ENTRY AS D
+      INNER JOIN dbo.DATA_ENTRY_GRID AS G ON D.BRN_CODE = G.BRN_CODE AND D.REC_NO = G.REC_NO
+      INNER JOIN dbo.trn_type AS TT ON D.TRN_TYPE = TT.TRN_CODE
+      INNER JOIN dbo.WRHOUSE_MASTER AS WH ON D.WR_CODE = WH.WR_CODE AND G.WR_CODE = WH.WR_CODE
+      INNER JOIN dbo.CURRENCY_MASTER AS C ON D.CURRENCY = C.Currency_No
+      LEFT OUTER JOIN dbo.UnitMaster AS U ON G.UNIT = U.Unit_id
+      LEFT OUTER JOIN dbo.ACCOUNTS_INFO AS ACC ON D.ACCODE = ACC.ACC_NO
+      LEFT OUTER JOIN dbo.UserInfo AS UI ON D.USER_ID = UI.UserId
+      INNER JOIN dbo.TRN_TYPE_REP AS B ON D.TRN_TYPE IN (
+        SELECT Value FROM dbo.SplitString(B.CODES, ',')
+      )
+      WHERE
+        B.REP_CAT = 1
+        AND B.TRN_CODE = CASE WHEN @selectedTrn = 0 THEN B.TRN_CODE ELSE @selectedTrn END
+        ${extraWhere}
+      ORDER BY D.CURDATE, D.INVOICE_NO, G.ITEM_CODE
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Invoice report fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET Customer Report Data from CUS_SUP_TRN_DET
+app.get('/api/reports/customer-report', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { fromDate, toDate, accNo, dateFilter, accType } = req.query;
+
+    const request = pool.request();
+
+    let extraWhere = '';
+    if (dateFilter !== 'all' && fromDate && toDate) {
+      request.input('fromDate', sql.VarChar(20), fromDate);
+      request.input('toDate', sql.VarChar(20), toDate);
+      extraWhere += ' AND CAST(PAY_DATE AS DATE) >= CAST(@fromDate AS DATE) AND CAST(PAY_DATE AS DATE) <= CAST(@toDate AS DATE)';
+    }
+    if (accNo && accNo !== '0') {
+      extraWhere += ' AND ACC_NO = @accNo';
+      request.input('accNo', sql.VarChar(50), accNo);
+    }
+
+    if (accType && accType !== '0') {
+      extraWhere += ' AND ACC_TYPE = @accType';
+      request.input('accType', sql.Int, parseInt(accType));
+    }
+
+    console.log('Customer report params:', { dateFilter, fromDate, toDate, accNo, accType });
+
+    const result = await request.query(`
+      SELECT 
+        ACC_NO, ACC_NAME, ACC_ANAME, LEDGER_ACC,
+        PAY_DATE, PAY_AMOUNT, CR_AMOUNT, DR_AMOUNT,
+        TRN_NAME, TRN_ANAME, DR_CR, NARRATION, INVOICE_NO, UserName
+      FROM dbo.CUS_SUP_TRN_DET
+      WHERE 1=1
+      ${extraWhere}
+      ORDER BY PAY_DATE, INVOICE_NO
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Customer report fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET items list for dropdown
+app.get('/api/reports/items-list', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT ITEM_CODE, DESCRIPTION AS Item_Name, AR_DESC AS Item_AName 
+      FROM dbo.HD_ITEMMASTER 
+      ORDER BY DESCRIPTION
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET Accounts List
+app.get('/api/reports/accounts-list', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { accType } = req.query;
+    let query = 'SELECT ACC_NO, ACC_NAME, ACC_ANAME FROM dbo.ACCOUNTS_INFO';
+    if (accType && accType !== '0') {
+      query += ` WHERE ACC_TYPE = ${parseInt(accType)}`;
+    }
+    query += ' ORDER BY ACC_NAME';
+    const result = await pool.request().query(query);
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET Warehouses List
+app.get('/api/reports/warehouses-list', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT WR_CODE, WR_NAME, WR_ANAME FROM dbo.WRHOUSE_MASTER ORDER BY WR_NAME
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET Stock Movement Report Data
+app.get('/api/reports/stock-movement', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { fromDate, toDate, itemCode, dateFilter, accNo, wrCode } = req.query;
+
+    const request = pool.request();
+    request.input('itemCode', sql.VarChar(50), itemCode);
+
+    let extraWhere = '';
+    if (dateFilter !== 'all') {
+      request.input('fromDate', sql.VarChar(20), fromDate);
+      request.input('toDate', sql.VarChar(20), toDate);
+      extraWhere += ' AND CAST(d.CURDATE AS DATE) BETWEEN CAST(@fromDate AS DATE) AND CAST(@toDate AS DATE)';
+    }
+    if (accNo && accNo !== '0') {
+      request.input('accNo', sql.VarChar(50), accNo);
+      extraWhere += ' AND d.ACCODE = @accNo';
+    }
+    if (wrCode && wrCode !== '0') {
+      request.input('wrCode', sql.VarChar(50), wrCode);
+      extraWhere += ' AND g.WR_CODE = @wrCode';
+    }
+
+    const result = await request.query(`
+      SELECT 
+        d.CURDATE, t.TRN_NAME, d.INVOICE_NO, Ename as Account, 
+        case when d.trn_type < 6 then g.QTY else g.qty *-1 end as Qty, 
+        g.PRICE, g.SALE_PUR_AMT, g.ITM_TOTAL, g.FRACTION, 
+        w.WR_NAME, U.Unit_Name, U.Unit_AName, t.TRN_ANAME, d.TRN_TYPE
+      FROM dbo.DATA_ENTRY AS d 
+      INNER JOIN dbo.DATA_ENTRY_GRID AS g ON d.BRN_CODE = g.BRN_CODE AND d.REC_NO = g.REC_NO 
+      INNER JOIN dbo.WRHOUSE_MASTER AS w ON g.WR_CODE = w.WR_CODE 
+      INNER JOIN dbo.TRN_TYPE AS t ON d.TRN_TYPE = t.TRN_CODE 
+      LEFT OUTER JOIN dbo.UnitMaster AS U ON U.Unit_id = g.UNIT
+      WHERE g.ITEM_CODE = @itemCode
+        ${extraWhere}
+      ORDER BY d.CURDATE, d.REC_NO
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Stock movement fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET VAT Report Data
+app.get('/api/reports/vat-report', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { fromDate, toDate, trnCode, accNo, dateFilter } = req.query;
+
+    const request = pool.request();
+    let extraWhere = '';
+
+    if (dateFilter !== 'all') {
+      request.input('fromDate', sql.VarChar(20), fromDate);
+      request.input('toDate', sql.VarChar(20), toDate);
+      extraWhere += ' AND CAST(d.CURDATE AS DATE) BETWEEN CAST(@fromDate AS DATE) AND CAST(@toDate AS DATE)';
+    }
+    const selectedTrn = parseInt(trnCode || '0', 10);
+    request.input('selectedTrn', sql.Int, selectedTrn);
+    // extraWhere handled in query join
+    if (accNo && accNo !== '0') {
+      request.input('accNo', sql.VarChar(50), accNo);
+      extraWhere += ' AND d.ACCODE = @accNo';
+    }
+
+    const result = await request.query(`
+      SELECT 
+        d.CURDATE, d.INVOICE_NO, d.ENAME, d.NET_AMOUNT, d.CASH_PAID, d.OTHER_PAID, 
+        d.VAT_AMOUNT, d.VAT_PERCENT, d.VAT_NUMBER, d.TAXABLE_AMOUNT, 
+        ISNULL(d.ZATCA_SEND, 0) AS ZATCA_SEND, d.submit_date, t.TRN_NAME, t.TRN_ANAME
+      FROM dbo.DATA_ENTRY AS d 
+      INNER JOIN dbo.TRN_TYPE AS t ON d.TRN_TYPE = t.TRN_CODE
+      INNER JOIN dbo.TRN_TYPE_REP AS B ON d.TRN_TYPE IN (
+        SELECT Value FROM dbo.SplitString(B.CODES, ',')
+      )
+      WHERE B.REP_CAT = 1
+        AND B.TRN_CODE = CASE WHEN @selectedTrn = 0 THEN B.TRN_CODE ELSE @selectedTrn END
+        ${extraWhere}
+      ORDER BY d.CURDATE, d.INVOICE_NO
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('VAT report fetch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// --- PRODUCTION CATCH-ALL ---
+app.use((req, res) => {
+
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'API route not found' });
+  }
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
   try {
     const pool = await getPool();
+    console.log('📡 Attempting to connect to database...');
+    console.log('✅ Connected to MSSQL');
     console.log('✅ Successfully connected to the Microsoft SQL Server database!');
 
     // Initialize translations table
@@ -4706,7 +5221,7 @@ app.listen(PORT, async () => {
     `);
     console.log('✅ WEB_TRANSLATIONS table initialized');
 
-    // Initialize options table (check/add Crystal_Print column safely)
+    // Initialize options table
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='User_Entry_Options' AND xtype='U')
       BEGIN
@@ -4735,8 +5250,11 @@ app.listen(PORT, async () => {
       END
     `);
     console.log('✅ User_entry_Option table initialized');
-  } catch (error) {
-    console.error('❌ Failed to connect to the database or initialize table:', error.message);
+
+  } catch (err) {
+    console.error('❌ Database initialization failed:', err.message);
   }
 });
+
+
 

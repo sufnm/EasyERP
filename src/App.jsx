@@ -36,6 +36,12 @@ import DeliveryNotePage from './pages/DeliveryNotePage';
 import DeliveryHistoryPage from './pages/DeliveryHistoryPage';
 import ApplicationSetupPage from './pages/ApplicationSetupPage';
 import ZatcaSubmissionPage from './pages/ZatcaSubmissionPage';
+import StockReportPage from './pages/StockReportPage';
+import StockReportWarehousePage from './pages/StockReportWarehousePage';
+import StockMovementReportPage from './pages/StockMovementReportPage';
+import VatReportPage from './pages/VatReportPage';
+import InvoiceReportPage from './pages/InvoiceReportPage';
+import CustomerReportPage from './pages/CustomerReportPage';
 import { CacheProvider } from './context/CacheContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Menu, AlertCircle, CheckCircle, X } from 'lucide-react';
@@ -139,8 +145,15 @@ function AppContent({ theme, setTheme, activePage, activePageParams, navigateTo,
           {activePage === 'delivery-history' && <DeliveryHistoryPage setActivePage={navigateTo} />}
           {activePage === 'application-setup' && <ApplicationSetupPage />}
           {activePage === 'zatca-submission-sales' && <ZatcaSubmissionPage />}
+          {activePage === 'stock-report' && <StockReportPage />}
+          {activePage === 'stock-report-warehouse' && <StockReportWarehousePage />}
+          {activePage === 'stock-movement' && <StockMovementReportPage />}
+          {activePage === 'vat-report' && <VatReportPage />}
+          {activePage === 'invoice-report' && <InvoiceReportPage />}
+          {activePage === 'customer-report' && <CustomerReportPage activePage={activePage} />}
+          {activePage === 'supplier-report' && <CustomerReportPage activePage={activePage} />}
           {activePage === 'translation-manager' && <TranslationManagerPage />}
-          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager', 'item-creation', 'opening-stock', 'quotation-entry', 'active-quotations', 'delivery-note', 'delivery-history', 'application-setup', 'zatca-submission-sales'].includes(activePage) ? null : (
+          {['home', 'sales', 'sales-history', 'accounts', 'expense-accounts', 'customers-account', 'supplier-accounts', 'purchase-accounts', 'chart-of-accounts', 'create-account', 'customer-account-form', 'settings', 'lookup-master', 'item-group', 'customer-receivable', 'supplier-payable', 'general-voucher', 'expense-entry', 'employee-salary', 'sales-return', 'edit-sales-return', 'purchase', 'purchase-return', 'translation-manager', 'item-creation', 'opening-stock', 'quotation-entry', 'active-quotations', 'delivery-note', 'delivery-history', 'application-setup', 'zatca-submission-sales', 'stock-report', 'stock-report-warehouse', 'stock-movement', 'vat-report', 'invoice-report', 'customer-report', 'supplier-report'].includes(activePage) ? null : (
             <div className="flex items-center justify-center p-12 h-screen">
               <p className="text-zinc-400 text-lg font-medium text-center w-full">{t('comingSoon')}</p>
             </div>
