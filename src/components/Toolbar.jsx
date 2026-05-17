@@ -40,7 +40,7 @@ export default function Toolbar({
       <ToolbarButton icon={Plus} label="New" shortcut="F1" onClick={onNew} colorClass="text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" />
       <ToolbarButton icon={Trash2} label="Clear" onClick={onClear} colorClass="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" />
       
-      {isQuotation && (
+      {onScanPdf && (
         <ToolbarButton 
           icon={FileSearch} 
           label="Scan PDF" 

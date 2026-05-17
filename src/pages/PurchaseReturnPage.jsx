@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronRight, FileSearch } from 'lucide-react';
 import { API_ENDPOINTS } from '../config';
 import { useCache } from '../context/CacheContext';
 import Toolbar from '../components/Toolbar';
@@ -75,6 +75,8 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [purchaseItems, setPurchaseItems] = useState(null);
   const [showPendingModal, setShowPendingModal] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -304,6 +306,88 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
       }
     } catch (err) {
       console.error("Failed to fetch purchase items:", err);
+    }
+  };
+
+  const handlePdfScan = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    const formData = new FormData();
+    formData.append('pdf', file);
+
+    try {
+      const res = await fetch(`${API_ENDPOINTS.BASE_URL}/api/scan-pdf`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to scan PDF');
+      }
+
+      const data = await res.json();
+      console.log('📄 Scanned Data:', data);
+
+      if (data.customer) {
+        if (data.customer.accNo) {
+          setSupplier(prev => ({ ...prev, id: data.customer.accNo }));
+          if (data.customer.vatNumber) setVatNumber(data.customer.vatNumber);
+          
+          fetch(API_ENDPOINTS.SUPPLIER_INFO(data.customer.accNo))
+            .then(res => res.json())
+            .then(info => {
+              if (info) {
+                setAddress({
+                  building: info.building_no || '',
+                  street: info.street_name || '',
+                  district: info.city_subdivision_name || '',
+                  city: info.city_name || '',
+                  pincode: info.postal_zone || ''
+                });
+                if (info.VAT_Tinno) setVatNumber(info.VAT_Tinno);
+              }
+            })
+            .catch(err => console.error("Failed to fetch matched supplier info:", err));
+        } else {
+          setSupplier(prev => ({ ...prev, id: '999' }));
+          if (data.customer.vatNumber) setVatNumber(data.customer.vatNumber);
+        }
+      }
+
+      if (data.items && Array.isArray(data.items)) {
+        const newRows = data.items.map((item, idx) => ({
+          id: Date.now() + idx,
+          itemCode: item.itemCode || '999',
+          description: item.officialDescription || item.description || '',
+          unit: item.unit || 'Pcs',
+          qty: item.qty || 1,
+          purchasePrice: (item.dbPrice || item.price || 0) / selectedCurrencyRate,
+          salePrice: '',
+          retailPrice: '',
+          vatPercent: item.vatPercent || 15,
+          vatAmt: 0,
+          total: 0,
+          unitId: ''
+        }));
+
+        while (newRows.length < 5) {
+          newRows.push({ 
+            id: Date.now() + newRows.length, 
+            itemCode: '', description: '', unit: '', qty: '', purchasePrice: '', 
+            salePrice: '', retailPrice: '', vatAmt: '', vatPercent: 15, total: '', unitId: '' 
+          });
+        }
+        setRows(newRows);
+      }
+    } catch (error) {
+      console.error("PDF Scan Error:", error);
+      alert(error.message);
+    } finally {
+      setIsScanning(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -574,6 +658,7 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
               pendingCount={pendingReturns.length}
               onHistory={() => navigateTo('purchase-history')}
               onClear={resetPage}
+              onScanPdf={() => fileInputRef.current?.click()}
               currencies={currencies}
               selectedCurrency={selectedCurrency}
               setSelectedCurrency={setSelectedCurrency}
@@ -687,6 +772,31 @@ export default function PurchaseReturnPage({ user, params = {}, navigateTo, onBa
         onRemove={removePendingReturn}
         onClearAll={clearPendingReturns}
       />
+
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handlePdfScan} 
+        accept=".pdf" 
+        className="hidden" 
+      />
+
+      {isScanning && (
+        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-zinc-900/40 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-card p-8 rounded-3xl shadow-2xl border border-border flex flex-col items-center gap-6 max-w-sm w-full mx-4">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <FileSearch className="text-indigo-500 animate-pulse" size={32} />
+              </div>
+            </div>
+            <div className="text-center">
+              <h3 className="text-xl font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-widest mb-2">Scanning PDF</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Extracting details using AI...</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

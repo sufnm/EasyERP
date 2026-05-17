@@ -68,7 +68,20 @@ export const translations = {
     "VAT Report": "VAT Report",
     "Daily Sales N Purchase": "Daily Sales & Purchase",
     "Customer Report": "Customer Report",
-    "Supplier Report": "Supplier Report"
+    "Supplier Report": "Supplier Report",
+    share: "Share & Send",
+    sharePage: "Share Page",
+    documentShare: "Document Sharing Suite",
+    shareHistory: "Recent Shares Log",
+    recipient: "Recipient",
+    subject: "Subject",
+    body: "Email Body",
+    attachInvoice: "Attach Selected Invoice (PDF)",
+    sendEmail: "Send Email",
+    sendWhatsapp: "Send via WhatsApp",
+    phoneNumber: "Phone Number",
+    selectInvoiceToShare: "Search and select an invoice to share...",
+    invoiceSelected: "Invoice Attached"
   },
   ar: {
     // Common
@@ -139,7 +152,20 @@ export const translations = {
     "VAT Report": "تقرير الضريبة",
     "Daily Sales N Purchase": "المبيعات والمشتريات اليومية",
     "Customer Report": "تقرير العملاء",
-    "Supplier Report": "تقرير الموردين"
+    "Supplier Report": "تقرير الموردين",
+    share: "مشاركة وإرسال",
+    sharePage: "صفحة المشاركة",
+    documentShare: "بوابة مشاركة المستندات",
+    shareHistory: "سجل الإرسال والمشاركة",
+    recipient: "المستلم",
+    subject: "الموضوع",
+    body: "نص البريد",
+    attachInvoice: "إرفاق الفاتورة المحددة (PDF)",
+    sendEmail: "إرسال البريد الإلكتروني",
+    sendWhatsapp: "إرسال عبر الواتساب",
+    phoneNumber: "رقم الهاتف",
+    selectInvoiceToShare: "ابحث واختر فاتورة لمشاركتها...",
+    invoiceSelected: "تم إرفاق الفاتورة"
   }
 };
 

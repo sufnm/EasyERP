@@ -100,6 +100,7 @@ export const API_ENDPOINTS = {
   ZATCA_SUBMIT: `${API_BASE_URL}/api/zatca/submit`,
   DASHBOARD_STATS: `${API_BASE_URL}/api/dashboard/stats`,
   DASHBOARD_SALES_HISTORY: `${API_BASE_URL}/api/dashboard/sales-history`,
+  EMAIL_SHARE: `${API_BASE_URL}/api/email/share`,
 };
 
 export default API_BASE_URL;

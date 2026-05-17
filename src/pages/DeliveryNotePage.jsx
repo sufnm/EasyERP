@@ -6,7 +6,7 @@ import CustomerDetails from '../components/CustomerDetails';
 import Toolbar from '../components/Toolbar';
 import InvoiceModal from '../components/InvoiceModal';
 import { useLanguage } from '../context/LanguageContext';
-import { Trash2, Plus, Minus, CheckCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { Trash2, Plus, Minus, CheckCircle, AlertCircle, Loader2, ArrowRight, FileSearch } from 'lucide-react';
 
 export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack }) {
   const { t, language } = useLanguage();
@@ -33,6 +33,8 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
   const [warehouses, setWarehouses] = useState([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState('1');
   const [isSaving, setIsSaving] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const fileInputRef = useRef(null);
   const [editingRecNo, setEditingRecNo] = useState(null);
   const [savedInvoice, setSavedInvoice] = useState(null);
   const [referenceItems, setReferenceItems] = useState([]);
@@ -368,6 +370,81 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
     }
   };
 
+  const handlePdfScan = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    const formData = new FormData();
+    formData.append('pdf', file);
+
+    try {
+      const res = await fetch(`${API_ENDPOINTS.BASE_URL}/api/scan-pdf`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to scan PDF');
+      }
+
+      const data = await res.json();
+      console.log('📄 Scanned Data:', data);
+
+      if (data.customer) {
+        if (data.customer.accNo) {
+          setCustomer(prev => ({ ...prev, id: data.customer.accNo }));
+          if (data.customer.vatNumber) setVatNumber(data.customer.vatNumber);
+          
+          fetch(API_ENDPOINTS.CUSTOMER_INFO(data.customer.accNo))
+            .then(res => res.json())
+            .then(info => {
+              if (info) {
+                setAddress({
+                  building: info.building_no || '',
+                  street: info.street_name || '',
+                  district: info.city_subdivision_name || '',
+                  city: info.city_name || '',
+                  pincode: info.postal_zone || ''
+                });
+                if (info.VAT_Tinno) setVatNumber(info.VAT_Tinno);
+              }
+            })
+            .catch(err => console.error("Failed to fetch matched customer info:", err));
+        } else {
+          setCustomer(prev => ({ ...prev, id: '999' }));
+          if (data.customer.vatNumber) setVatNumber(data.customer.vatNumber);
+        }
+      }
+
+      if (data.items && Array.isArray(data.items)) {
+        const newRows = data.items.map((item, idx) => ({
+          id: Date.now() + idx,
+          itemCode: item.itemCode || '999',
+          description: item.officialDescription || item.description || '',
+          unit: item.unit || 'Pcs',
+          qty: item.qty || 1,
+          unitId: ''
+        }));
+
+        while (newRows.length < 5) {
+          newRows.push({ 
+            id: Date.now() + newRows.length, 
+            itemCode: '', description: '', unit: '', qty: '', unitId: '' 
+          });
+        }
+        setRows(newRows);
+      }
+    } catch (error) {
+      console.error("PDF Scan Error:", error);
+      alert(error.message);
+    } finally {
+      setIsScanning(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   useEffect(() => {
     fetchInvoiceNo();
 
@@ -677,6 +754,7 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
               onPending={null}
               onHistory={() => navigateTo?.('delivery-history')}
               onClear={resetPage}
+              onScanPdf={() => fileInputRef.current?.click()}
               pendingCount={0}
               isQuotation={false}
               isDelivery={true}
@@ -901,6 +979,31 @@ export default function DeliveryNotePage({ user, params = {}, navigateTo, onBack
         onClose={handleCloseInvoice}
         address={address}
       />
+
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handlePdfScan} 
+        accept=".pdf" 
+        className="hidden" 
+      />
+
+      {isScanning && (
+        <div className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-zinc-900/40 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-card p-8 rounded-3xl shadow-2xl border border-border flex flex-col items-center gap-6 max-w-sm w-full mx-4">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <FileSearch className="text-indigo-500 animate-pulse" size={32} />
+              </div>
+            </div>
+            <div className="text-center">
+              <h3 className="text-xl font-black text-zinc-800 dark:text-zinc-100 uppercase tracking-widest mb-2">Scanning PDF</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Extracting details using AI...</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -162,6 +162,9 @@ export default function DeliveryHistoryPage({ setActivePage }) {
         onClose={() => setSelectedDelivery(null)} 
         onEdit={handleEditInvoice}
         historyInvoiceColumns={historyInvoiceColumns}
+        onShare={(sale) => {
+          setActivePage('share', { invoice: sale });
+        }}
       />
     </div>
   );

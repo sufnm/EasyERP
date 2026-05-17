@@ -10,6 +10,9 @@ import { PDFParse } from 'pdf-parse';
 import { sql, getPool } from './db.js';
 import multer from 'multer';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import nodemailer from 'nodemailer';
+import { buildInvoicePdf } from './src/utils/pdfGenerator.js';
+import { initializeWhatsapp, getWhatsappStatus, sendWhatsappMessageWithInvoice, logoutWhatsapp } from './src/utils/whatsappService.js';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -5191,17 +5194,365 @@ app.get('/api/reports/vat-report', async (req, res) => {
   }
 });
 
+// --- HELPER TO GENERATE PDF FOR ATTACHMENT ---
+const generateInvoicePdf = async (invoiceNo, trnType, inv, items, invLabel, invDate) => {
+  const pdfFileName = `${invLabel.replace(/\s+/g, '_')}_${invoiceNo}_${Date.now()}.pdf`;
+  const pdfPath = path.join(__dirname, 'Reports', pdfFileName);
 
+  console.log(`🖨️ Generating PDF attachment using native PDFKit engine for ${invLabel} #${invoiceNo}...`);
+  try {
+    const resultPath = await buildInvoicePdf(pdfPath, inv, items, invLabel, invDate);
+    console.log(`✅ PDF successfully generated at: ${resultPath}`);
+    return resultPath;
+  } catch (err) {
+    console.error('❌ PDFKit failed to generate PDF attachment:', err.message);
+    return null;
+  }
+};
+
+// --- WHATSAPP GATEWAY ENDPOINTS ---
+app.get('/api/whatsapp/status', (req, res) => {
+  res.json(getWhatsappStatus());
+});
+
+app.post('/api/whatsapp/logout', async (req, res) => {
+  try {
+    const result = await logoutWhatsapp();
+    res.json(result);
+  } catch (err) {
+    console.error('❌ WhatsApp logout route failed:', err.message);
+    res.status(500).json({ error: 'Failed to unpair WhatsApp device', details: err.message });
+  }
+});
+
+app.post('/api/whatsapp/share', async (req, res) => {
+  console.log('📬 Incoming whatsapp share request payload:', req.body);
+  const { invoiceNo, trnType, phone, messageBody } = req.body;
+
+  if (!invoiceNo || !phone) {
+    return res.status(400).json({ error: 'invoiceNo and phone are required' });
+  }
+
+  // Ensure WhatsApp gateway is ready
+  const wsStatus = getWhatsappStatus();
+  if (wsStatus.status !== 'ready') {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not active. Please pair the device first.' });
+  }
+
+  try {
+    const pool = await getPool();
+
+    // Fetch invoice header
+    const headerRes = await pool.request()
+      .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+      .input('trnType', sql.Int, parseInt(trnType || 6))
+      .query(`
+        SELECT TOP 1
+          D.INVOICE_NO, D.CURDATE, D.ENAME, D.ACCODE,
+          D.G_TOTAL, D.DISC_AMT, D.VAT_AMOUNT, D.NET_AMOUNT,
+          D.CASH_PAID, D.OTHER_PAID, D.TRN_TYPE,
+          D.CRATE, D.VAT_NUMBER,
+          ISNULL(CM.Currency_code, 'SAR') AS CURRENCY_CODE
+        FROM dbo.DATA_ENTRY_WEB D
+        LEFT JOIN dbo.CURRENCY_MASTER CM ON D.CURRENCY = CM.Currency_No
+        WHERE D.INVOICE_NO = @invoiceNo AND D.TRN_TYPE = @trnType
+      `);
+
+    if (headerRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    const inv = headerRes.recordset[0];
+    const crate = inv.CRATE || 1;
+
+    // Fetch invoice items
+    const itemsRes = await pool.request()
+      .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+      .input('trnType', sql.Int, parseInt(trnType || 6))
+      .query(`
+        SELECT G.BARCODE, G.DESCRIPTION, G.UNIT, G.QTY,
+               G.UNIT_PRICE, G.VAT_PERCENT, G.VAT_AMOUNT, G.ITM_TOTAL
+        FROM dbo.DATA_ENTRY_GRID G
+        INNER JOIN dbo.DATA_ENTRY_WEB D ON G.REC_NO = D.REC_NO
+        WHERE G.BARCODE IS NOT NULL AND D.INVOICE_NO = @invoiceNo AND D.TRN_TYPE = @trnType
+      `);
+    const items = itemsRes.recordset;
+
+    // Determine invoice type label
+    const trnTypeNum = parseInt(trnType || 6);
+    let invLabel = 'Invoice';
+    if (trnTypeNum === 3 || trnTypeNum === 4) invLabel = 'Sales Return';
+    else if (trnTypeNum === 19) invLabel = 'Quotation';
+    else if (trnTypeNum === 16) invLabel = 'Delivery Note';
+    else if (trnTypeNum === 1 || trnTypeNum === 2) invLabel = 'Purchase Invoice';
+    else if (trnTypeNum === 8 || trnTypeNum === 9) invLabel = 'Purchase Return';
+
+    // Build invoice date
+    const invDate = inv.CURDATE ? new Date(inv.CURDATE).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString();
+
+    // Respond back to frontend instantly so the UI transitions immediately!
+    res.json({ success: true, message: `WhatsApp invoice has been queued for background dispatch to ${phone}!` });
+
+    // Execute PDF compilation and WhatsApp transmission asynchronously in the background!
+    (async () => {
+      let generatedPdfPath = null;
+      try {
+        generatedPdfPath = await generateInvoicePdf(invoiceNo, trnType, inv, items, invLabel, invDate);
+
+        // Send via background WhatsApp engine
+        await sendWhatsappMessageWithInvoice(
+          phone, 
+          messageBody || `Dear Customer, here is your ${invLabel} #${invoiceNo}.`, 
+          generatedPdfPath,
+          `${invLabel.replace(/\s+/g, '_')}_${invoiceNo}.pdf`
+        );
+      } catch (bgErr) {
+        console.error('❌ [WHATSAPP BG] Background dispatch failed:', bgErr.message);
+      } finally {
+        // Cleanup temporary PDF file
+        if (generatedPdfPath && fs.existsSync(generatedPdfPath)) {
+          try {
+            fs.unlinkSync(generatedPdfPath);
+            console.log(`🗑️ [WHATSAPP BG] Temporary PDF cleaned up: ${generatedPdfPath}`);
+          } catch (cleanupErr) {
+            console.error('⚠️ [WHATSAPP BG] Failed to cleanup temp PDF:', cleanupErr.message);
+          }
+        }
+      }
+    })();
+
+  } catch (err) {
+    console.error('❌ WhatsApp share route failed:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to queue WhatsApp dispatch', details: err.message });
+    }
+  }
+});
+
+// --- EMAIL SHARE ENDPOINT ---
+app.post('/api/email/share', async (req, res) => {
+  console.log('📬 Incoming email share request payload:', req.body);
+  const { invoiceNo, trnType, toEmail, customerName, subject, body } = req.body;
+
+  if (!invoiceNo || !toEmail) {
+    return res.status(400).json({ error: 'invoiceNo and toEmail are required' });
+  }
+
+  const smtpUser = process.env.SMTP_USER || '';
+  const smtpPass = process.env.SMTP_PASS || '';
+  if (!smtpUser || smtpUser === 'your_email@gmail.com' || !smtpPass || smtpPass === 'your_app_password') {
+    return res.status(500).json({ error: 'SMTP credentials not configured. Please set SMTP_USER and SMTP_PASS in your .env file.' });
+  }
+
+  let generatedPdfPath = null;
+
+  try {
+    const pool = await getPool();
+
+    // Fetch invoice header
+    const headerRes = await pool.request()
+      .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+      .input('trnType', sql.Int, parseInt(trnType || 6))
+      .query(`
+        SELECT TOP 1
+          D.INVOICE_NO, D.CURDATE, D.ENAME, D.ACCODE,
+          D.G_TOTAL, D.DISC_AMT, D.VAT_AMOUNT, D.NET_AMOUNT,
+          D.CASH_PAID, D.OTHER_PAID, D.TRN_TYPE,
+          D.CRATE, D.VAT_NUMBER,
+          ISNULL(CM.Currency_code, 'SAR') AS CURRENCY_CODE
+        FROM dbo.DATA_ENTRY_WEB D
+        LEFT JOIN dbo.CURRENCY_MASTER CM ON D.CURRENCY = CM.Currency_No
+        WHERE D.INVOICE_NO = @invoiceNo AND D.TRN_TYPE = @trnType
+      `);
+
+    if (headerRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    const inv = headerRes.recordset[0];
+    const crate = inv.CRATE || 1;
+    const currCode = inv.CURRENCY_CODE || 'SAR';
+
+    // Fetch invoice items
+    const itemsRes = await pool.request()
+      .input('invoiceNo', sql.NVarChar(50), String(invoiceNo))
+      .input('trnType', sql.Int, parseInt(trnType || 6))
+      .query(`
+        SELECT G.BARCODE, G.DESCRIPTION, G.UNIT, G.QTY,
+               G.UNIT_PRICE, G.VAT_PERCENT, G.VAT_AMOUNT, G.ITM_TOTAL
+        FROM dbo.DATA_ENTRY_GRID G
+        INNER JOIN dbo.DATA_ENTRY_WEB D ON G.REC_NO = D.REC_NO
+        WHERE D.INVOICE_NO = @invoiceNo AND D.TRN_TYPE = @trnType
+      `);
+    const items = itemsRes.recordset;
+
+    // Determine invoice type label
+    const trnTypeNum = parseInt(trnType || 6);
+    let invLabel = 'Invoice';
+    if (trnTypeNum === 3 || trnTypeNum === 4) invLabel = 'Sales Return';
+    else if (trnTypeNum === 19) invLabel = 'Quotation';
+    else if (trnTypeNum === 16) invLabel = 'Delivery Note';
+    else if (trnTypeNum === 1 || trnTypeNum === 2) invLabel = 'Purchase Invoice';
+    else if (trnTypeNum === 8 || trnTypeNum === 9) invLabel = 'Purchase Return';
+
+    // Build invoice date
+    const invDate = inv.CURDATE ? new Date(inv.CURDATE).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString();
+
+    // Build items rows HTML
+    const itemRows = items.map((item, i) => {
+      const unitPrice = (Number(item.UNIT_PRICE) || 0) / crate;
+      const vatAmt = (Number(item.VAT_AMOUNT) || 0) / crate;
+      const total = (Number(item.ITM_TOTAL) || 0) / crate;
+      const bg = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+      return `<tr style="background:${bg}">
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151">${item.BARCODE || ''}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#111827;font-weight:600">${item.DESCRIPTION || ''}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280;text-align:center">${item.UNIT || 'Pcs'}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151;text-align:center">${(Number(item.QTY) || 0).toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151;text-align:right">${currCode} ${unitPrice.toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280;text-align:right">${(Number(item.VAT_PERCENT) || 0).toFixed(0)}%</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280;text-align:right">${currCode} ${vatAmt.toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:700;color:#111827;text-align:right">${currCode} ${total.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+
+    const grossTotal = ((Number(inv.G_TOTAL) || 0) / crate).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    const discAmt = ((Number(inv.DISC_AMT) || 0) / crate).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    const vatAmt = ((Number(inv.VAT_AMOUNT) || 0) / crate).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    const netTotal = ((Number(inv.NET_AMOUNT) || 0) / crate).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    const paidAmt = (((Number(inv.CASH_PAID) || 0) + (Number(inv.OTHER_PAID) || 0)) / crate).toLocaleString('en-US', { minimumFractionDigits: 2 });
+    const balance = (((Number(inv.NET_AMOUNT) || 0) - (Number(inv.CASH_PAID) || 0) - (Number(inv.OTHER_PAID) || 0)) / crate).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+    // Optional custom message HTML block
+    const messageHtml = body
+      ? `<tr><td style="padding:24px 40px;font-size:13px;line-height:1.6;color:#374151;border-bottom:1px solid #f3f4f6;white-space:pre-wrap;background:#f9fafb">${body}</td></tr>`
+      : '';
+
+    // Build full HTML email
+    const htmlBody = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${invLabel} #${inv.INVOICE_NO}</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0">
+    <tr><td align="center">
+      <table width="680" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+        <!-- Header -->
+        <tr><td style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:32px 40px">
+          <table width="100%"><tr>
+            <td><h1 style="margin:0;font-size:28px;font-weight:900;color:#ffffff;letter-spacing:-0.5px">EasyERP</h1><p style="margin:4px 0 0;color:#c7d2fe;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:2px">${invLabel}</p></td>
+            <td align="right"><p style="margin:0;color:#e0e7ff;font-size:28px;font-weight:900">#${inv.INVOICE_NO}</p><p style="margin:4px 0 0;color:#c7d2fe;font-size:12px">${invDate}</p></td>
+          </tr></table>
+        </td></tr>
+        <!-- Custom Message -->
+        ${messageHtml}
+        <!-- Customer Row -->
+        <tr><td style="padding:24px 40px;border-bottom:1px solid #f3f4f6">
+          <table width="100%"><tr>
+            <td><p style="margin:0 0 4px;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:2px">Bill To</p><p style="margin:0;font-size:16px;font-weight:700;color:#111827">${inv.ENAME || 'Cash Customer'}</p>${inv.VAT_NUMBER ? `<p style="margin:4px 0 0;font-size:11px;color:#6b7280">VAT: ${inv.VAT_NUMBER}</p>` : ''}</td>
+            <td align="right"><span style="display:inline-block;padding:6px 14px;border-radius:99px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;background:${Number(inv.NET_AMOUNT) <= (Number(inv.CASH_PAID || 0) + Number(inv.OTHER_PAID || 0)) + 0.01 ? '#d1fae5' : '#fee2e2'};color:${Number(inv.NET_AMOUNT) <= (Number(inv.CASH_PAID || 0) + Number(inv.OTHER_PAID || 0)) + 0.01 ? '#065f46' : '#991b1b'}">${Number(inv.NET_AMOUNT) <= (Number(inv.CASH_PAID || 0) + Number(inv.OTHER_PAID || 0)) + 0.01 ? 'PAID' : 'PENDING'}</span></td>
+          </tr></table>
+        </td></tr>
+        <!-- Items Table -->
+        <tr><td style="padding:0 40px 24px">
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px">
+            <thead><tr style="background:#f9fafb">
+              <th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #e5e7eb">Barcode</th>
+              <th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #e5e7eb">Description</th>
+              <th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #e5e7eb">Unit</th>
+              <th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #e5e7eb">Qty</th>
+              <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #e5e7eb">Price</th>
+              <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #e5e7eb">VAT%</th>
+              <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #e5e7eb">VAT Amt</th>
+              <th style="padding:10px 12px;text-align:right;font-size:10px;font-weight:800;color:#9ca3af;text-transform:uppercase;letter-spacing:1.5px;border-bottom:2px solid #e5e7eb">Total</th>
+            </tr></thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+        </td></tr>
+        <!-- Totals -->
+        <tr><td style="padding:0 40px 32px">
+          <table align="right" cellpadding="0" cellspacing="0" style="min-width:280px">
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Gross Total</td><td style="padding:6px 0 6px 32px;font-size:13px;color:#111827;font-weight:600;text-align:right">${currCode} ${grossTotal}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#ef4444">Discount</td><td style="padding:6px 0 6px 32px;font-size:13px;color:#ef4444;font-weight:600;text-align:right">- ${currCode} ${discAmt}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">VAT Amount</td><td style="padding:6px 0 6px 32px;font-size:13px;color:#111827;font-weight:600;text-align:right">${currCode} ${vatAmt}</td></tr>
+            <tr><td colspan="2" style="padding:2px 0"><div style="height:2px;background:#e5e7eb;margin:6px 0"></div></td></tr>
+            <tr><td style="padding:8px 0;font-size:16px;font-weight:900;color:#4f46e5">Net Total</td><td style="padding:8px 0 8px 32px;font-size:16px;font-weight:900;color:#4f46e5;text-align:right">${currCode} ${netTotal}</td></tr>
+            <tr><td style="padding:4px 0;font-size:12px;color:#10b981">Paid</td><td style="padding:4px 0 4px 32px;font-size:12px;color:#10b981;font-weight:600;text-align:right">${currCode} ${paidAmt}</td></tr>
+            <tr><td style="padding:4px 0;font-size:12px;color:#f59e0b">Balance</td><td style="padding:4px 0 4px 32px;font-size:12px;color:#f59e0b;font-weight:700;text-align:right">${currCode} ${balance}</td></tr>
+          </table>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center">
+          <p style="margin:0;font-size:11px;color:#9ca3af">This is an auto-generated email from <strong>EasyERP</strong>. Please do not reply to this email.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    // Respond back to frontend instantly so the UI transitions immediately!
+    res.json({ success: true, message: `Email is being sent successfully to ${toEmail}` });
+
+    // Execute PDF compilation and email transmission in the background
+    (async () => {
+      let generatedPdfPath = null;
+      try {
+        generatedPdfPath = await generateInvoicePdf(invoiceNo, trnType, inv, items, invLabel, invDate);
+
+        let attachments = [];
+        if (generatedPdfPath && fs.existsSync(generatedPdfPath)) {
+          attachments.push({
+            filename: `${invLabel}_${invoiceNo}.pdf`,
+            path: generatedPdfPath
+          });
+        }
+
+        // Create transporter
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST || 'smtp.gmail.com',
+          port: parseInt(process.env.SMTP_PORT || '587'),
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: smtpUser,
+            pass: smtpPass
+          },
+          tls: { rejectUnauthorized: false }
+        });
+
+        await transporter.sendMail({
+          from: `"${process.env.SMTP_FROM_NAME || 'EasyERP'}" <${smtpUser}>`,
+          to: toEmail,
+          subject: subject || `${invLabel} #${inv.INVOICE_NO} from EasyERP`,
+          html: htmlBody,
+          attachments: attachments
+        });
+
+        console.log(`📧 [BACKGROUND] Invoice #${invoiceNo} successfully emailed to ${toEmail}`);
+      } catch (bgErr) {
+        console.error('❌ [BACKGROUND] Email dispatch failed:', bgErr.message);
+      } finally {
+        if (generatedPdfPath && fs.existsSync(generatedPdfPath)) {
+          try {
+            fs.unlinkSync(generatedPdfPath);
+            console.log(`🗑️ [BACKGROUND] Temporary PDF attachment cleaned up: ${generatedPdfPath}`);
+          } catch (cleanupErr) {
+            console.error('⚠️ [BACKGROUND] Failed to cleanup temp PDF:', cleanupErr.message);
+          }
+        }
+      }
+    })();
+  } catch (err) {
+    console.error('❌ Email share failed:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to send email', details: err.message });
+    }
+  }
+});
 // --- PRODUCTION CATCH-ALL ---
 app.use((req, res) => {
-
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'API route not found' });
   }
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
-
-
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
   try {
@@ -5254,6 +5605,9 @@ app.listen(PORT, async () => {
   } catch (err) {
     console.error('❌ Database initialization failed:', err.message);
   }
+
+  // Start background WhatsApp engine
+  initializeWhatsapp();
 });
 
 

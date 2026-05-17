@@ -351,6 +351,9 @@ export default function ActiveQuotationsPage({ setActivePage }) {
         onEdit={handleEditQuotation}
         onCompleteSales={(quote) => setActivePage('sales', { loadQuotation: quote })}
         historyInvoiceColumns={historyInvoiceColumns}
+        onShare={(sale) => {
+          setActivePage('share', { invoice: sale });
+        }}
       />
     </div>
   );

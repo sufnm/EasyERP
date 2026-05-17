@@ -380,6 +380,9 @@ export default function SalesHistoryPage({ setActivePage, params }) {
         onClose={() => setSelectedSale(null)} 
         onEdit={handleEditInvoice}
         historyInvoiceColumns={historyInvoiceColumns}
+        onShare={(sale) => {
+          setActivePage('share', { invoice: sale });
+        }}
       />
     </div>
   );

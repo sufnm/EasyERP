@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Calendar, User, Printer, ShoppingCart, CloudUpload } from 'lucide-react';
+import { X, FileText, Calendar, User, Printer, ShoppingCart, CloudUpload, Mail, Send, Check, AlertCircle, Share2 } from 'lucide-react';
 import { API_ENDPOINTS } from '../config';
 
 export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, onZatcaSubmit, address: passedAddress, historyInvoiceColumns = {
@@ -11,7 +11,7 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, o
   vatPercent: true,
   vatAmt: true,
   total: true
-}, isPurchase = false, autoPrint = false, crystalPrint = false, defaultPrintPaper = 'Thermal' }) {
+}, isPurchase = false, autoPrint = false, crystalPrint = false, defaultPrintPaper = 'Thermal', onShare }) {
   const [saleItems, setSaleItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [customerAddress, setCustomerAddress] = useState(null);
@@ -21,6 +21,44 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, o
   const [isCrystalPrinting, setIsCrystalPrinting] = useState(false);
   const [crystalPrintResult, setCrystalPrintResult] = useState(null);
   const [pdfUrl, setPdfUrl] = useState(null);
+  // Email sharing state
+  const [showEmailInput, setShowEmailInput] = useState(false);
+  const [emailAddress, setEmailAddress] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState(null); // { success, message }
+
+  const handleEmailShare = async () => {
+    if (!emailAddress || !emailAddress.includes('@')) {
+      setEmailResult({ success: false, message: 'Please enter a valid email address.' });
+      return;
+    }
+    setIsSendingEmail(true);
+    setEmailResult(null);
+    try {
+      const res = await fetch(API_ENDPOINTS.EMAIL_SHARE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceNo: sale?.INVOICE_NO,
+          trnType: sale?.TRN_TYPE,
+          toEmail: emailAddress,
+          customerName: sale?.ENAME || ''
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setEmailResult({ success: true, message: `Sent to ${emailAddress}` });
+        setEmailAddress('');
+        setTimeout(() => { setShowEmailInput(false); setEmailResult(null); }, 3000);
+      } else {
+        setEmailResult({ success: false, message: data.error || 'Failed to send email.' });
+      }
+    } catch (err) {
+      setEmailResult({ success: false, message: 'Network error. Could not reach server.' });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
 
   const handlePrint = async () => {
     if (crystalPrint) {
@@ -559,74 +597,87 @@ export default function InvoiceModal({ sale, onClose, onEdit, onCompleteSales, o
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex justify-between items-center print:hidden rounded-b-3xl">
-           <div>
-             {crystalPrintResult && (
-               <p className={`text-xs font-bold ${crystalPrintResult.success ? 'text-emerald-500' : 'text-rose-500'}`}>
-                 {crystalPrintResult.message}
-               </p>
-             )}
-           </div>
-           <div className="flex justify-end gap-3">
-             <button 
-              onClick={onClose}
-              className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:bg-zinc-100 transition-all"
-             >
-              Close
-             </button>
-             {pdfUrl && (
-               <a 
-                 href={pdfUrl} 
-                 target="_blank" 
-                 rel="noopener noreferrer"
-                 className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
-               >
-                 <FileText size={14} /> Open PDF
-               </a>
-             )}
-             <button 
-              onClick={handlePrint}
-              disabled={isCrystalPrinting}
-              className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${isCrystalPrinting ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
-             >
-               {isCrystalPrinting ? (
-                 <div className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></div>
-               ) : (
-                 <Printer size={14} />
+        <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex flex-col gap-3 print:hidden rounded-b-3xl">
+           <div className="flex justify-between items-center">
+             <div>
+               {crystalPrintResult && (
+                 <p className={`text-xs font-bold ${crystalPrintResult.success ? 'text-emerald-500' : 'text-rose-500'}`}>
+                   {crystalPrintResult.message}
+                 </p>
                )}
-               {isCrystalPrinting ? 'Printing...' : 'Print'}
-             </button>
-             {onZatcaSubmit && (
+             </div>
+             <div className="flex justify-end gap-3 flex-wrap">
+               <button 
+                onClick={onClose}
+                className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:bg-zinc-100 transition-all"
+               >
+                Close
+               </button>
+               {pdfUrl && (
+                 <a 
+                   href={pdfUrl} 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+                 >
+                   <FileText size={14} /> Open PDF
+                 </a>
+               )}
+               <button 
+                onClick={handlePrint}
+                disabled={isCrystalPrinting}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${isCrystalPrinting ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+               >
+                 {isCrystalPrinting ? (
+                   <div className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></div>
+                 ) : (
+                   <Printer size={14} />
+                 )}
+                 {isCrystalPrinting ? 'Printing...' : 'Print'}
+               </button>
+               {onZatcaSubmit && (
+                  <button 
+                    onClick={() => onZatcaSubmit(sale)}
+                    className="px-6 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm"
+                  >
+                    <CloudUpload size={14} />
+                    Submit to ZATCA
+                  </button>
+               )}
+               {sale?.TRN_TYPE === 19 && onCompleteSales && (
                 <button 
-                  onClick={() => onZatcaSubmit(sale)}
-                  className="px-6 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm"
+                  onClick={() => {
+                    onCompleteSales(sale);
+                    onClose();
+                  }}
+                  className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
                 >
-                  <CloudUpload size={14} />
-                  Submit to ZATCA
+                  <ShoppingCart size={14} /> Complete Sales
                 </button>
-             )}
-             {sale?.TRN_TYPE === 19 && onCompleteSales && (
-              <button 
-                onClick={() => {
-                  onCompleteSales(sale);
-                  onClose();
-                }}
-                className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
-              >
-                <ShoppingCart size={14} /> Complete Sales
-              </button>
-             )}
-             {onEdit && (
-              <button 
-                onClick={() => {
-                  onEdit(sale);
-                  onClose();
-                }}
-                className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
-              >
-                <FileText size={14} /> {sale.TRN_TYPE === 19 ? 'Edit Quotation' : 'Edit Invoice'}
-              </button>
-             )}
+               )}
+               {onEdit && (
+                <button 
+                  onClick={() => {
+                    onEdit(sale);
+                    onClose();
+                  }}
+                  className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+                >
+                  <FileText size={14} /> {sale.TRN_TYPE === 19 ? 'Edit Quotation' : 'Edit Invoice'}
+                </button>
+               )}
+               {onShare && (
+                <button 
+                  onClick={() => {
+                    onShare(sale);
+                    onClose();
+                  }}
+                  className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                >
+                  <Share2 size={14} /> Share & Send
+                </button>
+               )}
+             </div>
            </div>
         </div>
       </div>

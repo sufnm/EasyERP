@@ -343,6 +343,9 @@ export default function PurchaseHistoryPage({ setActivePage }) {
         onEdit={handleEdit}
         historyInvoiceColumns={historyInvoiceColumns}
         isPurchase={true}
+        onShare={(sale) => {
+          setActivePage('share', { invoice: sale });
+        }}
       />
     </div>
   );

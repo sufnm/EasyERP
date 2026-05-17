@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Home, ShoppingCart, ShoppingBag, Settings, Users, BarChart3, 
   Book, Clock, LogOut, ChevronDown, ChevronRight, ChevronUp, Wallet, 
-  ShieldCheck, Languages, PanelLeftClose, PanelLeftOpen, X 
+  ShieldCheck, Languages, PanelLeftClose, PanelLeftOpen, X, Share2
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -166,6 +166,7 @@ export default function Sidebar({ activePage, setActivePage, onLogout, user, isM
         { id: 'zatca-config', label: t('Zatca Config') }
       ]
     },
+    { id: 'share', label: t('share'), icon: Share2 },
     { id: 'settings', label: t('settings'), icon: Settings },
   ];
 
